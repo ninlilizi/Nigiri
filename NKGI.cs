@@ -6,19 +6,60 @@ public class NKGI : MonoBehaviour {
 
     public Shader shaderRSM;
     public Shader shaderRSMPost;
-    public Material material_RSM;
-    public Material material_RSMPost;
+    public Shader shaderLightInjection;
+    public Material materialRSM;
+    public Material materialRSMPost;
+    public Material materialLightInjection;
+
+    RenderTexture lightVolumeR;
+    RenderTexture lightVolumeG;
+    RenderTexture lightVolumeB;
+
+    RenderBuffer[] injectionBuffer;
 
     // Use this for initialization
-    void Start () {
+    void OnEnable () {
         shaderRSM = Shader.Find("NKGI/Reflective Shadow Map");
         shaderRSMPost = Shader.Find("Hidden/NKGI_RSM_Post");
-        material_RSM = new Material(shaderRSM);
-        material_RSMPost = new Material(shaderRSMPost);
-	}
-	
-	// Update is called once per frame
-	void Update () {
+        shaderLightInjection = Shader.Find("Hidden/NKGI-LightInjection");
+        materialRSM = new Material(shaderRSM);
+        materialRSMPost = new Material(shaderRSMPost);
+        materialLightInjection = new Material(shaderLightInjection);
+
+        lightVolumeR = new RenderTexture(32, 32, 0, RenderTextureFormat.ARGBFloat);
+        lightVolumeR.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+        lightVolumeR.enableRandomWrite = true;
+        lightVolumeR.volumeDepth = 32;
+        lightVolumeR.hideFlags = HideFlags.HideAndDontSave;
+        lightVolumeR.Create();
+
+        lightVolumeG = new RenderTexture(32, 32, 0, RenderTextureFormat.ARGBFloat);
+        lightVolumeG.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+        lightVolumeG.enableRandomWrite = true;
+        lightVolumeG.volumeDepth = 32;
+        lightVolumeG.hideFlags = HideFlags.HideAndDontSave;
+        lightVolumeG.Create();
+
+        lightVolumeB = new RenderTexture(32, 32, 0, RenderTextureFormat.ARGBFloat);
+        lightVolumeB.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+        lightVolumeB.enableRandomWrite = true;
+        lightVolumeB.volumeDepth = 32;
+        lightVolumeB.hideFlags = HideFlags.HideAndDontSave;
+        lightVolumeB.Create();
+
+        //Create buffer for MRT
+        injectionBuffer = new RenderBuffer[3];
+    }
+
+    private void OnDisable()
+    {
+        if (lightVolumeR != null) lightVolumeR.Release();
+        if (lightVolumeG != null) lightVolumeG.Release();
+        if (lightVolumeB != null) lightVolumeB.Release();
+    }
+
+    // Update is called once per frame
+    void Update () {
 		
 	}
 
@@ -34,13 +75,26 @@ public class NKGI : MonoBehaviour {
         NKGI_RSMCamera.CopyFrom(Camera.main);
         NKGI_RSMCamera.hideFlags = HideFlags.HideAndDontSave;
 
-        // Render that camera to get the Reflective Shadow Map
+        //Render that camera to get the Reflective Shadow Map
         NKGI_RSMCamera.targetTexture = NKGI_RSM;
         NKGI_RSMCamera.SetReplacementShader(shaderRSM, "");
         NKGI_RSMCamera.Render();
 
+        //Perform Light injection
+        Shader.SetGlobalTexture("rsmFluxMap", NKGI_RSM);
+        injectionBuffer[0] = lightVolumeR.colorBuffer;
+        injectionBuffer[1] = lightVolumeG.colorBuffer;
+        injectionBuffer[2] = lightVolumeB.colorBuffer;
+        Graphics.SetRenderTarget(injectionBuffer, lightVolumeR.depthBuffer);
+        Graphics.Blit(null, materialLightInjection, 0);
 
-        Shader.SetGlobalTexture("NKGI_RSM", NKGI_RSM);
+        //Perform Light propagation
+        Graphics.SetRandomWriteTarget(0, lightVolumeR);
+        Graphics.SetRandomWriteTarget(1, lightVolumeG);
+        Graphics.SetRandomWriteTarget(2, lightVolumeB);
+
+
+        
 
         //Output /something/
         Graphics.Blit(NKGI_RSM, destination);

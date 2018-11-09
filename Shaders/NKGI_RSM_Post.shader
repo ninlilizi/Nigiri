@@ -63,7 +63,7 @@
 			sampler2D _CameraDepthTexture;
 			sampler2D _CameraDepthNormalsTexture;
 
-			sampler2D NKGI_RSM;
+			sampler2D rsmFluxMap;
 
 			float3 rgb2hsv(float3 c)
 			{
@@ -92,7 +92,7 @@
 
 
 
-				half4 RSM = tex2D(NKGI_RSM, i.uv.xy);
+				half4 RSM = tex2D(rsmFluxMap, i.uv.xy);
 
 				//Average HSV values independantly for prettier result
 				half4 RSMHSV = float4(rgb2hsv(RSM).rgb, 0);
