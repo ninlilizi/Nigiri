@@ -11,6 +11,8 @@ public class NKGI : MonoBehaviour {
     public Material materialRSMPost;
     public Material materialLightInjection;
 
+    ComputeShader shaderLightPropagation;
+
     RenderTexture lightVolumeR;
     RenderTexture lightVolumeG;
     RenderTexture lightVolumeB;
@@ -25,6 +27,8 @@ public class NKGI : MonoBehaviour {
         materialRSM = new Material(shaderRSM);
         materialRSMPost = new Material(shaderRSMPost);
         materialLightInjection = new Material(shaderLightInjection);
+
+        shaderLightPropagation = Resources.Load("BKGI-LightPropagation") as ComputeShader;
 
         lightVolumeR = new RenderTexture(32, 32, 0, RenderTextureFormat.ARGBFloat);
         lightVolumeR.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
@@ -92,9 +96,13 @@ public class NKGI : MonoBehaviour {
         Graphics.SetRandomWriteTarget(0, lightVolumeR);
         Graphics.SetRandomWriteTarget(1, lightVolumeG);
         Graphics.SetRandomWriteTarget(2, lightVolumeB);
+        shaderLightPropagation.SetTexture(0, "lpvR", lightVolumeR);
+        shaderLightPropagation.SetTexture(0, "lpvG", lightVolumeG);
+        shaderLightPropagation.SetTexture(0, "lpvB", lightVolumeB);
+        shaderLightPropagation.Dispatch(0, source.width / 16, source.height / 2, 1);
 
 
-        
+
 
         //Output /something/
         Graphics.Blit(NKGI_RSM, destination);
