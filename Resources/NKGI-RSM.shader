@@ -64,10 +64,11 @@
 			}
 			Blend [_SrcBlend] [_DstBlend]
 			ZWrite [_ZWrite]
+			Cull Off
 
 			CGPROGRAM
 
-			#pragma target 3.0
+			#pragma target 5.0
 
 			#pragma shader_feature _ _RENDERING_CUTOUT _RENDERING_FADE _RENDERING_TRANSPARENT
 			#pragma shader_feature _METALLIC_MAP
@@ -104,10 +105,11 @@
 
 			Blend [_SrcBlend] One
 			ZWrite Off
+			Cull Off
 
 			CGPROGRAM
 
-			#pragma target 3.0
+			#pragma target 5.0
 
 			#pragma shader_feature _ _RENDERING_CUTOUT _RENDERING_FADE _RENDERING_TRANSPARENT
 			#pragma shader_feature _METALLIC_MAP
@@ -135,10 +137,11 @@
 			Tags {
 				"LightMode" = "Deferred"
 			}
+			Cull Off
 
 			CGPROGRAM
 
-			#pragma target 3.0
+			#pragma target 5.0
 			#pragma exclude_renderers nomrt
 
 			#pragma shader_feature _ _RENDERING_CUTOUT
@@ -175,7 +178,7 @@
 
 			CGPROGRAM
 
-			#pragma target 3.0
+			#pragma target 5.0
 
 			#pragma shader_feature _ _RENDERING_CUTOUT _RENDERING_FADE _RENDERING_TRANSPARENT
 			#pragma shader_feature _SEMITRANSPARENT_SHADOWS

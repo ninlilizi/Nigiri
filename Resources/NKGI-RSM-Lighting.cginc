@@ -602,7 +602,6 @@ struct FragmentOutput {
 		float4 gBuffer1 : SV_Target1;
 		float4 gBuffer2 : SV_Target2;
 		float4 gBuffer3 : SV_Target3;
-
 		#if defined(SHADOWS_SHADOWMASK) && (UNITY_ALLOWED_MRT_COUNT > 4)
 			float4 gBuffer4 : SV_Target4;
 		#endif
@@ -628,6 +627,9 @@ sampler2D _CameraGBufferTexture1;
 sampler2D _CameraGBufferTexture2;
 sampler2D _CameraDepthTexture;
 
+sampler2D normalMap;
+sampler2D albedoMap;
+
 sampler2D _NoiseMap0;
 sampler2D _NoiseMap1;
 sampler2D _NoiseMap2;
@@ -646,14 +648,35 @@ float2 rand(float2 coord)
 	return float2(noiseX, noiseY);
 }
 
+//uniform RWTexture2D<uint> vplPositionWS : register(u1);
+//uniform RWTexture2D<uint> vplNormalWS : register(u2);
+//uniform RWTexture2D<uint> flux : register(u3);
+
 // http://ericpolman.com/2016/04/13/reflective-shadow-maps-part-2-the-implementation/
-float3 DoReflectiveShadowMapping(float3 P, bool divideByW, float3 N, float4 uv, Interpolators interpolator)
+float3 DoReflectiveShadowMapping(float3 P, bool divideByW, float3 N, float4 uv, float4 tangent, Interpolators interpolator)
 {
 	float rsmRMax = 0.07;
 	uint rsmSampleCount = 8;
 	float rsmIntensity = 1;
 
-	float4 textureSpacePosition = mul(CreateLight(interpolator).dir, float4(P, 1.0));
+	// Calculate the world normal, tangent, and binormal
+	float3 worldNormal = UnityObjectToWorldNormal(N);
+	float3 worldTangent = UnityObjectToWorldDir(tangent);
+	float tangentSign = tangent.w * unity_WorldTransformParams.w;
+	float3 worldBinormal = cross(worldNormal, worldTangent) * tangentSign;
+
+	// Construct a world to tangent rotation matrix
+	float3x3 worldToTangent = float3x3(worldTangent, worldBinormal, worldNormal);
+
+	// Rotate world space light direction
+	float3 tangentLightDir = mul(worldToTangent, CreateLight(interpolator).dir);
+
+	// Apply UV space rotation
+	float2 lightVec = normalize(tangentLightDir.xy);
+	float2x2 lightVecRotationMatrix = float2x2(lightVec.x, -lightVec.y, lightVec.y, lightVec.x);
+	float2 rotatedUV = mul(P, lightVecRotationMatrix);
+
+	float4 textureSpacePosition = mul(rotatedUV, float4(P, 1.0));
 	if (divideByW) textureSpacePosition.xyz /= textureSpacePosition.w;
 
 	float3 indirectIllumination = float3(0, 0, 0);
@@ -661,7 +684,7 @@ float3 DoReflectiveShadowMapping(float3 P, bool divideByW, float3 N, float4 uv, 
 
 	for (uint i = 0; i < rsmSampleCount; ++i)
 	{
-		float2 rnd;
+		float2 rnd = float2(0, 0);
 		if (i == 0) rnd = tex2D(_NoiseMap0, uv.xy).xyz;
 		else if (i == 1) rnd = tex2D(_NoiseMap1, uv).xyz;
 		else if (i == 2) rnd = tex2D(_NoiseMap2, uv).xyz;
@@ -674,11 +697,11 @@ float3 DoReflectiveShadowMapping(float3 P, bool divideByW, float3 N, float4 uv, 
 
 		float2 coords = textureSpacePosition.xy + rMax * rnd;
 
-		float3 vplPositionWS = tex2D(_CameraGBufferTexture0, coords.xy).xyz;
-		float3 vplNormalWS = tex2D(_CameraGBufferTexture2, coords.xy).xyz;
-		float3 flux = RSMFluxLight(coords, P, N, CreateLight(interpolator));
+		float3 vplPositionWS = tex2D(_CameraDepthTexture, coords.xy).xyz;
+		float3 vplNormalWS = tex2D(normalMap, coords.xy).xyz;
+		float3 RSMflux = tex2D(albedoMap, coords.xy).xyz * CreateLight(interpolator).color;
 
-		float3 result = flux * ((max(0, dot(vplNormalWS, P - vplPositionWS)) * (max(0, dot(N, vplPositionWS - P)))) / pow(length(P - vplPositionWS), 4));
+		float3 result = RSMflux * ((max(0, dot(vplNormalWS, P - vplPositionWS)) * (max(0, dot(N, vplPositionWS - P)))) / pow(length(P - vplPositionWS), 4));
 
 		result *= rnd.x * rnd.x;
 		indirectIllumination += result;
@@ -688,6 +711,28 @@ float3 DoReflectiveShadowMapping(float3 P, bool divideByW, float3 N, float4 uv, 
 }
 //#endif
 
+
+uint RGBAtoUINT(float4 color)
+{
+	//uint4 bitShifts = uint4(24, 16, 8, 0);
+	//uint4 colorAsBytes = uint4(color * 255.0f) << bitShifts;
+
+	uint4 kEncodeMul = uint4(16777216, 65536, 256, 1);
+	uint4 colorAsBytes = round(color * 255.0f);
+
+	return dot(colorAsBytes, kEncodeMul);
+}
+
+float4 UINTtoRGBA(uint value)
+{
+	uint4 bitMask = uint4(0xff000000, 0x00ff0000, 0x0000ff00, 0x000000ff);
+	uint4 bitShifts = uint4(24, 16, 8, 0);
+
+	uint4 color = (uint4)value & bitMask;
+	color >>= bitShifts;
+
+	return color / 255.0f;
+}
 
 ///
 
@@ -732,21 +777,20 @@ FragmentOutput MyFragmentProgram (Interpolators i) {
 	#endif
 
 	//NIN - Reflective Shadow Mapping
-	float3 RSM = DoReflectiveShadowMapping(i.pos, true, i.normal, i.uv, i);
-	color.rgb = RSM;
+	float4 flux = float4(DoReflectiveShadowMapping(i.worldPos, true, tex2D(_CameraGBufferTexture2, i.uv.xy).xyz, i.uv, i.tangent, i), 0);
+	//color.rgb = flux;
 
 	FragmentOutput output;
 	#if defined(DEFERRED_PASS)
 		#if !defined(UNITY_HDR_ON)
 			color.rgb = exp2(-color.rgb);
 		#endif
-			output.gBuffer0.rgb = RSM;
-		output.gBuffer0.a = GetOcclusion(i);
-		output.gBuffer1.rgb = specularTint;
-		output.gBuffer1.a = GetSmoothness(i);
-		output.gBuffer2 = float4(i.normal * 0.5 + 0.5, 1);
-		output.gBuffer3 = color;
-
+			output.gBuffer0.rgb = flux.rgb;
+			output.gBuffer0.a = GetOcclusion(i);
+			output.gBuffer1.rgb = specularTint;
+			output.gBuffer1.a = GetSmoothness(i);
+			output.gBuffer2 = float4(i.normal * 0.5 + 0.5, 1);
+			output.gBuffer3 = flux;
 		#if defined(SHADOWS_SHADOWMASK) && (UNITY_ALLOWED_MRT_COUNT > 4)
 			float2 shadowUV = 0;
 			#if defined(LIGHTMAP_ON)

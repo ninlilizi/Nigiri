@@ -14,8 +14,9 @@
 			CGPROGRAM
 			#pragma target 5.0
 			#pragma vertex vert
-			#pragma fragment frag
 			#pragma geometry geom
+			#pragma fragment frag
+			
 
 			#include "UnityCG.cginc"
 
@@ -29,6 +30,7 @@
 				float4 cellIndex : SV_POSITION;
 				float3 normal : WORLD_NORMAL;
 				float3 flux : LIGHT_FLUX;
+				float3 uv	: TEXCOORD0;
 			};
 
 			struct g2f
@@ -89,16 +91,16 @@
 				return (worldPos / LPV_CELL_SIZE) + int3(LPV_DIMH, LPV_DIMH, LPV_DIMH);
 			}
 
-			Texture2D rsmFluxMap : register(t0);
-			Texture2D rsmWsPosMap : register(t1);
-			Texture2D rsmWsNorMap : register(t2);
-
 			struct RsmTexel
 			{
 				float4 flux;
 				float3 normalWS;
 				float3 positionWS;
 			};
+
+			Texture2D RSMFlux : register(t0);
+			Texture2D _CameraDepthTexture : register(t1);
+			Texture2D normalMap : register(t2);
 
 			float Luminance(RsmTexel rsmTexel)
 			{
@@ -109,9 +111,9 @@
 			RsmTexel GetRsmTexel(int2 coords)
 			{
 				RsmTexel tx = (RsmTexel)0;
-				tx.flux = rsmFluxMap.Load(int3(coords, 0));
-				tx.normalWS = rsmWsNorMap.Load(int3(coords, 0)).xyz;
-				tx.positionWS = rsmWsPosMap.Load(int3(coords, 0)).xyz + (tx.normalWS * POSWS_BIAS_NORMAL);
+				tx.flux = float4(RSMFlux.Load(int3(coords, 0)).xyz, 0);
+				tx.normalWS = normalMap.Load(int3(coords, 0)).xyz;
+				tx.positionWS = _CameraDepthTexture.Load(int3(coords, 0)).xyz + (tx.normalWS * POSWS_BIAS_NORMAL);
 				return tx;
 			}
 
@@ -123,7 +125,7 @@
 				v2g o;// = (v2f)0;
 
 				uint2 RSMsize;
-				rsmWsPosMap.GetDimensions(RSMsize.x, RSMsize.y);
+				_CameraDepthTexture.GetDimensions(RSMsize.x, RSMsize.y);
 				RSMsize /= KERNEL_SIZE;
 				int3 rsmCoords = int3(v.posIndex % RSMsize.x, v.posIndex / RSMsize.x, 0);
 
