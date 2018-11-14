@@ -1,4 +1,4 @@
-﻿Shader "NKGI/Emissive Glow" {
+﻿Shader "NKLI/Nigiri Light and shadow injector" {
 
 	Properties {
 		_Color ("Tint", Color) = (1, 1, 1, 1)

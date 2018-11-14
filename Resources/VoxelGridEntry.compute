@@ -4,6 +4,8 @@
 // Readable/Writable texture for storing the direct lighting and the occupied flag
 RWTexture3D<float4>			voxelGrid;
 
+RWStructuredBuffer<float>   voxelUpdateCounter;
+
 // Texture for storing the color with direct lighting
 Texture2D<float4>			lightingTexture;
 
@@ -17,15 +19,13 @@ Texture2D<float4>			NoiseTexture;
 // Variable representing the dimension of the voxel grid
 uint						voxelResolution;
 
+uint f0;
+
 // World-space boundary of the voxel grid
 float 						worldVolumeBoundary;
 
-float f0;
-uint rng_state;
-double checkCounter;
-
 // Function to get position of voxel in the grid
-inline uint3 GetVoxelPosition (float3 worldPosition)
+inline uint3 GetVoxelPosition(float3 worldPosition)
 {
 	float3 encodedPosition = worldPosition / worldVolumeBoundary;
 	encodedPosition += float3(1.0f, 1.0f, 1.0f);
@@ -34,55 +34,40 @@ inline uint3 GetVoxelPosition (float3 worldPosition)
 	return voxelPosition;
 }
 
-float2 rand(float2 coord)
-{
-	float noiseX = saturate(frac(sin(dot(coord, float2(12.9898, 78.223))) * 43758.5453));
-	float noiseY = saturate(frac(sin(dot(coord, float2(12.9898, 78.223)*2.0)) * 43758.5453));
-
-	return float2(noiseX, noiseY);
-}
-
-uint rand_xorshift()
-{
-	// Xorshift algorithm from George Marsaglia's paper
-	rng_state ^= (rng_state << 13);
-	rng_state ^= (rng_state >> 17);
-	rng_state ^= (rng_state << 5);
-	return rng_state;
-}
-
-
 [numthreads(16, 16, 1)]
 // Entry point of the voxelization compute shader
-void CSMain (uint3 id : SV_DispatchThreadID)
+void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	float3 noiseCoord = NoiseTexture[id.xy].rgb;
 
-	// Color of the current voxel with lighting
-	float3 lightingColor = lightingTexture[id.xy + noiseCoord.rg].rgb;
 
-	//float4 lightMapColor = lightMapTexture[id.xy] * 0.05;
+	// Color of the current voxel with lighting
+	float4 lightingColor = lightingTexture[id.xy];
+
+	float4 lightMapColor = lightMapTexture[id.xy];
 
 	// World space position
-	float3 worldPosition = positionTexture[id.xy + noiseCoord.rg].rgb;
+	float3 worldPosition = positionTexture[id.xy].rgb;
 
 	// Extract the pixel's depth
-	float lindepth = positionTexture[id.xy + noiseCoord.rg].a;
+	float lindepth = positionTexture[id.xy].a;
 
-	uint3 voxelPosition = GetVoxelPosition(worldPosition) + noiseCoord;
+	uint3 voxelPosition = GetVoxelPosition(worldPosition);
 
-	f0 += 0.01f;
+	double index = id.x * 256 + id.y;
+	voxelUpdateCounter[index] = voxelUpdateCounter[1] + 0.01;
 
 	// Inject the current voxel's information into the grid
 	if (((lindepth < voxelGrid[voxelPosition].a) && (lindepth > 0.01f)) || (voxelGrid[voxelPosition].a == 0.0f))
 	{
-
-		voxelGrid[voxelPosition] = lerp(float4(lightingColor, lindepth), voxelGrid[voxelPosition], 0.5);
+		float4 oldColor = voxelGrid[voxelPosition];
+		if (oldColor.r == 0 && oldColor.g == 0 && oldColor.b == 0) voxelGrid[voxelPosition] = float4(lightingColor.rgb + lightMapColor, lindepth);
+		else voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb, lindepth), oldColor, 0.995);
 	}
-	else if (f0 > noiseCoord.x)
+	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
-		voxelGrid[voxelPosition] = lerp(float4(lightingColor, lindepth), voxelGrid[voxelPosition], 0.5);
-		f0 = 0;
+		float4 oldColor = voxelGrid[voxelPosition];
+		voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb, lindepth), oldColor, 0.995);
+		voxelUpdateCounter[index] = 0;
 	}
-
 }

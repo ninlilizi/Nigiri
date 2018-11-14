@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 [ExecuteInEditMode]
-public class PVGI : MonoBehaviour {
+public class Nigiri : MonoBehaviour {
 
 	public enum DebugVoxelGrid {
 		GRID_1,
@@ -35,6 +35,7 @@ public class PVGI : MonoBehaviour {
     public ComputeShader lpvPropagationCompositionShader = null;
     public Shader lpvRenderShader = null;
     [Header("LPV Settings")]
+    public bool DoLPV = false;
     public LayerMask emissiveLayer;
     public bool backBuffering = true;
     public bool rsmVPLInjection = true;
@@ -83,16 +84,22 @@ public class PVGI : MonoBehaviour {
 	public Vector2Int injectionTextureResolution = new Vector2Int(1280, 720);
 
 	[Header("Cone Trace Settings")]
-	public float maximumIterations = 8.0f;
+    [Range(1, 64)]
+	public int maximumIterations = 8;
+    [Range(0.01f, 2)]
     public float coneLength = 1;
+    [Range(0.01f, 12)]
+    public float coneWidth = 6;
+    public bool stochasticSampling = true;
 
-	public RenderTexture lightingTexture;
-	public RenderTexture positionTexture;
+    public RenderTexture lightingTexture;
+    public RenderTexture lightingVoxelTexture;
+    public RenderTexture positionTexture;
     public RenderTexture normalTexture;
     public RenderTexture lightMapTexture;
     public RenderTexture lpvTexture;
     public RenderTexture lpvBlendTexture;
-    public RenderTexture lpvBounceTexture;
+    public RenderTexture lightAttenuationTexture;
     private RenderTexture blur;
     public RenderTexture gi;
 
@@ -112,9 +119,13 @@ public class PVGI : MonoBehaviour {
     public ComputeShader clearComputeCache;
     public ComputeShader transferIntsCompute;
 
+    [Header("Debug Settings")]
+    public bool VisualiseGI = false;
+
     public Texture2D[] blueNoise;
 
     PathCacheBuffer pathCacheBuffer;
+    ComputeBuffer voxelUpdateCounter;
     public int tracedTexture1UpdateCount;
 
     private float lengthOfCone = 0.0f;
@@ -135,7 +146,8 @@ public class PVGI : MonoBehaviour {
         lpvPropagationCompositionShader = Resources.Load("LPVPropagationCompositionShader") as ComputeShader;
         lpvRenderShader = Shader.Find("Hidden/LPVRenderShader");
         blurShader = Shader.Find("Hidden/BilateralBlur");
-        emissiveShader = Shader.Find("NKGI/Emissive Glow");
+        emissiveShader = Shader.Find("NKLI/Nigiri Light and shadow injector");
+        emissiveShader = Shader.Find("NKLI/Nigiri Light and shadow injector");
         gaussianShader = Shader.Find("Hidden/SEGI Gaussian Blur Filter");
         gaussianMaterial = new Material(gaussianShader);
         blurMaterial = new Material(blurShader);
@@ -168,20 +180,24 @@ public class PVGI : MonoBehaviour {
         InitializeVoxelGrid();
 
 		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-		positionTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        normalTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        lightingVoxelTexture = new RenderTexture((injectionTextureResolution.x / 4), (injectionTextureResolution.y / 4), 0, RenderTextureFormat.ARGBHalf);
+        positionTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
+        normalTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightMapTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 16, RenderTextureFormat.ARGBHalf);
         lpvTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lpvBlendTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        lpvBounceTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        lightAttenuationTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.filterMode = FilterMode.Bilinear;
+        lightingVoxelTexture.filterMode = FilterMode.Bilinear;
         lpvTexture.filterMode = FilterMode.Bilinear;
         lpvBlendTexture.filterMode = FilterMode.Bilinear;
-        lpvBounceTexture.filterMode = FilterMode.Bilinear;
+        lightAttenuationTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
+
+        voxelUpdateCounter = new ComputeBuffer(injectionTextureResolution.y * injectionTextureResolution.y, 4, ComputeBufferType.Default);
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
@@ -202,13 +218,13 @@ public class PVGI : MonoBehaviour {
         pathCacheBuffer = new PathCacheBuffer();
         pathCacheBuffer.Init(256);
 
-        if (!emissiveCameraGO)
+        /*if (!emissiveCameraGO)
         {
             emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
-            emissiveCamera.hideFlags = HideFlags.DontSave;
+            emissiveCamera.hideFlags = HideFlags.HideAndDontSave;
             emissiveCamera.enabled = false;
-        }
+        }*/
     }
 
 	// Function to initialize the voxel grid data
@@ -273,6 +289,7 @@ public class PVGI : MonoBehaviour {
 		int kernelHandle = voxelGridEntryShader.FindKernel("CSMain");
 
         // Updating voxel grid 1
+        voxelGridEntryShader.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
         voxelGridEntryShader.SetTexture(kernelHandle, "lightMapTexture", lightMapTexture);
         voxelGridEntryShader.SetTexture(kernelHandle, "NoiseTexture", blueNoise[frameSwitch % 64]);
         voxelGridEntryShader.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
@@ -341,17 +358,22 @@ public class PVGI : MonoBehaviour {
 
         lengthOfCone = (32.0f * worldVolumeBoundary) / (highestVoxelResolution * Mathf.Tan (Mathf.PI / 6.0f));
 
-		pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
+        pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
 		pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
 		pvgiMaterial.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
 		pvgiMaterial.SetFloat ("maximumIterations", maximumIterations);
 		pvgiMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
 		pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-		pvgiMaterial.SetInt ("highestVoxelResolution", highestVoxelResolution);
+        pvgiMaterial.SetFloat("coneLength", coneLength);
+        pvgiMaterial.SetFloat("coneWidth", coneWidth);
+        pvgiMaterial.SetInt ("highestVoxelResolution", highestVoxelResolution);
+        pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
+        pvgiMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
         pvgiMaterial.SetFloat("coneLength", coneLength);
 
 		Graphics.Blit(source, lightingTexture);
-		Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
+        Graphics.Blit(source, lightingVoxelTexture);
+        Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
         Graphics.Blit(source, normalTexture, pvgiMaterial, 4);
         Graphics.Blit(source, lightMapTexture, lightMapMaterial, 0);
 
@@ -419,6 +441,7 @@ public class PVGI : MonoBehaviour {
 
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
             Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
+            //Shader.SetGlobalBuffer("tracedBuffer1", pathCacheBuffer.back);
             Graphics.SetRandomWriteTarget(1, pathCacheBuffer.back);
             Graphics.Blit (source, gi, pvgiMaterial, 2);
             Graphics.ClearRandomWriteTargets();
@@ -431,7 +454,8 @@ public class PVGI : MonoBehaviour {
 
 
             ///////////////////////////////// LPV
-
+            if (DoLPV)
+            {
 
                 if (backBuffering)
                 {
@@ -462,77 +486,78 @@ public class PVGI : MonoBehaviour {
                 }
 
 
-            lpvRenderMaterial.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
-            lpvRenderMaterial.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
-            lpvRenderMaterial.SetFloat("firstCascadeBoundary", firstCascadeBoundary);
-            lpvRenderMaterial.SetFloat("secondCascadeBoundary", secondCascadeBoundary);
-            lpvRenderMaterial.SetFloat("thirdCascadeBoundary", thirdCascadeBoundary);
-            lpvRenderMaterial.SetFloat("lpvDimension", lpvDimension);
-            lpvRenderMaterial.SetVector("playerPosition", this.transform.position);
+                lpvRenderMaterial.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
+                lpvRenderMaterial.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
+                lpvRenderMaterial.SetFloat("firstCascadeBoundary", firstCascadeBoundary);
+                lpvRenderMaterial.SetFloat("secondCascadeBoundary", secondCascadeBoundary);
+                lpvRenderMaterial.SetFloat("thirdCascadeBoundary", thirdCascadeBoundary);
+                lpvRenderMaterial.SetFloat("lpvDimension", lpvDimension);
+                lpvRenderMaterial.SetVector("playerPosition", this.transform.position);
 
-            emissiveCamera.CopyFrom(localCam);
-            emissiveCamera.transform.SetPositionAndRotation(localCam.transform.position, localCam.transform.rotation);
-            emissiveCamera.renderingPath = RenderingPath.DeferredShading;
-            emissiveCamera.SetReplacementShader(emissiveShader, "");
-            emissiveCamera.targetTexture = lightMapTexture;
-            emissiveCamera.cullingMask = emissiveLayer;
-            //emissiveCamera.Render();
-            //Graphics.Blit(source, lightMapTexture, lightMapMaterial, 0);
+                /*emissiveCamera.CopyFrom(localCam);
+                emissiveCamera.transform.SetPositionAndRotation(localCam.transform.position, localCam.transform.rotation);
+                emissiveCamera.renderingPath = RenderingPath.DeferredShading;
+                emissiveCamera.SetReplacementShader(emissiveShader, "");
+                emissiveCamera.targetTexture = lightMapTexture;
+                emissiveCamera.cullingMask = emissiveLayer;*/
+                //emissiveCamera.Render();
+                //Graphics.Blit(source, lightMapTexture, lightMapMaterial, 0);
 
-            // bilateral blur at full res
-            Graphics.Blit(lightMapTexture, blur, blurMaterial, 8);
-            Graphics.Blit(blur, lightMapTexture, blurMaterial, 9);
+                // bilateral blur at full res
+                Graphics.Blit(lightMapTexture, blur, blurMaterial, 8);
+                Graphics.Blit(blur, lightMapTexture, blurMaterial, 9);
 
-            if (lpvStageSwitch == 0) LPVGridInjection(ref firstCascade, firstCascadeBoundary);
-            if (lpvStageSwitch == 1) LPVGridInjection(ref secondCascade, secondCascadeBoundary);
-            if (lpvStageSwitch == 2) LPVGridInjection(ref thirdCascade, thirdCascadeBoundary);
+                if (lpvStageSwitch == 0) LPVGridInjection(ref firstCascade, firstCascadeBoundary);
+                if (lpvStageSwitch == 1) LPVGridInjection(ref secondCascade, secondCascadeBoundary);
+                if (lpvStageSwitch == 2) LPVGridInjection(ref thirdCascade, thirdCascadeBoundary);
 
-            if (backBuffering)
-            {
-                if (lpvStageSwitch == 0) LPVGridPropagation(ref firstCascade);
-                if (lpvStageSwitch == 1) LPVGridPropagation(ref secondCascade);
-                if (lpvStageSwitch == 2) LPVGridPropagation(ref thirdCascade);
-            }
-            else
-            {
-
-                for (int i = 0; i < propagationSteps; ++i)
+                if (backBuffering)
                 {
                     if (lpvStageSwitch == 0) LPVGridPropagation(ref firstCascade);
                     if (lpvStageSwitch == 1) LPVGridPropagation(ref secondCascade);
                     if (lpvStageSwitch == 2) LPVGridPropagation(ref thirdCascade);
                 }
+                else
+                {
 
-            }
-            lpvStageSwitch = (lpvStageSwitch + 1) % (3);
+                    for (int i = 0; i < propagationSteps; ++i)
+                    {
+                        if (lpvStageSwitch == 0) LPVGridPropagation(ref firstCascade);
+                        if (lpvStageSwitch == 1) LPVGridPropagation(ref secondCascade);
+                        if (lpvStageSwitch == 2) LPVGridPropagation(ref thirdCascade);
+                    }
 
-            if (bDisplayBackBuffer)
-            {
-                lpvRenderMaterial.SetTexture("lpvRedSHFirstCascade", firstCascade.lpvRedSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvGreenSHFirstCascade", firstCascade.lpvGreenSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvBlueSHFirstCascade", firstCascade.lpvBlueSHBackBuffer);
+                }
+                lpvStageSwitch = (lpvStageSwitch + 1) % (3);
 
-                lpvRenderMaterial.SetTexture("lpvRedSHSecondCascade", secondCascade.lpvRedSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvGreenSHSecondCascade", secondCascade.lpvGreenSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvBlueSHSecondCascade", secondCascade.lpvBlueSHBackBuffer);
+                if (bDisplayBackBuffer)
+                {
+                    lpvRenderMaterial.SetTexture("lpvRedSHFirstCascade", firstCascade.lpvRedSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHFirstCascade", firstCascade.lpvGreenSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHFirstCascade", firstCascade.lpvBlueSHBackBuffer);
 
-                lpvRenderMaterial.SetTexture("lpvRedSHThirdCascade", thirdCascade.lpvRedSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvGreenSHThirdCascade", thirdCascade.lpvGreenSHBackBuffer);
-                lpvRenderMaterial.SetTexture("lpvBlueSHThirdCascade", thirdCascade.lpvBlueSHBackBuffer);
-            }
-            else
-            {
-                lpvRenderMaterial.SetTexture("lpvRedSHFirstCascade", firstCascade.lpvRedSH);
-                lpvRenderMaterial.SetTexture("lpvGreenSHFirstCascade", firstCascade.lpvGreenSH);
-                lpvRenderMaterial.SetTexture("lpvBlueSHFirstCascade", firstCascade.lpvBlueSH);
+                    lpvRenderMaterial.SetTexture("lpvRedSHSecondCascade", secondCascade.lpvRedSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHSecondCascade", secondCascade.lpvGreenSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHSecondCascade", secondCascade.lpvBlueSHBackBuffer);
 
-                lpvRenderMaterial.SetTexture("lpvRedSHSecondCascade", secondCascade.lpvRedSH);
-                lpvRenderMaterial.SetTexture("lpvGreenSHSecondCascade", secondCascade.lpvGreenSH);
-                lpvRenderMaterial.SetTexture("lpvBlueSHSecondCascade", secondCascade.lpvBlueSH);
+                    lpvRenderMaterial.SetTexture("lpvRedSHThirdCascade", thirdCascade.lpvRedSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHThirdCascade", thirdCascade.lpvGreenSHBackBuffer);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHThirdCascade", thirdCascade.lpvBlueSHBackBuffer);
+                }
+                else
+                {
+                    lpvRenderMaterial.SetTexture("lpvRedSHFirstCascade", firstCascade.lpvRedSH);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHFirstCascade", firstCascade.lpvGreenSH);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHFirstCascade", firstCascade.lpvBlueSH);
 
-                lpvRenderMaterial.SetTexture("lpvRedSHThirdCascade", thirdCascade.lpvRedSH);
-                lpvRenderMaterial.SetTexture("lpvGreenSHThirdCascade", thirdCascade.lpvGreenSH);
-                lpvRenderMaterial.SetTexture("lpvBlueSHThirdCascade", thirdCascade.lpvBlueSH);
+                    lpvRenderMaterial.SetTexture("lpvRedSHSecondCascade", secondCascade.lpvRedSH);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHSecondCascade", secondCascade.lpvGreenSH);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHSecondCascade", secondCascade.lpvBlueSH);
+
+                    lpvRenderMaterial.SetTexture("lpvRedSHThirdCascade", thirdCascade.lpvRedSH);
+                    lpvRenderMaterial.SetTexture("lpvGreenSHThirdCascade", thirdCascade.lpvGreenSH);
+                    lpvRenderMaterial.SetTexture("lpvBlueSHThirdCascade", thirdCascade.lpvBlueSH);
+                }
             }
             ///////////////////////////////// LPV
 
@@ -553,7 +578,8 @@ public class PVGI : MonoBehaviour {
 
             Shader.SetGlobalTexture("gi", gi);
             Shader.SetGlobalTexture("lpv", lpvTexture);
-            Graphics.Blit(source, destination, pvgiMaterial, 3);
+            //Shader.SetGlobalTexture("lightingTexture", lightingTexture);
+            Graphics.Blit(lightingTexture, destination, pvgiMaterial, 3);
 
 
 
@@ -563,6 +589,7 @@ public class PVGI : MonoBehaviour {
 
             //Advance the frame counter
             frameSwitch = (frameSwitch + 1) % (64);
+
         }
 
 	}
@@ -571,16 +598,40 @@ public class PVGI : MonoBehaviour {
     {
         if (pathCacheBuffer != null) pathCacheBuffer.Cleanup();
         if (lightingTexture != null) lightingTexture.Release();
+        if (lightingVoxelTexture != null) lightingVoxelTexture.Release();
         if (positionTexture != null) positionTexture.Release();
         if (normalTexture != null) normalTexture.Release();
         if (lightMapTexture != null) lightMapTexture.Release();
         if (lpvTexture != null) lpvTexture.Release();
         if (lpvBlendTexture != null) lpvBlendTexture.Release();
-        if (lpvBounceTexture != null) lpvBounceTexture.Release();
+        if (lightAttenuationTexture != null) lightAttenuationTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
-        if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
+        //if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
+    }
+
+    public void UpdateForceGI()
+    {
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
+        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
+
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid2);
+        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
+
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid3);
+        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
+
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid4);
+        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
+
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid5);
+        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
     }
 
     // Function to inject the vpl data into LPV grid as spherical harmonics

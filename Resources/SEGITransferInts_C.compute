@@ -4,7 +4,7 @@
 #pragma kernel CSMain4 // 3 - PathTracer cache decoder
 
 
-RWTexture3D<half4> Result;
+RWTexture3D<float4> Result;
 Texture3D<float4> PrevResult;
 
 
@@ -188,17 +188,18 @@ void CSMain4(uint3 id : SV_DispatchThreadID)
 {
 	uint slice = Resolution / 16;
 	uint currentZ;
-	half4 color;
+	float4 color;
 
 	[unroll(32)]
 	for (uint i = 0; i < slice; i++)
 	{
 		currentZ = zStagger * slice - slice + i;
 		double index = id.x * Resolution * Resolution + id.y * Resolution + currentZ;
-		color = float4(InputBuffer[index]);
+		color = float4(InputBuffer[index]) / 32768;
+		//color = float4(1, 1, 1, 1);
 		if (color.r > 0 || color.g > 0 || color.b > 0)
 		{
-			ResultBuffer[index] = lerp(ResultBuffer[index], color, 0.5);
+			ResultBuffer[index].rgba = lerp(ResultBuffer[index].rgba, color.rgba, 0.5);
 		}
 	}
 }

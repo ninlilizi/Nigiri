@@ -709,9 +709,22 @@ FragmentOutput MyFragmentProgram (Interpolators i) {
 		CreateLight(i), CreateIndirectLight(i, viewDir)
 	);
 	half3 emission = GetEmission(i);
+
+	//Nin - NKGI - We want this to mux into emissive data
 	half3 lightColor = UNITY_SAMPLE_TEX2D(unity_Lightmap, i.uv);
 	float4 flux = float4(DoReflectiveShadowMapping(i.worldPos, true, float4(i.normal * 0.5 + 0.5, 1), i.uv, i.tangent, i), 0);
-	//color.rgb += emission + flux;
+	///
+
+	//Nin - NKGI - Sample shadowmap to pass to GI
+	float3 lightColor1 = _LightColor0.rgb;
+	float3 lightDir = _WorldSpaceLightPos0.xyz;
+	float4 colorTex = tex2D(_MainTex, i.uv.xy);
+	UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
+	float3 N = float3(0.0f, 1.0f, 0.0f);
+	float  NL = saturate(dot(N, lightDir));
+	float3 shadowColor = colorTex.rgb * lightColor1 * NL * atten;
+	///
+	
 	
 	#if defined(_RENDERING_FADE) || defined(_RENDERING_TRANSPARENT)
 		color.a = alpha;
@@ -719,16 +732,15 @@ FragmentOutput MyFragmentProgram (Interpolators i) {
 
 		if (lightColor.r < 0.2) lightColor.rgb = 0;
 	
-	//color *= flux;
-
 		FragmentOutput output;
 	#if defined(DEFERRED_PASS)
 		#if !defined(UNITY_HDR_ON)
 			color.rgb = exp2(-color.rgb);
 		#endif
 		output.gBuffer0.rgb = albedo;
-		output.gBuffer0.a = GetOcclusion(i);
-		//Nin - NKGI - The line below shows where to put your emissive data
+		//Nin - NKGI - The shadowmap must be put here.
+		output.gBuffer0.a = shadowColor;
+		//Nin - NKGI - The line below shows where to put your emissive data. We exclude low values to avoid default gray from showing
 		if (emission.r > 0.1 || emission.g > 0.1 || emission.b > 0.1) output.gBuffer1.rgb = emission + lightColor + flux.rgb;
 		///
 		output.gBuffer1.a = GetSmoothness(i);
