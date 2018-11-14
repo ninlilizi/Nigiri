@@ -1,0 +1,204 @@
+#pragma kernel CSMain // 0
+#pragma kernel CSMain2 // 1
+#pragma kernel CSMain3 // 2 - PathTracer cache decoder
+#pragma kernel CSMain4 // 3 - PathTracer cache decoder
+
+
+RWTexture3D<half4> Result;
+Texture3D<float4> PrevResult;
+
+
+//We use a struct as a float4 (to align with 128 byte cache addressing for performance)
+cbuffer PerFrame: register(b0)
+{
+	struct colorStruct
+	{
+		float4 value;
+	};
+	uniform StructuredBuffer<colorStruct> InputBuffer;
+
+	Texture3D<uint> RG0;
+	float4 VoxelOriginDelta;
+	float4 ClipmapOverlap;
+	uint Resolution;
+	int VoxelAA;
+}
+uniform RWStructuredBuffer<float4> ResultBuffer;
+///
+
+
+SamplerState _PointClamp;
+
+int zStagger;
+
+
+// Encoding/decoding [0..1) floats into 8 bit/channel RGBA. Note that 1.0 will not be encoded properly.
+/*inline float4 EncodeFloatRGBA(float v)
+{
+	float4 kEncodeMul = float4(1.0, 255.0, 65025.0, 160581375.0);
+	float kEncodeBit = 1.0 / 255.0;
+	float4 enc = kEncodeMul * v;
+	enc = frac(enc);
+	enc -= enc.yzww * kEncodeBit;
+	return enc;
+}
+inline float DecodeFloatRGBA(float4 enc)
+{
+	float4 kDecodeDot = float4(1.0, 1 / 255.0, 1 / 65025.0, 1 / 160581375.0);
+	return dot(enc, kDecodeDot);
+}*/
+
+float3 rgb2hsv(float3 c)
+{
+	float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
+	float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+
+	return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+float3 hsv2rgb(float3 c)
+{
+	float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
+	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
+}
+
+float4 DecodeRGBAuint(uint value)
+{
+	uint ai = value & 0x0000007F;
+	uint vi = (value / 0x00000080) & 0x000007FF;
+	uint si = (value / 0x00040000) & 0x0000007F;
+	uint hi = value / 0x02000000;
+
+	float h = float(hi) / 127.0;
+	float s = float(si) / 127.0;
+	float v = (float(vi) / 2047.0) * 10.0;
+	float a = ai * 2.0;
+
+	v = pow(v, 3.0);
+
+	float3 color = hsv2rgb(float3(h, s, v));
+
+	return float4(color.rgb, a);
+}
+
+uint EncodeRGBAuint(float4 color)
+{
+	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
+	float3 hsv = rgb2hsv(color.rgb);
+	hsv.z = pow(hsv.z, 1.0 / 3.0);
+
+	uint result = 0;
+
+	uint a = min(127, uint(color.a / 2.0));
+	uint v = min(2047, uint((hsv.z / 10.0) * 2047));
+	uint s = uint(hsv.y * 127);
+	uint h = uint(hsv.x * 127);
+
+	result += a;
+	result += v * 0x00000080; // << 7
+	result += s * 0x00040000; // << 18
+	result += h * 0x02000000; // << 25
+
+	return result;
+}
+
+// 9-tap Gaussian filter with linear sampling
+// http://rastergrid.com/blog/2010/09/efficient-gaussian-blur-with-linear-sampling/
+/*inline half4 gaussian_filter(float2 stride, uint3 coord)
+{
+	float4 s = RG1[uint3(coord)] * 0.227027027;
+
+	float2 d1 = stride * 1.3846153846;
+	s += RG1[uint3(coord)] * 0.3162162162;
+	s += RG1[uint3(coord)] * 0.3162162162;
+
+	float2 d2 = stride * 3.2307692308;
+	s += RG1[uint3(coord)] * 0.0702702703;
+	s += RG1[uint3(coord)] * 0.0702702703;
+
+	return s;
+}*/
+
+// 0
+[numthreads(16,16,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    for (uint i = 0; i < Resolution; i++)
+    {
+    	float4 result = float4(0,0,0,0);
+
+		result.rgba = DecodeRGBAuint(RG0[uint3(id.x, id.y, i)]);
+
+		result /= 1 + VoxelAA * 3;
+
+		result.rgb /= max(result.a, 2.0);
+
+		float blockerValue = 0.0;
+
+		if (result.a > 20.0)
+		{
+			blockerValue = max(0.0, result.a - 20.0);
+		}
+
+		result.a = min(result.a, 2.0) * 1.0;
+		result.a += blockerValue;
+
+		Result[uint3(id.xy, i)] = result;
+
+    }
+}
+
+
+// 1
+[numthreads(16,16,1)]
+void CSMain2 (uint3 id : SV_DispatchThreadID)
+{
+    for (uint i = 0; i < Resolution; i++)
+    {
+    	float4 result = float4(0,0,0,0);
+
+		result.rgba = DecodeRGBAuint(RG0[uint3(id.x, id.y, i)]);
+
+		result.rgb /= max(2.0, result.a);
+
+        Result[uint3(id.xy, i)] = result;
+    }
+}
+
+
+// 2
+[numthreads(16, 16, 1)]
+void CSMain3(uint3 id : SV_DispatchThreadID)
+{
+	for (uint i = 0; i < Resolution; i++)
+	{
+		double index = id.x * Resolution * Resolution + id.y * Resolution + i;
+		ResultBuffer[index] = float4(InputBuffer[index]);
+	}
+}
+
+// 3 - Copies contents over 16 frames
+[numthreads(16, 16, 1)]
+void CSMain4(uint3 id : SV_DispatchThreadID)
+{
+	uint slice = Resolution / 16;
+	uint currentZ;
+	half4 color;
+
+	[unroll(32)]
+	for (uint i = 0; i < slice; i++)
+	{
+		currentZ = zStagger * slice - slice + i;
+		double index = id.x * Resolution * Resolution + id.y * Resolution + currentZ;
+		color = float4(InputBuffer[index]);
+		if (color.r > 0 || color.g > 0 || color.b > 0)
+		{
+			ResultBuffer[index] = lerp(ResultBuffer[index], color, 0.5);
+		}
+	}
+}
