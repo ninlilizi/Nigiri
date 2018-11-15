@@ -40,6 +40,8 @@
 
 		uniform float					worldVolumeBoundary;
 		uniform float					indirectLightingStrength;
+		uniform float					SunlightInjection;
+
 		uniform float					lengthOfCone;
 		uniform int						StochasticSampling;
 		uniform float					maximumIterations;
@@ -252,7 +254,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float3 SEGISunlightVector = _WorldSpaceLightPos0;
 	float3 SEGISkyColor = float3(256 / 193, 256 / 223, 256 / 243);
 	float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);;
-	float SEGISoftSunlight = 0.25f;
 	float GIGain = 1;
 	///
 
@@ -317,7 +318,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) * SunlightInjection;
 
 			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
@@ -479,11 +480,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float upGradient = saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)));
 	float sunGradient = saturate(dot(coneDirection, -SEGISunlightVector.xyz));
 	skyColor += lerp(SEGISkyColor.rgb * 1.0, SEGISkyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
-	skyColor += GISunColor.rgb * pow(sunGradient, (4.0).xxx) * SEGISoftSunlight;
+	skyColor += GISunColor.rgb * pow(sunGradient, (4.0).xxx) * SunlightInjection;
 
-	//gi.rgb *= GIGain * 0.15;
+	gi.rgb *= GIGain;// *0.15;
 
-	gi.rgb += (skyColor * skyVisibility) * 0.5;
+	gi.rgb += (skyColor * skyVisibility);
 
 	computedColor.rgb = gi.rgb;
 
@@ -567,7 +568,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//albedo * albedoTex.a * albedoTex.rgb;
 		
-	float3 indirectLighting = ((ao * indirectLightingStrength * emissive + albedo) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
+	float3 indirectLighting = ((indirectLightingStrength * albedo + emissive) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
 	if (VisualiseGI) indirectLighting = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
 
 	//indirectLighting = ao;

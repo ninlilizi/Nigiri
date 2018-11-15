@@ -8,18 +8,23 @@ RWStructuredBuffer<float1>   voxelUpdateCounter;
 
 // Texture for storing the color with direct lighting
 Texture2D<float4>			lightingTexture;
+Texture2D<float4>			lightingEmissionTexture;
 
 Texture2D<float4>			lightMapTexture;
+Texture2D<float4>			lightMapEmissionTexture;
 
 // Texture for storing the world space position
 Texture2D<float4>			positionTexture;
+Texture2D<float4>			positionEmissionTexture;
 
 Texture2D<float4>			NoiseTexture;
 
+// This is here to cause nin suffering
+float4x4					InverseViewMatrix;
+float4x4					InverseProjectionMatrix;
+
 // Variable representing the dimension of the voxel grid
 uint						voxelResolution;
-
-uint f0;
 
 // World-space boundary of the voxel grid
 float 						worldVolumeBoundary;
@@ -34,40 +39,59 @@ inline uint3 GetVoxelPosition(float3 worldPosition)
 	return voxelPosition;
 }
 
+
 [numthreads(16, 16, 1)]
 // Entry point of the voxelization compute shader
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	float3 noiseCoord = NoiseTexture[id.xy].rgb;
 
+	// Extract the pixel's depth
+	float lindepth = positionTexture[id.xy].a;
+	float linEmissionDepth = positionEmissionTexture[id.xy].a;
 
 	// Color of the current voxel with lighting
 	float4 lightingColor = lightingTexture[id.xy];
+	float4 lightingEmissionColor = lightingEmissionTexture[id.xy] * linEmissionDepth;
 
 	float4 lightMapColor = lightMapTexture[id.xy];
+	float4 lightMapEmissionColor = lightMapEmissionTexture[id.xy] * linEmissionDepth;
 
 	// World space position
 	float3 worldPosition = positionTexture[id.xy].rgb;
+	float3 worldEmissionPosition = positionEmissionTexture[id.xy].rgb;
 
-	// Extract the pixel's depth
-	float lindepth = positionTexture[id.xy].a;
 
 	uint3 voxelPosition = GetVoxelPosition(worldPosition);
+	uint3 voxelEmissionPosition = voxelPosition - (voxelPosition * 2);
 
-	double index = id.x * 256 + id.y;
+	double index = voxelPosition.y * 256 + voxelPosition.z;
 	voxelUpdateCounter[index] += 0.01;
+
 
 	// Inject the current voxel's information into the grid
 	if (((lindepth < voxelGrid[voxelPosition].a) && (lindepth > 0.01f)) || (voxelGrid[voxelPosition].a == 0.0f))
 	{
 		float4 oldColor = voxelGrid[voxelPosition];
-		if (oldColor.r == 0 && oldColor.g == 0 && oldColor.b == 0) voxelGrid[voxelPosition] = float4(lightingColor.rgb + lightMapColor, lindepth);
-		else voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb, lindepth), oldColor, 0.995);
+		float4 oldEmissionColor = voxelGrid[voxelEmissionPosition];
+		float4 inverseOldColor = voxelGrid[voxelPosition];
+		if (oldColor.r == 0 && oldColor.g == 0 && oldColor.b == 0)
+		{
+			voxelGrid[voxelPosition] = float4(lightingColor.rgb + lightMapColor.rgb + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth);
+			voxelGrid[voxelEmissionPosition] = float4(lightingColor.rgb + lightMapColor + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth);
+		}
+		else
+		{
+			voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth), oldColor, 0.995);
+			voxelGrid[voxelEmissionPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth), oldEmissionColor, 0.995);
+		}
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
 		float4 oldColor = voxelGrid[voxelPosition];
-		voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb, lindepth), oldColor, 0.995);
+		float4 oldEmissionColor = voxelGrid[voxelEmissionPosition];
+		voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth), oldColor, 0.995);
+		voxelGrid[voxelEmissionPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb + lightingEmissionColor.rgb + lightMapEmissionColor.rgb, lindepth), oldEmissionColor, 0.995);
 		voxelUpdateCounter[index] = 0;
 	}
 }
