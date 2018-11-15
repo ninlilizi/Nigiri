@@ -4,7 +4,7 @@
 // Readable/Writable texture for storing the direct lighting and the occupied flag
 RWTexture3D<float4>			voxelGrid;
 
-RWStructuredBuffer<float>   voxelUpdateCounter;
+RWStructuredBuffer<float1>   voxelUpdateCounter;
 
 // Texture for storing the color with direct lighting
 Texture2D<float4>			lightingTexture;
@@ -55,19 +55,19 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	uint3 voxelPosition = GetVoxelPosition(worldPosition);
 
 	double index = id.x * 256 + id.y;
-	voxelUpdateCounter[index] = voxelUpdateCounter[1] + 0.01;
+	voxelUpdateCounter[index] += 0.01;
 
 	// Inject the current voxel's information into the grid
 	if (((lindepth < voxelGrid[voxelPosition].a) && (lindepth > 0.01f)) || (voxelGrid[voxelPosition].a == 0.0f))
 	{
 		float4 oldColor = voxelGrid[voxelPosition];
 		if (oldColor.r == 0 && oldColor.g == 0 && oldColor.b == 0) voxelGrid[voxelPosition] = float4(lightingColor.rgb + lightMapColor, lindepth);
-		else voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb, lindepth), oldColor, 0.995);
+		else voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb, lindepth), oldColor, 0.995);
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
 		float4 oldColor = voxelGrid[voxelPosition];
-		voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb, lindepth), oldColor, 0.995);
+		voxelGrid[voxelPosition] = lerp(float4(lightingColor.rgb + lightMapColor.rgb, lindepth), oldColor, 0.995);
 		voxelUpdateCounter[index] = 0;
 	}
 }

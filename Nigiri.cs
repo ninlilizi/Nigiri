@@ -87,9 +87,9 @@ public class Nigiri : MonoBehaviour {
     [Range(1, 64)]
 	public int maximumIterations = 8;
     [Range(0.01f, 2)]
-    public float coneLength = 1;
+    private float coneLength = 1;
     [Range(0.01f, 12)]
-    public float coneWidth = 6;
+    private float coneWidth = 6;
     public bool stochasticSampling = true;
 
     public RenderTexture lightingTexture;
@@ -218,13 +218,13 @@ public class Nigiri : MonoBehaviour {
         pathCacheBuffer = new PathCacheBuffer();
         pathCacheBuffer.Init(256);
 
-        /*if (!emissiveCameraGO)
+        if (!emissiveCameraGO)
         {
             emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
-            emissiveCamera.hideFlags = HideFlags.HideAndDontSave;
+            emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
             emissiveCamera.enabled = false;
-        }*/
+        }
     }
 
 	// Function to initialize the voxel grid data
@@ -608,7 +608,7 @@ public class Nigiri : MonoBehaviour {
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
-        //if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
+        if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
     }
 
     public void UpdateForceGI()

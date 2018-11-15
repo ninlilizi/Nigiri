@@ -234,7 +234,7 @@ float3 GetWorldNormal(float2 screenspaceUV)
 	//float3 worldSpaceNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
 	//float3 worldSpaceNormal = mul((float3x3)InverseViewMatrix, tex2D(_CameraGBufferTexture2, screenspaceUV));
 	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, screenspaceUV);
-	worldSpaceNormal = 1 - normalize(worldSpaceNormal);
+	worldSpaceNormal = normalize(worldSpaceNormal);
 
 	return worldSpaceNormal;
 }
@@ -284,6 +284,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
 
+	float shadowMap = tex2D(_CameraGBufferTexture1, uv).a;
+
 	//float3 voxelBufferCoord = float3(0, 0, 0);
 
 	// Sample voxel grid 1
@@ -307,6 +309,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
+			currentVoxelInfo.a = shadowMap;
 
 			occlusion = skyVisibility * skyVisibility;
 
@@ -341,6 +344,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
+			currentVoxelInfo.a = shadowMap;
 
 			occlusion = skyVisibility * skyVisibility;
 
@@ -375,6 +379,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
+			currentVoxelInfo.a = shadowMap;
 
 			occlusion = skyVisibility * skyVisibility;
 
@@ -409,6 +414,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
+			currentVoxelInfo.a = shadowMap;
 
 			occlusion = skyVisibility * skyVisibility;
 
@@ -443,6 +449,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
+			currentVoxelInfo.a = shadowMap;
 
 			occlusion = skyVisibility * skyVisibility;
 
@@ -543,7 +550,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//directLighting = gBufferSample.rgb;
 
-	float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
+	float3 emissive = tex2D(_CameraGBufferTexture1, i.uv).rgb;
 
 
 	// read low res depth and reconstruct world position
@@ -556,12 +563,11 @@ float4 frag_lighting(v2f i) : SV_Target
 	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
 	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
-	float3 worldSpaceNormal = GetWorldNormal(i.uv);
+	float3 worldSpaceNormal = 1 - GetWorldNormal(i.uv);
 
 	//albedo * albedoTex.a * albedoTex.rgb;
 		
-	//float3 indirectLighting = directLighting + ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth) + ((ao * indirectLightingStrength * (1.0f - metallic) * albedo) / PI);
-	float3 indirectLighting = ((ao * indirectLightingStrength * (1.0f - metallic) * albedo) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
+	float3 indirectLighting = ((ao * indirectLightingStrength * emissive + albedo) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
 	if (VisualiseGI) indirectLighting = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
 
 	//indirectLighting = ao;
