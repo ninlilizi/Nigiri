@@ -1,4 +1,4 @@
-﻿Shader "Hidden/Nigiri Light and shadow injector ZOff" {
+﻿Shader "NKLI/Nigiri_Spherical Harmonics" {
 
 	Properties {
 		_Color ("Tint", Color) = (1, 1, 1, 1)
@@ -132,8 +132,7 @@
 			Tags {
 				"LightMode" = "Deferred"
 			}
-		Cull Off
-		ZTest Off
+		Cull Back
 
 			CGPROGRAM
 

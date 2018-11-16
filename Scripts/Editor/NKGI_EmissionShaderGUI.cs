@@ -99,7 +99,8 @@ public class NKGI_EmissionShaderGUI : ShaderGUI {
 			);
 
 			RenderingSettings settings = RenderingSettings.modes[(int)mode];
-			foreach (Material m in editor.targets) {
+			for (int indexOfEditorTargets = 0; indexOfEditorTargets < editor.targets.Length; indexOfEditorTargets++) {
+				Material m = ((Material)editor.targets[indexOfEditorTargets]);
 				m.renderQueue = (int)settings.queue;
 				m.SetOverrideTag("RenderType", settings.renderType);
 				m.SetInt("_SrcBlend", (int)settings.srcBlend);
@@ -248,7 +249,8 @@ public class NKGI_EmissionShaderGUI : ShaderGUI {
 				SetKeyword("_EMISSION_MAP", map.textureValue);
 			}
 
-			foreach (Material m in editor.targets) {
+			for (int indexOfEditorTargets = 0; indexOfEditorTargets < editor.targets.Length; indexOfEditorTargets++) {
+				Material m = ((Material)editor.targets[indexOfEditorTargets]);
 				m.globalIlluminationFlags &=
 					~MaterialGlobalIlluminationFlags.AnyEmissive;
             }
@@ -328,12 +330,14 @@ public class NKGI_EmissionShaderGUI : ShaderGUI {
 
 	void SetKeyword (string keyword, bool state) {
 		if (state) {
-			foreach (Material m in editor.targets) {
+			for (int indexOfEditorTargets = 0; indexOfEditorTargets < editor.targets.Length; indexOfEditorTargets++) {
+				Material m = ((Material)editor.targets[indexOfEditorTargets]);
 				m.EnableKeyword(keyword);
 			}
 		}
 		else {
-			foreach (Material m in editor.targets) {
+			for (int indexOfEditorTargets = 0; indexOfEditorTargets < editor.targets.Length; indexOfEditorTargets++) {
+				Material m = ((Material)editor.targets[indexOfEditorTargets]);
 				m.DisableKeyword(keyword);
 			}
 		}

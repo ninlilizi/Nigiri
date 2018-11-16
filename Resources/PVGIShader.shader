@@ -118,14 +118,14 @@
 			// read low res depth and reconstruct world position
 			float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
 
-		//linearise depth		
-		float lindepth = Linear01Depth(depth);
+			//linearise depth		
+			float lindepth = Linear01Depth(depth);
 
-		//get view and then world positions		
-		float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-		float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+			//get view and then world positions		
+			float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+			float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
-		return float4(worldPos, lindepth);
+			return float4(worldPos, lindepth);
 	}
 
 			// Returns the voxel position in the grids
