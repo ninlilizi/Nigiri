@@ -71,7 +71,7 @@ public class Nigiri : MonoBehaviour {
     public Shader gaussianShader;
     public Shader lightMapShader;
     public Shader blurShader;
-    public ComputeShader voxelGridEntryShader;
+    public ComputeShader nigiri_InjectionCompute;
 
     [Header("General Settings")]
     public Vector2Int resolution = new Vector2Int(256, 256);
@@ -97,7 +97,7 @@ public class Nigiri : MonoBehaviour {
 
     public RenderTexture lightingTexture;
     public RenderTexture lightingVoxelTexture;
-    //public RenderTexture positionTexture;
+    public static RenderTexture positionTexture;
     //public RenderTexture positionEmissiveTexture;
     public RenderTexture lightMapTexture;
     public RenderTexture lpvTexture;
@@ -113,11 +113,11 @@ public class Nigiri : MonoBehaviour {
 
     private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-	private RenderTexture voxelGrid1;
-	private RenderTexture voxelGrid2;
-	private RenderTexture voxelGrid3;
-	private RenderTexture voxelGrid4;
-	private RenderTexture voxelGrid5;
+	public static RenderTexture voxelGrid1;
+	public static RenderTexture voxelGrid2;
+	public static RenderTexture voxelGrid3;
+    public static RenderTexture voxelGrid4;
+    public static RenderTexture voxelGrid5;
 
     public ComputeShader clearComputeCache;
     public ComputeShader transferIntsCompute;
@@ -149,12 +149,13 @@ public class Nigiri : MonoBehaviour {
         lpvPropagationCompositionShader = Resources.Load("LPVPropagationCompositionShader") as ComputeShader;
         lpvRenderShader = Shader.Find("Hidden/LPVRenderShader");
         blurShader = Shader.Find("Hidden/BilateralBlur");
-        emissiveShader = Shader.Find("Hidden/Nigiri Light and shadow injector ZOff");
+        emissiveShader = Shader.Find("Hidden/Nigiri_Injection");
         gaussianShader = Shader.Find("Hidden/SEGI Gaussian Blur Filter");
         gaussianMaterial = new Material(gaussianShader);
         blurMaterial = new Material(blurShader);
 
-        voxelGridEntryShader = Resources.Load("VoxelGridEntry") as ComputeShader;
+        //voxelGridEntryShader = Resources.Load("VoxelGridEntry") as ComputeShader;
+        nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
         Screen.SetResolution (resolution.x, resolution.y, true);
 
@@ -177,7 +178,7 @@ public class Nigiri : MonoBehaviour {
 
 		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
         lightingVoxelTexture = new RenderTexture((injectionTextureResolution.x / 4), (injectionTextureResolution.y / 4), 0, RenderTextureFormat.ARGBHalf);
-        //positionTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
+        positionTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
         //positionEmissiveTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightMapTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
         lpvTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
@@ -224,16 +225,12 @@ public class Nigiri : MonoBehaviour {
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
             emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-            //emissiveCameraGO.transform.localRotation = GetComponent<Camera>().transform.localRotation;
-            //emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            //emissiveCameraGO.transform.LookAt(GetComponent<Camera>().transform);
-            emissiveCamera.renderingPath = RenderingPath.Forward;
-            emissiveCamera.orthographic = true;
-            emissiveCamera.orthographicSize = worldVolumeBoundary;
-            emissiveCamera.depth = -2;
-            emissiveCamera.farClipPlane = worldVolumeBoundary;
+            emissiveCamera.orthographicSize = (int)(worldVolumeBoundary * 0.5);
+            emissiveCamera.farClipPlane = (int)(worldVolumeBoundary * 0.5);
             emissiveCamera.enabled = false;
-            Nigiri_EmissiveCameraHelper.positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
+            Nigiri_EmissiveCameraHelper.injectionResolution = injectionTextureResolution;
+            //Nigiri_EmissiveCameraHelper.lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
+            positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
 
             //emissiveCamera.SetTargetBuffers(lightMapTexture.colorBuffer, lightMapTexture.depthBuffer);
             //emissiveCamera.enabled = false;
@@ -287,7 +284,7 @@ public class Nigiri : MonoBehaviour {
 		voxelGrid4.filterMode = FilterMode.Bilinear;
 		voxelGrid5.filterMode = FilterMode.Bilinear;
 
-		voxelGrid1.Create ();
+        voxelGrid1.Create ();
 		voxelGrid2.Create ();
 		voxelGrid3.Create ();
 		voxelGrid4.Create ();
@@ -303,29 +300,31 @@ public class Nigiri : MonoBehaviour {
         //Graphics.Blit(blur, Nigiri_EmissiveCameraHelper.lightMapTexture, blurMaterial, 8);
 
         // Kernel index for the entry point in compute shader
-        int kernelHandle = voxelGridEntryShader.FindKernel("CSMain");
+        int kernelHandle = nigiri_InjectionCompute.FindKernel("CSMain");
 
         // These apply to all grids
-        voxelGridEntryShader.SetMatrix("InverseViewMatrix", Nigiri_EmissiveCameraHelper.cam.cameraToWorldMatrix);
-        voxelGridEntryShader.SetMatrix("InverseProjectionMatrix", Nigiri_EmissiveCameraHelper.cam.projectionMatrix.inverse);
-        voxelGridEntryShader.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
-        voxelGridEntryShader.SetTexture(kernelHandle, "lightMapTexture", lightMapTexture);
-        voxelGridEntryShader.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
-        voxelGridEntryShader.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
+        nigiri_InjectionCompute.SetMatrix("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
+        nigiri_InjectionCompute.SetMatrix("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        nigiri_InjectionCompute.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
+        nigiri_InjectionCompute.SetTexture(kernelHandle, "lightMapTexture", lightMapTexture);
+        nigiri_InjectionCompute.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
+        nigiri_InjectionCompute.SetTexture(kernelHandle, "positionTexture", positionTexture);
         //voxelGridEntryShader.SetTexture(kernelHandle, "lightMapEmissionTexture", Nigiri_EmissiveCameraHelper.lightMapTexture);
         //voxelGridEntryShader.SetTexture(kernelHandle, "lightingEmissionTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
-        voxelGridEntryShader.SetBuffer(kernelHandle, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        nigiri_InjectionCompute.SetBuffer(kernelHandle, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        //voxelGridEntryShader.SetBuffer(kernelHandle, "sampleCountBuffer", Nigiri_EmissiveCameraHelper.sampleCountBuffer);
 
 
         // Updating voxel grid 1
-        voxelGridEntryShader.SetTexture(kernelHandle, "NoiseTexture", blueNoise[frameSwitch % 64]);
-        voxelGridEntryShader.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-		voxelGridEntryShader.SetInt("voxelResolution", highestVoxelResolution);
-		voxelGridEntryShader.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        voxelGridEntryShader.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        nigiri_InjectionCompute.SetTexture(kernelHandle, "NoiseTexture", blueNoise[frameSwitch % 64]);
+        nigiri_InjectionCompute.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+		nigiri_InjectionCompute.SetInt("voxelResolution", highestVoxelResolution);
+		nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
+        //voxelGridEntryShader.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        nigiri_InjectionCompute.Dispatch(kernelHandle, 65536, 1, 1);
 
-		// Updating voxel grid 2
-		voxelGridEntryShader.SetTexture(kernelHandle, "voxelGrid", voxelGrid2);
+        /*/ Updating voxel grid 2
+        voxelGridEntryShader.SetTexture(kernelHandle, "voxelGrid", voxelGrid2);
 		voxelGridEntryShader.SetInt("voxelResolution", highestVoxelResolution / 2);
 		voxelGridEntryShader.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
 		voxelGridEntryShader.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
@@ -346,7 +345,7 @@ public class Nigiri : MonoBehaviour {
 		voxelGridEntryShader.SetTexture(kernelHandle, "voxelGrid", voxelGrid5);
 		voxelGridEntryShader.SetInt("voxelResolution", highestVoxelResolution / 16);
 		voxelGridEntryShader.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-		voxelGridEntryShader.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+		voxelGridEntryShader.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);*/
 	}
 
 	// This is called once per frame after the scene is rendered
@@ -386,31 +385,12 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("coneLength", coneLength);
 
         Graphics.Blit(source, lightingTexture);
-        Graphics.Blit(source, Nigiri_EmissiveCameraHelper.positionTexture, pvgiMaterial, 0);
+        Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
         Graphics.Blit(source, lightingVoxelTexture);
         Graphics.Blit(source, lightMapTexture, lightMapMaterial, 0);
 
         // Configure emissive camera
-        
-        //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-        //emissiveCameraGO.transform.localRotation = Quaternion.identity;
-        //emissiveCameraGO.transform.position = new Vector3(localCam.transform.position.x, localCam.transform.position.y, localCam.transform.position.z);
-        //emissiveCameraGO.transform.LookAt(localCam.transform);
-        //emissiveCameraGO.transform.rotation = localCam.transform.rotation;
-        //emissiveCamera.renderingPath = RenderingPath.Forward;
-        //emissiveCamera.SetTargetBuffers(Nigiri_EmissiveCameraHelper.lightingTexture.colorBuffer, Nigiri_EmissiveCameraHelper.lightingTexture.depthBuffer);
-        //emissiveCamera.SetReplacementShader(emissiveShader, "");
-        //emissiveCamera.orthographic = true;
-        //emissiveCamera.rect = new Rect(0, 0, 1f, 1f);
-        //emissiveCamera.orthographicSize = worldVolumeBoundary * 0.5f;
-        //emissiveCamera.nearClipPlane = 0.1f;
-        //emissiveCamera.farClipPlane = worldVolumeBoundary;
-        //emissiveCamera.clearFlags = CameraClearFlags.Color;
-        //emissiveCamera.backgroundColor = Color.black;
         emissiveCamera.cullingMask = emissiveLayer;
-        emissiveCamera.targetDisplay = 7;
-        //emissiveCamera.depth = -2;
-        //
 
         Graphics.Blit(source, lightMapTexture, lightMapMaterial, 0);
         //
@@ -633,7 +613,7 @@ public class Nigiri : MonoBehaviour {
         if (pathCacheBuffer != null) pathCacheBuffer.Cleanup();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingVoxelTexture != null) lightingVoxelTexture.Release();
-        //if (positionTexture != null) positionTexture.Release();
+        if (positionTexture != null) positionTexture.Release();
         //if (positionEmissiveTexture != null) positionEmissiveTexture.Release();
         if (lightMapTexture != null) lightMapTexture.Release();
         if (lpvTexture != null) lpvTexture.Release();
@@ -711,8 +691,8 @@ public class Nigiri : MonoBehaviour {
             lpvInjectionShader.SetInt("lpvDimension", lpvDimension);
             lpvInjectionShader.SetFloat("worldVolumeBoundary", cascadeBoundary);
             lpvInjectionShader.SetTexture(kernelHandle, "lightingTexture", lightMapTexture);
-            lpvInjectionShader.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
-            lpvInjectionShader.SetTexture(kernelHandle, "normalTexture", Nigiri_EmissiveCameraHelper.positionTexture);
+            lpvInjectionShader.SetTexture(kernelHandle, "positionTexture", positionTexture);
+            lpvInjectionShader.SetTexture(kernelHandle, "normalTexture", positionTexture);
             lpvInjectionShader.Dispatch(kernelHandle, lightMapTexture.width, lightMapTexture.height, 1);
 
 
@@ -751,7 +731,7 @@ public class Nigiri : MonoBehaviour {
             lpvInjectionShader.SetInt("lpvDimension", lpvDimension);
             lpvInjectionShader.SetFloat("cascadeBoundary", cascadeBoundary);
             lpvInjectionShader.SetTexture(kernelHandle, "lightingTexture", lightMapTexture);
-            lpvInjectionShader.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
+            lpvInjectionShader.SetTexture(kernelHandle, "positionTexture", positionTexture);
             //lpvInjectionShader.SetTexture(kernelHandle, "normalTexture", normal);
             lpvInjectionShader.Dispatch(kernelHandle, injectionTextureResolution.x, injectionTextureResolution.y, 1);
 

@@ -1,5 +1,7 @@
 #pragma kernel CSMain
-#pragma kernel CSMain2 // PathTracer cache
+#pragma kernel CSMain2 // Staggered Clear Buffer
+#pragma kernel CSMain3 // Clear Buffer
+
 
 RWTexture3D<uint> RG0;
 
@@ -9,6 +11,8 @@ uint Resolution;
 
 uint zStagger;
 
+
+// 0
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
@@ -18,6 +22,8 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	}
 }
 
+
+// 1
 [numthreads(16, 16, 1)]
 void CSMain2(uint3 id : SV_DispatchThreadID)
 {
@@ -30,5 +36,16 @@ void CSMain2(uint3 id : SV_DispatchThreadID)
 		currentZ = zStagger * slice - slice + i;
 		double index = id.x * Resolution * Resolution + id.y * Resolution + currentZ;
 		RG1[index] = float3(0, 0, 0);
+	}
+}
+
+// 2
+[numthreads(16, 16, 1)]
+void CSMain3(uint3 id : SV_DispatchThreadID)
+{
+	for (int i = 0; i < Resolution; i++)
+	{
+		double index = id.x * Resolution * Resolution + id.y * Resolution + i;
+		RG1[index] = float4(0.5, 0.5, 0.5, 1);
 	}
 }

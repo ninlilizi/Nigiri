@@ -116,7 +116,7 @@
 		float4 frag_position(v2f i) : SV_Target
 		{
 			// read low res depth and reconstruct world position
-			float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+			float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture , i.uv);
 
 			//linearise depth		
 			float lindepth = Linear01Depth(depth);
