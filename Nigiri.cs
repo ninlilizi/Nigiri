@@ -31,10 +31,10 @@ public class Nigiri : MonoBehaviour {
     [Range(1, 64)]
 	public int maximumIterations = 8;
     [Range(0.01f, 2)]
-    public float coneLength = 1;
+    public float coneLength = 0.1f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
-    public bool stochasticSampling = true;
+    private bool stochasticSampling = true;
 
     [Header("Debug Settings")]
     public bool VisualiseGI = false;
@@ -83,6 +83,7 @@ public class Nigiri : MonoBehaviour {
     private float lengthOfCone = 0.0f;
 
     int frameSwitch = 0;
+    int emmisiveSlice = 0;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
@@ -235,15 +236,24 @@ public class Nigiri : MonoBehaviour {
     {
         Nigiri_EmissiveCameraHelper.DoRender();
 
+        if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
+
+
+        
+        //int sliceOffset = (emmisiveSlice + 1) * 4096;
+
+
+
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_InjectionCompute.FindKernel("CSMain");
 
-        //nigiri_InjectionCompute.SetTexture(kernelHandle, "NoiseTexture", blueNoise[frameSwitch % 64]);
+        
         nigiri_InjectionCompute.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_InjectionCompute.SetTexture(0, "voxelGrid", voxelInjectionGrid);
-		nigiri_InjectionCompute.SetInt("voxelResolution", highestVoxelResolution);
-		nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_InjectionCompute.Dispatch(0, 65536, 1, 1);
+        nigiri_InjectionCompute.SetInt("offsetStart", emmisiveSlice * 1048576);
+        nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
+        nigiri_InjectionCompute.Dispatch(0, 4096, 1, 1);
+        emmisiveSlice = (emmisiveSlice + 1) % (15);
 
         // These apply to all grids
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);

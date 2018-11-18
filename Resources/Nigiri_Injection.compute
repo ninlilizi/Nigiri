@@ -4,6 +4,8 @@
 uniform RWTexture3D<float4>			voxelGrid;
 uniform RWStructuredBuffer<uint>	lightMapBuffer;
 
+uniform uint						offsetStart;
+
 inline uint3 CoordinateFromLinearIndex(uint index, uint res)
 {
 	return uint3(
@@ -42,6 +44,7 @@ float4 DecodeRGBAuint(uint value)
 [numthreads(256, 1, 1)]
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-	voxelGrid[CoordinateFromLinearIndex(id3.x, 256)] = DecodeRGBAuint(lightMapBuffer[id3.x]);
-	lightMapBuffer[id3.x] = 0;
+	float4 decodedColor = DecodeRGBAuint(lightMapBuffer[id3.x + offsetStart]);
+	voxelGrid[CoordinateFromLinearIndex(id3.x + offsetStart, 256)] = float4(decodedColor.rgb / (decodedColor.a + 1), 1);
+	lightMapBuffer[id3.x + offsetStart] = 0;
 }

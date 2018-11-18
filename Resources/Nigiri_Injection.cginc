@@ -323,7 +323,7 @@ half4 frag(vertOutput i) : COLOR
 			index3d.y < 0 || index3d.y >= 256 ||
 			index3d.z < 0 || index3d.z >= 256)
 		{
-			//finalColor = float4(1, 0, 0, 0);
+			//finalColor = float4(1, 0, 1, 1);
 		}
 		else
 		{
@@ -343,9 +343,9 @@ half4 frag(vertOutput i) : COLOR
 
 			double index1d = (index3d.z * highestVoxelResolution * highestVoxelResolution) + (index3d.y * highestVoxelResolution) + index3d.x;
 			#if defined(_EMISSION_MAP)
-				lightMapBuffer[index1d] = EncodeRGBAuint(tex2D(_EmissionMap, i.uv.xy) * _Emission, 8));
+				lightMapBuffer[index1d] = EncodeRGBAuint(tex2D(_EmissionMap, i.uv.xy) * _Emission, 2) + DecodeRGBAuint(lightMapBuffer[index1d]));
 			#else
-				lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission, 8));
+				lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission, 2) + DecodeRGBAuint(lightMapBuffer[index1d]));
 			#endif
 		}
 	}
