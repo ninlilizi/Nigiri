@@ -8,9 +8,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
    
     public static Camera cam;
 
-    public Shader pvgiShader;
-    public Shader emissiveShader;
-    private Material pvgiMaterial;
+    public static Shader emissiveShader;
 
     public static RenderTexture lightingTexture;
     
@@ -37,10 +35,8 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
 
         cam = GetComponent<Camera>();
-        if (pvgiShader == null) pvgiShader = Shader.Find("Hidden/PVGIShader");
-        if (pvgiMaterial == null) pvgiMaterial = new Material(pvgiShader);
 
-        lightingTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
+        lightingTexture = new RenderTexture(256, 256, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.Create();
 
         lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
@@ -62,9 +58,9 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (lightMapBuffer != null) lightMapBuffer.Release();
     }
 
-    private void Update()
+    public static void DoRender()
     {
-        if (lightingTexture != null)
+        if (lightingTexture != null && lightMapBuffer != null)
         {
             Graphics.SetRandomWriteTarget(5, lightMapBuffer);
             cam.targetTexture = lightingTexture;

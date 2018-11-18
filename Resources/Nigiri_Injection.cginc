@@ -315,48 +315,42 @@ float GetSmoothness(vertOutput i) {
 
 half4 frag(vertOutput i) : COLOR
 {
-	//i.sPos.xy /= i.sPos.w;
-	float3 specularTint;
-	float oneMinusReflectivity;
-	float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
-	float3 albedo = DiffuseAndSpecularFromMetallic(
-		GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
-	);
-
-	float4 color = UNITY_BRDF_PBS(
-		albedo, specularTint,
-		oneMinusReflectivity, GetSmoothness(i),
-		i.normal, viewDir,
-		CreateLight(i), CreateIndirectLight(i, viewDir)
-	);
-
-	//Nin - NKGI - Sample shadowmap to pass to GI
-	float3 lightColor1 = _LightColor0.rgb;
-	float3 lightDir = _WorldSpaceLightPos0.xyz;
-	float4 colorTex = tex2D(_MainTex, i.texcoord.xy);
-	UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
-	float3 N = float3(0.0f, 1.0f, 0.0f);
-	float  NL = saturate(dot(N, lightDir));
-	float3 shadowColor = colorTex.rgb * lightColor1 * NL * atten;
-	///
-
-	float3 index3d = GetVoxelPosition(i.wPos);
-	if (index3d.x < 0 || index3d.x >= 256 ||
-		index3d.y < 0 || index3d.y >= 256 ||
-		index3d.z < 0 || index3d.z >= 256)
+	float3 albedo;
+	if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
 	{
-		//finalColor = float4(1, 0, 0, 0);
-	}
-	else
-	{
-		double index1d = (index3d.z * highestVoxelResolution * highestVoxelResolution) + (index3d.y * highestVoxelResolution) + index3d.x;
-		#if defined(_EMISSION_MAP)
-			lightMapBuffer[index1d] = EncodeRGBAuint(color + tex2D(_EmissionMap, i.uv.xy) * _Emission, 1));
-		#else
-			lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission + albedo, min(_Emission.r + _Emission.b + _Emission.g, 1)));
-		#endif
-	}
+		float3 index3d = GetVoxelPosition(i.wPos);
+		if (index3d.x < 0 || index3d.x >= 256 ||
+			index3d.y < 0 || index3d.y >= 256 ||
+			index3d.z < 0 || index3d.z >= 256)
+		{
+			//finalColor = float4(1, 0, 0, 0);
+		}
+		else
+		{
+			float3 specularTint;
+			float oneMinusReflectivity;
+			float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
+			albedo = DiffuseAndSpecularFromMetallic(
+				GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
+			);
 
-return color;
+			float4 color = UNITY_BRDF_PBS(
+				albedo, specularTint,
+				oneMinusReflectivity, GetSmoothness(i),
+				i.normal, viewDir,
+				CreateLight(i), CreateIndirectLight(i, viewDir)
+			);
+
+			double index1d = (index3d.z * highestVoxelResolution * highestVoxelResolution) + (index3d.y * highestVoxelResolution) + index3d.x;
+			#if defined(_EMISSION_MAP)
+				lightMapBuffer[index1d] = EncodeRGBAuint(tex2D(_EmissionMap, i.uv.xy) * _Emission, 8));
+			#else
+				lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission, 8));
+			#endif
+		}
+	}
+	else albedo = float3(0, 0, 0);
+
+return float4(albedo, 1);
 }
 

@@ -1,4 +1,4 @@
-﻿Shader "Hidden/SEGIFXAA" {
+﻿Shader "Hidden/Nigiri_FXAA" {
 	Properties {
 		_MainTex ("Texture", 2D) = "white" {}
 	}

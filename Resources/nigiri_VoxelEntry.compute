@@ -72,19 +72,19 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	uint index = id.x * injectionTextureResolutionX + id.y;
 	voxelUpdateCounter[index] += 0.1;
 
+	//voxelGrid[voxelPosition] = voxelInjectionGrid[voxelPosition];
+	//voxelUpdateCounter[index] = 0;
 
 	if (voxelGrid[voxelPosition].r == 0 || voxelGrid[voxelPosition].g == 0 || voxelGrid[voxelPosition].b == 0)
 	{
 		voxelGrid[voxelPosition] = voxelInjectionGrid[voxelPosition] +
 			float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, unity_ColorSpaceLuminance.rgb)));
-
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
 		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + 
 			float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, unity_ColorSpaceLuminance.rgb))), voxelGrid[voxelPosition], 0.998);
 
-		//voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition], oldColor, 0.5);
 		voxelUpdateCounter[index] = 0;
 	}
 

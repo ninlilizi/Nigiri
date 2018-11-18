@@ -29,7 +29,7 @@
 
 
 
-Shader "Hidden/BilateralBlur"
+Shader "Hidden/Nigiri_BilateralBlur"
 {
 	Properties
 	{

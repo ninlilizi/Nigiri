@@ -1,4 +1,4 @@
-﻿Shader "Hidden/PVGIShader"
+﻿Shader "Hidden/Nigiri_Tracing"
 {
 	Properties
 	{
@@ -229,12 +229,6 @@ float GetDepthTexture(float2 uv)
 
 float3 GetWorldNormal(float2 screenspaceUV)
 {
-	//float depthValue;
-	//float3 viewSpaceNormal;
-	//DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, screenspaceUV), depthValue, viewSpaceNormal);
-	//viewSpaceNormal = normalize(viewSpaceNormal);
-	//float3 worldSpaceNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
-	//float3 worldSpaceNormal = mul((float3x3)InverseViewMatrix, tex2D(_CameraGBufferTexture2, screenspaceUV));
 	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, screenspaceUV);
 	worldSpaceNormal = normalize(worldSpaceNormal);
 
@@ -249,17 +243,17 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float OcclusionStrength = 0.15;
 	float FarOcclusionStrength = 1;
 	float OcclusionPower = 0.65;
-	float ConeTraceBias = 2.01;
+	float ConeTraceBias = 1.01;
 	int SEGISphericalSkylight = 0;
 	float3 SEGISunlightVector = _WorldSpaceLightPos0;
-	float3 SEGISkyColor = float3(256 / 193, 256 / 223, 256 / 243);
+	float3 SEGISkyColor = unity_AmbientSky;
 	float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);;
 	float GIGain = 1;
 	///
 
 	float3 computedColor = float3(0.0f, 0.0f, 0.0f);
 
-	float coneStep = lengthOfCone / maximumIterations;
+	float coneStep = lengthOfCone / maximumIterations / 3;
 
 	float iteration0 = maximumIterations / 32.0f;
 	float iteration1 = maximumIterations / 32.0f;
@@ -285,21 +279,15 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
 
-	float shadowMap = tex2D(_CameraGBufferTexture1, uv).a;
-
-	//float3 voxelBufferCoord = float3(0, 0, 0);
-
 	// Sample voxel grid 1
 	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection);
+		currentPosition += (coneStep * coneDirection) * coneLength;
 
 		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		//float coneDistance = currentPosition.z;
-
 		float coneSize = coneDistance * coneWidth;
 
 		if (hitFound < 0.9f)
@@ -308,33 +296,30 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
+				voxelBufferCoord = GetVoxelPosition(currentPosition);
 			}
-			currentVoxelInfo.a = shadowMap;
-
-			occlusion = skyVisibility * skyVisibility;
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) * SunlightInjection;
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
+		occlusion = skyVisibility * skyVisibility;
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		//currentVoxelInfo.a * 0.5
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		gi.rgb += currentVoxelInfo.rgb * SunlightInjection * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
 	// Sample voxel grid 2
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection);
+		currentPosition += (coneStep * coneDirection) * coneLength;
 
 		float fi = ((float)i2 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		//float coneDistance = currentPosition.z;
-
 		float coneSize = coneDistance * coneWidth * 10.3;
 
 		if (hitFound < 0.9f)
@@ -345,31 +330,27 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
-			currentVoxelInfo.a = shadowMap;
-
-			occlusion = skyVisibility * skyVisibility;
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
+		occlusion = skyVisibility * skyVisibility;
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		gi.rgb += currentVoxelInfo.rgb * SunlightInjection * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
 	// Sample voxel grid 3
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection);
+		currentPosition += coneStep * coneDirection * coneLength;
 
 		float fi = ((float)i3 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		//float coneDistance = currentPosition.z;
-
 		float coneSize = coneDistance * coneWidth * 10.3;
 
 		if (hitFound < 0.9f)
@@ -380,31 +361,27 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
-			currentVoxelInfo.a = shadowMap;
-
-			occlusion = skyVisibility * skyVisibility;
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
+		occlusion = skyVisibility * skyVisibility;
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		gi.rgb += currentVoxelInfo.rgb * SunlightInjection * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
 	// Sample voxel grid 4
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection);
+		currentPosition += coneStep * coneDirection * coneLength;
 
 		float fi = ((float)i4 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		//float coneDistance = currentPosition.z;
-
 		float coneSize = coneDistance * coneWidth * 10.3;
 
 		if (hitFound < 0.9f)
@@ -415,31 +392,27 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
-			currentVoxelInfo.a = shadowMap;
-
-			occlusion = skyVisibility * skyVisibility;
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
+		occlusion = skyVisibility * skyVisibility;
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		gi.rgb += currentVoxelInfo.rgb * SunlightInjection * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
 	// Sample voxel grid 5
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection);
+		currentPosition += coneStep * coneDirection * coneLength;
 
 		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		//float coneDistance = currentPosition.z;
-
 		float coneSize = coneDistance * coneWidth * 10.3;
 
 		if (hitFound < 0.9f)
@@ -450,18 +423,16 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);// *(coneLength * 1.12 * coneDistance);
 			}
-			currentVoxelInfo.a = shadowMap;
-
-			occlusion = skyVisibility * skyVisibility;
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 		}
+		occlusion = skyVisibility * skyVisibility;
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		gi.rgb += currentVoxelInfo.rgb * SunlightInjection * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi);
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
 	//gi.rgb /= 32;
@@ -482,7 +453,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	skyColor += lerp(SEGISkyColor.rgb * 1.0, SEGISkyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
 	skyColor += GISunColor.rgb * pow(sunGradient, (4.0).xxx) * SunlightInjection;
 
-	gi.rgb *= GIGain;// *0.15;
+	gi.rgb *= GIGain * 0.15;
 
 	gi.rgb += (skyColor * skyVisibility);
 
