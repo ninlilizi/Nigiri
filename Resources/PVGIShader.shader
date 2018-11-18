@@ -568,7 +568,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//albedo * albedoTex.a * albedoTex.rgb;
 		
-	float3 indirectLighting = ((indirectLightingStrength * albedo + emissive) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
+	float3 indirectLighting = max(directLighting, ((indirectLightingStrength * albedo + emissive) / PI) * ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth));
 	if (VisualiseGI) indirectLighting = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
 
 	//indirectLighting = ao;

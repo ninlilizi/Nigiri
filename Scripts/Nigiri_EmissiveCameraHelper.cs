@@ -12,11 +12,9 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public Shader emissiveShader;
     private Material pvgiMaterial;
 
-    //public RenderTexture positionTexture;
     public static RenderTexture lightingTexture;
     
     public static ComputeBuffer lightMapBuffer;
-    //public static ComputeBuffer sampleCountBuffer;
 
     public ComputeShader clearComputeCache;
 
@@ -42,7 +40,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (pvgiShader == null) pvgiShader = Shader.Find("Hidden/PVGIShader");
         if (pvgiMaterial == null) pvgiMaterial = new Material(pvgiShader);
 
-        lightingTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
+        lightingTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.Create();
 
         lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
@@ -53,8 +51,8 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         cam.backgroundColor = Color.black;
         cam.renderingPath = RenderingPath.Forward;
         cam.orthographic = true;
-        cam.allowHDR = false;
-        cam.allowMSAA = true;
+        cam.allowHDR = true;
+        cam.allowMSAA = false;
         cam.depth = -2;
     }
 
@@ -68,16 +66,9 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     {
         if (lightingTexture != null)
         {
-            Shader.SetGlobalTexture("positionTexture", Nigiri.positionTexture);
             Graphics.SetRandomWriteTarget(5, lightMapBuffer);
             cam.targetTexture = lightingTexture;
             cam.RenderWithShader(emissiveShader, "");
         }
-    }
-
-    void OnRenderImage(RenderTexture source, RenderTexture destination)
-    {
-        //Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
-        Graphics.Blit(source, lightingTexture);
     }
 }

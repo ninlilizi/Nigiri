@@ -5,9 +5,9 @@
 
 sampler2D _MainTex;
 sampler2D _MetallicMap;
-float4 _Color;
 float _Metallic;
 float _Smoothness;
+float3 _Emission;
 sampler2D _CameraDepthTexture;
 float worldVolumeBoundary;
 int highestVoxelResolution;
@@ -16,6 +16,11 @@ sampler2D positionTexture;
 uniform RWStructuredBuffer<uint> lightMapBuffer : register(u5);
 
 float4x4 InverseProjectionMatrix;
+
+UNITY_INSTANCING_BUFFER_START(InstanceProperties)
+UNITY_DEFINE_INSTANCED_PROP(float4, _Color)
+#define _Color_arr InstanceProperties
+UNITY_INSTANCING_BUFFER_END(InstanceProperties)
 
 struct vertOutput
 {
@@ -310,14 +315,13 @@ float GetSmoothness(vertOutput i) {
 
 half4 frag(vertOutput i) : COLOR
 {
-	i.sPos.xy /= i.sPos.w;
+	//i.sPos.xy /= i.sPos.w;
 	float3 specularTint;
 	float oneMinusReflectivity;
 	float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
 	float3 albedo = DiffuseAndSpecularFromMetallic(
 		GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
 	);
-	float3 emission = GetEmission(i);
 
 	float4 color = UNITY_BRDF_PBS(
 		albedo, specularTint,
@@ -326,31 +330,33 @@ half4 frag(vertOutput i) : COLOR
 		CreateLight(i), CreateIndirectLight(i, viewDir)
 	);
 
-
 	//Nin - NKGI - Sample shadowmap to pass to GI
 	float3 lightColor1 = _LightColor0.rgb;
 	float3 lightDir = _WorldSpaceLightPos0.xyz;
+	float4 colorTex = tex2D(_MainTex, i.texcoord.xy);
 	UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
-	float3 N = i.normal;
+	float3 N = float3(0.0f, 1.0f, 0.0f);
 	float  NL = saturate(dot(N, lightDir));
-	float3 shadowColor = albedo * lightColor1 * NL * atten;
+	float3 shadowColor = colorTex.rgb * lightColor1 * NL * atten;
 	///
-
-	float4 finalColor = float4((shadowColor.rgb * color.rgb * 128) + emission.rgb, 1);
 
 	float3 index3d = GetVoxelPosition(i.wPos);
 	if (index3d.x < 0 || index3d.x >= 256 ||
 		index3d.y < 0 || index3d.y >= 256 ||
 		index3d.z < 0 || index3d.z >= 256)
 	{
-		finalColor = float4(1, 0, 0, 0);
+		//finalColor = float4(1, 0, 0, 0);
 	}
 	else
 	{
 		double index1d = (index3d.z * highestVoxelResolution * highestVoxelResolution) + (index3d.y * highestVoxelResolution) + index3d.x;
-		lightMapBuffer[index1d] = EncodeRGBAuint(float4(finalColor.rgb, 0.001) + DecodeRGBAuint(lightMapBuffer[index1d]));
+		#if defined(_EMISSION_MAP)
+			lightMapBuffer[index1d] = EncodeRGBAuint(color + tex2D(_EmissionMap, i.uv.xy) * _Emission, 1));
+		#else
+			lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission + albedo, min(_Emission.r + _Emission.b + _Emission.g, 1)));
+		#endif
 	}
 
-return finalColor;
+return color;
 }
 

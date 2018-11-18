@@ -756,7 +756,7 @@ FragmentOutput MyFragmentProgram (Interpolators i) {
 				UnityGetRawBakedOcclusions(shadowUV, i.worldPos.xyz);
 		#endif
 	#else
-		output.color = ApplyFog(color, i);
+		output.color = color;
 	#endif
 	return output;
 }
