@@ -8,6 +8,7 @@ sampler2D _MetallicMap;
 float _Metallic;
 float _Smoothness;
 float3 _Emission;
+float EmissiveStrength;
 sampler2D _CameraDepthTexture;
 float worldVolumeBoundary;
 int highestVoxelResolution;
@@ -313,6 +314,11 @@ float GetSmoothness(vertOutput i) {
 	return smoothness * _Smoothness;
 }
 
+uint threeD2oneD(float3 coord)
+{
+	return coord.z * (highestVoxelResolution * highestVoxelResolution) + (coord.y * highestVoxelResolution) + coord.x;
+}
+
 half4 frag(vertOutput i) : COLOR
 {
 	float3 albedo;
@@ -327,6 +333,13 @@ half4 frag(vertOutput i) : COLOR
 		}
 		else
 		{
+			/*float3 index3d0 = float3(index3d.x + 1, index3d.y, index3d.z);
+			float3 index3d1 = float3(index3d.x - 1, index3d.y, index3d.z);
+			float3 index3d2 = float3(index3d.x, index3d.y + 1, index3d.z);
+			float3 index3d3 = float3(index3d.x, index3d.y - 1, index3d.z);
+			float3 index3d4 = float3(index3d.x, index3d.y, index3d.z + 1);
+			float3 index3d5 = float3(index3d.x, index3d.y, index3d.z - 1);*/
+
 			float3 specularTint;
 			float oneMinusReflectivity;
 			float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
@@ -338,15 +351,28 @@ half4 frag(vertOutput i) : COLOR
 				albedo, specularTint,
 				oneMinusReflectivity, GetSmoothness(i),
 				i.normal, viewDir,
-				CreateLight(i), CreateIndirectLight(i, viewDir)
-			);
+				CreateLight(i), CreateIndirectLight(i, viewDir));
 
-			double index1d = (index3d.z * highestVoxelResolution * highestVoxelResolution) + (index3d.y * highestVoxelResolution) + index3d.x;
+			uint index1d = threeD2oneD(index3d);
 			#if defined(_EMISSION_MAP)
-				lightMapBuffer[index1d] = EncodeRGBAuint(tex2D(_EmissionMap, i.uv.xy) * _Emission, 2) + DecodeRGBAuint(lightMapBuffer[index1d]));
+				float4 newColor = tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * EmissiveStrength,
+					_Emission.g * EmissiveStrength,
+					_Emission.b * EmissiveStrength, 2));
 			#else
-				lightMapBuffer[index1d] = EncodeRGBAuint(float4(_Emission, 2) + DecodeRGBAuint(lightMapBuffer[index1d]));
+				float4 newColor = float4(_Emission.r * EmissiveStrength,
+					_Emission.g * EmissiveStrength,
+					_Emission.b * EmissiveStrength, 2);
 			#endif
+			
+			lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+
+			/*newColor *= 0.125;
+			index1d = threeD2oneD(index3d0); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			index1d = threeD2oneD(index3d1); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			index1d = threeD2oneD(index3d2); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			index1d = threeD2oneD(index3d3); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			index1d = threeD2oneD(index3d4); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			index1d = threeD2oneD(index3d5); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));*/
 		}
 	}
 	else albedo = float3(0, 0, 0);

@@ -16,12 +16,14 @@ public class Nigiri : MonoBehaviour {
 
     [Header("General Settings")]
     public Vector2Int resolution = new Vector2Int(256, 256);
-    [Range(0.01f, 8)]
-    public float AmbientAttribution = 1.0f;
-    [Range(0, 32)]
-    public float BouncedAttribution = 1.0f;
+    [Range(0.05f, 8)]
+    public float AmbientStrength = 1.0f;
+    [Range(0.0f, 8)]
+    public float EmissiveIntensity = 1.0f;
+    [Range(0.0f, 16)]
+    public float EmissiveAttribution = 1.0f;
 
-	[Header("Voxelization Settings")]
+    [Header("Voxelization Settings")]
     public LayerMask emissiveLayer;
     public float worldVolumeBoundary = 100.0f;
 	public int highestVoxelResolution = 256;
@@ -34,6 +36,19 @@ public class Nigiri : MonoBehaviour {
     public float coneLength = 0.1f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
+    [Range(0.1f, 4)]
+    public float GIGain = 1;
+    [Range(0.1f, 4)]
+    public float NearLightGain = 1.14f;
+    [Range(0.1f, 1)]
+    public float OcclusionStrength = 0.15f;
+    [Range(0.1f, 1)]
+    public float NearOcclusionStrength = 0.5f;
+    [Range(0.1f, 1)]
+    public float FarOcclusionStrength = 1;
+    [Range(0.1f, 1)]
+    public float OcclusionPower = 0.65f;
+
     private bool stochasticSampling = true;
 
     [Header("Debug Settings")]
@@ -51,6 +66,7 @@ public class Nigiri : MonoBehaviour {
     private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
     private ComputeShader transferIntsCompute;
+    private ComputeShader mipFilterCompute;
 
     //[Header("Materials")]
     private Material pvgiMaterial;
@@ -68,8 +84,8 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGrid4;
     public static RenderTexture voxelGrid5;
 
-    private RenderTexture lightingTexture;
-    private RenderTexture lightingTexture2;
+    public RenderTexture lightingTexture;
+    public RenderTexture lightingTexture2;
     public RenderTexture positionTexture;
 
     private RenderTexture blur;
@@ -84,6 +100,7 @@ public class Nigiri : MonoBehaviour {
 
     int frameSwitch = 0;
     int emmisiveSlice = 0;
+    int mipSwitch = 0;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
@@ -93,6 +110,7 @@ public class Nigiri : MonoBehaviour {
 
         clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
         transferIntsCompute = Resources.Load("SEGITransferInts_C") as ComputeShader;
+        mipFilterCompute = Resources.Load("Nigiri_MipFilter") as ComputeShader;
         fxaaShader = Shader.Find("Hidden/Nigiri_BilateralBlur");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
@@ -265,35 +283,44 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
 
-        //Updating voxel grid 1
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", worldVolumeBoundary);
         nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
 
-        //Updating voxel grid 2
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid2);
-        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution / 2);
-        nigiri_VoxelEntry.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
-
-        // Updating voxel grid 3
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid3);
-        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution / 4);
-        nigiri_VoxelEntry.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
-
-        // Updating voxel grid 4
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid4);
-        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution / 8);
-        nigiri_VoxelEntry.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
-
-        // Updating voxel grid 5
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid5);
-        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution / 16);
-        nigiri_VoxelEntry.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        if (mipSwitch == 0)
+        {
+            int destinationRes = (int)highestVoxelResolution / 2;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
+        }
+        else if (mipSwitch == 1)
+        {
+            int destinationRes = (int)highestVoxelResolution / 4;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            mipFilterCompute.SetTexture(1, "Source", voxelGrid2);
+            mipFilterCompute.SetTexture(1, "Destination", voxelGrid3);
+            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+        }
+        else if (mipSwitch == 2)
+        {
+            int destinationRes = (int)highestVoxelResolution / 8;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            mipFilterCompute.SetTexture(1, "Source", voxelGrid3);
+            mipFilterCompute.SetTexture(1, "Destination", voxelGrid4);
+            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+        }
+        else
+        {
+            int destinationRes = (int)highestVoxelResolution / 16;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            mipFilterCompute.SetTexture(1, "Source", voxelGrid4);
+            mipFilterCompute.SetTexture(1, "Destination", voxelGrid5);
+            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+        }
+        mipSwitch = (mipSwitch + 1) % (3);
     }
 
 	// This is called once per frame after the scene is rendered
@@ -322,8 +349,9 @@ public class Nigiri : MonoBehaviour {
 		pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
 		Shader.SetGlobalFloat("worldVolumeBoundary", worldVolumeBoundary);
 		pvgiMaterial.SetFloat ("maximumIterations", maximumIterations);
-		pvgiMaterial.SetFloat ("indirectLightingStrength", AmbientAttribution);
-        pvgiMaterial.SetFloat("SunlightInjection", BouncedAttribution);
+		pvgiMaterial.SetFloat ("indirectLightingStrength", AmbientStrength);
+        Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
+        Shader.SetGlobalFloat("EmissiveAttribution", EmissiveAttribution); 
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         pvgiMaterial.SetFloat("coneLength", coneLength);
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
@@ -331,6 +359,12 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
         pvgiMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
         pvgiMaterial.SetFloat("coneLength", coneLength);
+        pvgiMaterial.SetFloat("GIGain", GIGain);
+        pvgiMaterial.SetFloat("NearLightGain", NearLightGain);
+        pvgiMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
+        pvgiMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
+        pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
+        pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBufferMaterial);

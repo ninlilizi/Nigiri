@@ -730,22 +730,19 @@ FragmentOutput MyFragmentProgram (Interpolators i) {
 		color.a = alpha;
 	#endif
 
-		if (lightColor.r < 0.2) lightColor.rgb = 0;
+		//if (lightColor.r < 0.2) lightColor.rgb = 0;
 	
 		FragmentOutput output;
 	#if defined(DEFERRED_PASS)
 		#if !defined(UNITY_HDR_ON)
 			color.rgb = exp2(-color.rgb);
 		#endif
-		output.gBuffer0.rgb = albedo;
-		//Nin - NKGI - The shadowmap must be put here.
-		output.gBuffer0.a = shadowColor;
-		//Nin - NKGI - The line below shows where to put your emissive data. We exclude low values to avoid default gray from showing
-		if (emission.r > 0.1 || emission.g > 0.1 || emission.b > 0.1) output.gBuffer1.rgb = emission + lightColor + flux.rgb;
-		///
-		output.gBuffer1.a = GetSmoothness(i);
-		output.gBuffer2 = float4(i.normal * 0.5 + 0.5, 1);
-		output.gBuffer3 = color;
+			output.gBuffer0.rgb = albedo;
+			output.gBuffer0.a = GetOcclusion(i);
+			output.gBuffer1.rgb = specularTint;
+			output.gBuffer1.a = GetSmoothness(i);
+			output.gBuffer2 = float4(i.normal * 0.5 + 0.5, 1);
+			output.gBuffer3 = color;
 
 		#if defined(SHADOWS_SHADOWMASK) && (UNITY_ALLOWED_MRT_COUNT > 4)
 			float2 shadowUV = 0;

@@ -45,6 +45,6 @@ float4 DecodeRGBAuint(uint value)
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
 	float4 decodedColor = DecodeRGBAuint(lightMapBuffer[id3.x + offsetStart]);
-	voxelGrid[CoordinateFromLinearIndex(id3.x + offsetStart, 256)] = float4(decodedColor.rgb / (decodedColor.a + 1), 1);
+	voxelGrid[CoordinateFromLinearIndex(id3.x + offsetStart, 256)] = float4(decodedColor.rgb / (decodedColor.a + 1), decodedColor.a);
 	lightMapBuffer[id3.x + offsetStart] = 0;
 }

@@ -57,6 +57,25 @@ inline uint3 index1dTo3d(int index1d)
 		index1d & (res - 1));
 }
 
+float3 rgb2hsv(float3 c)
+{
+	float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
+	float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+
+	return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+}
+
+float3 hsv2rgb(float3 c)
+{
+	float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
+	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
+}
+
 
 [numthreads(16, 16, 1)]
 // Entry point of the voxelization compute shader
@@ -82,8 +101,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
-		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + 
-			float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, unity_ColorSpaceLuminance.rgb))), voxelGrid[voxelPosition], 0.998);
+		float4 newMixedColor = float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, 1 - unity_ColorSpaceLuminance.rgb)));
+		//float3 newMixedHSV = rgb2hsv(newMixedColor);
+		//newMixedHSV.b -= newMixedHSV.b * 0.5;
+		//newMixedColor.rgb = hsv2rgb(newMixedHSV);
+
+		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + newMixedColor, voxelGrid[voxelPosition], 0.998);
 
 		voxelUpdateCounter[index] = 0;
 	}
