@@ -47,6 +47,16 @@
 		uniform int						StochasticSampling;
 		uniform float					maximumIterations;
 
+		// Reflection
+		uniform float					rayStep;
+		uniform float					rayOffset;
+		uniform float3					mainCameraPosition;
+		uniform int						maximumIterationsReflection;
+		uniform int						DoReflections;
+		uniform float					BalanceGain;
+		///
+
+
 		uniform int						highestVoxelResolution;
 
 		uniform int						tracedTexture1UpdateCount;
@@ -122,6 +132,46 @@
 			float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
 			float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
 			return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
+		}
+
+		float4 DecodeRGBAuint(uint value)
+		{
+			uint ai = value & 0x0000007F;
+			uint vi = (value / 0x00000080) & 0x000007FF;
+			uint si = (value / 0x00040000) & 0x0000007F;
+			uint hi = value / 0x02000000;
+
+			float h = float(hi) / 127.0;
+			float s = float(si) / 127.0;
+			float v = (float(vi) / 2047.0) * 10.0;
+			float a = ai * 2.0;
+
+			v = pow(v, 3.0);
+
+			float3 color = hsv2rgb(float3(h, s, v));
+
+			return float4(color.rgb, a);
+		}
+
+		uint EncodeRGBAuint(float4 color)
+		{
+			//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
+			float3 hsv = rgb2hsv(color.rgb);
+			hsv.z = pow(hsv.z, 1.0 / 3.0);
+
+			uint result = 0;
+
+			uint a = min(127, uint(color.a / 2.0));
+			uint v = min(2047, uint((hsv.z / 10.0) * 2047));
+			uint s = uint(hsv.y * 127);
+			uint h = uint(hsv.x * 127);
+
+			result += a;
+			result += v * 0x00000080; // << 7
+			result += s * 0x00040000; // << 18
+			result += h * 0x02000000; // << 25
+
+			return result;
 		}
 
 		float4 frag_position(v2f i) : SV_Target
@@ -246,6 +296,55 @@ float3 GetWorldNormal(float2 screenspaceUV)
 	return worldSpaceNormal;
 }
 
+// Returns the voxel information
+inline float4 GetVoxelInfo(float3 worldPosition)
+{
+	// Default value
+	float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	// Check if the given position is inside the voxelized volume
+	if ((abs(worldPosition.x) < worldVolumeBoundary) && (abs(worldPosition.y) < worldVolumeBoundary) && (abs(worldPosition.z) < worldVolumeBoundary))
+	{
+		worldPosition += worldVolumeBoundary;
+		worldPosition /= (2.0f * worldVolumeBoundary);
+
+		info = tex3D(voxelGrid1, worldPosition);
+	}
+
+	return info;
+}
+
+// Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
+inline float3 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
+{
+	// Color for storing all the samples
+	float3 accumulatedColor = float3(0.0f, 0.0f, 0.0f);
+
+	float3 currentPosition = worldPosition + (rayOffset * pixelNormal);
+	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	bool hitFound = false;
+
+	// Loop for tracing the ray through the scene
+	for (float i = 0.0f; i < maximumIterationsReflection; i += 1.0f)
+	{
+		// Traverse the ray in the reflected direction
+		currentPosition += (reflectedRayDirection * rayStep);
+
+		// Get the currently hit voxel's information
+		currentVoxelInfo = GetVoxelInfo(currentPosition);
+
+		// At the currently traced sample
+		if ((currentVoxelInfo.w > 0.0f) && (!hitFound))
+		{
+			accumulatedColor = (currentVoxelInfo.xyz);
+			hitFound = true;
+		}
+	}
+
+	return accumulatedColor;
+}
+
 inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord)
 {
 	//Temp consts till integration
@@ -302,7 +401,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			currentVoxelInfo = GetVoxelInfo1(GetVoxelPosition(currentPosition));
 			if (currentVoxelInfo.a > 0.0f)
 			{
-				hitFound = 1.0f;
+				hitFound = 0.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
 			}
 		} 
@@ -451,7 +550,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 
-	//gi.rgb /= 32;
+	//gi.rgb /= maximumIterations;
 	//skyVisibility /= 32;
 
 	//Calculate lighting attribution
@@ -501,6 +600,17 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	float3 direction1 = normalize(cross(worldNormal, randomVector));
 	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
 
+	///Reflection cone setup
+	float depthValue;
+	float3 viewSpaceNormal;
+	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, uv), depthValue, viewSpaceNormal);
+	viewSpaceNormal = normalize(viewSpaceNormal);
+	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
+	float3 reflectedRayDirection = normalize(reflect(pixelToCameraUnitVector, pixelNormal));
+	reflectedRayDirection *= -1.0;
+	///
+
 	float3 voxelBufferCoord;
 	gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord);
 
@@ -510,8 +620,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	double index = voxelBufferCoord.x * (256) * (256) + voxelBufferCoord.y * (256) + voxelBufferCoord.z;
 	tracedBuffer1[index] += float4(gi, 1);
 
-
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
+	if (DoReflections) gi *= RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
 
 	float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
 
@@ -521,8 +631,6 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	gi.rgb *= cachedResult.rgb * EmissiveAttribution;
 	giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
 	gi.rgb += hsv2rgb(giHSV);
-
-	
 
 	return gi;
 }
@@ -541,10 +649,10 @@ float4 frag_lighting(v2f i) : SV_Target
 
 
 	// read low res depth and reconstruct world position
-	float depth = 1 - GetDepthTexture(i.uv);
+	float depth = GetDepthTexture(i.uv);
 
 	//linearise depth		
-	float lindepth = Linear01Depth(depth);
+	float lindepth = Linear01Depth(1 - depth);
 
 	//get view and then world positions		
 	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
@@ -554,9 +662,9 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//albedo * albedoTex.a * albedoTex.rgb;
 	float emissiveMult;
-	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, 1 - depth);
+	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
 	float3 indirectLighting = max(directLighting, ((ao * indirectLightingStrength * albedo + emissive) / PI) * indirectContribution);
-	if (VisualiseGI) indirectLighting = indirectContribution;
+	if (VisualiseGI) indirectLighting = indirectContribution / maximumIterations;
 
 	//indirectLighting = ao;
 

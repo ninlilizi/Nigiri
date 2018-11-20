@@ -7,6 +7,7 @@ uniform RWTexture3D<float4>			voxelGrid;
 uniform RWStructuredBuffer<float>   voxelUpdateCounter;
 
 uniform Texture3D<float4>			voxelInjectionGrid;
+uniform Texture3D<float4>			voxelPropagatedGrid;
 
 // Texture for storing the color with direct lighting
 uniform Texture2D<float4>			lightingTexture;
@@ -76,6 +77,46 @@ float3 hsv2rgb(float3 c)
 	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
 }
 
+float4 DecodeRGBAuint(uint value)
+{
+	uint ai = value & 0x0000007F;
+	uint vi = (value / 0x00000080) & 0x000007FF;
+	uint si = (value / 0x00040000) & 0x0000007F;
+	uint hi = value / 0x02000000;
+
+	float h = float(hi) / 127.0;
+	float s = float(si) / 127.0;
+	float v = (float(vi) / 2047.0) * 10.0;
+	float a = ai * 2.0;
+
+	v = pow(v, 3.0);
+
+	float3 color = hsv2rgb(float3(h, s, v));
+
+	return float4(color.rgb, a);
+}
+
+uint EncodeRGBAuint(float4 color)
+{
+	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
+	float3 hsv = rgb2hsv(color.rgb);
+	hsv.z = pow(hsv.z, 1.0 / 3.0);
+
+	uint result = 0;
+
+	uint a = min(127, uint(color.a / 2.0));
+	uint v = min(2047, uint((hsv.z / 10.0) * 2047));
+	uint s = uint(hsv.y * 127);
+	uint h = uint(hsv.x * 127);
+
+	result += a;
+	result += v * 0x00000080; // << 7
+	result += s * 0x00040000; // << 18
+	result += h * 0x02000000; // << 25
+
+	return result;
+}
+
 
 [numthreads(16, 16, 1)]
 // Entry point of the voxelization compute shader
@@ -87,6 +128,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	float lindepth = positionTexture[id.xy].a;
 
 	uint3 voxelPosition = GetVoxelPosition(positionTexture[id.xy].rgb);
+	uint3 voxelPosition2 = positionTexture[id.xy].rgb * voxelResolution;
 
 	uint index = id.x * injectionTextureResolutionX + id.y;
 	voxelUpdateCounter[index] += 0.1;
@@ -101,14 +143,10 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
-		float4 newMixedColor = float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, 1 - unity_ColorSpaceLuminance.rgb)));
-		//float3 newMixedHSV = rgb2hsv(newMixedColor);
-		//newMixedHSV.b -= newMixedHSV.b * 0.5;
-		//newMixedColor.rgb = hsv2rgb(newMixedHSV);
+		float4 newMixedColor = voxelGrid[voxelPosition] + float4(lightingTexture2[id.xy].rgb, max(1, dot(lightingTexture[id.xy].rgb, 1 - unity_ColorSpaceLuminance.rgb)));
 
-		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + newMixedColor, voxelGrid[voxelPosition], 0.998);
-
-		voxelUpdateCounter[index] = 0;
+		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + newMixedColor, voxelGrid[voxelPosition], 0.995);
+		voxelUpdateCounter[index] = 0;	
 	}
 
 }
