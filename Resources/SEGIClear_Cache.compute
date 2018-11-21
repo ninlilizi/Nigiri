@@ -1,7 +1,7 @@
 #pragma kernel CSMain
 #pragma kernel CSMain2 // Staggered Clear Buffer
 #pragma kernel CSMain3 // Clear Buffer
-
+#pragma kernel CSMain4
 
 RWTexture3D<uint> RG0;
 
@@ -16,7 +16,7 @@ uint zStagger;
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
-	for (int i = 0; i < Resolution; i++)
+	for (uint i = 0; i < Resolution; i++)
 	{
 		RG0[uint3(id.xy, i)] = 0;
 	}
@@ -43,9 +43,19 @@ void CSMain2(uint3 id : SV_DispatchThreadID)
 [numthreads(16, 16, 1)]
 void CSMain3(uint3 id : SV_DispatchThreadID)
 {
-	for (int i = 0; i < Resolution; i++)
+	for (uint i = 0; i < Resolution; i++)
 	{
 		uint index = id.x * Resolution * Resolution + id.y * Resolution + i;
-		RG1[index] = float4(0.5, 0.5, 0.5, 1);
+		RG1[index] = float3(0.5, 0.5, 0.5);
+	}
+}
+
+// 3
+[numthreads(16, 16, 1)]
+void CSMain4(uint3 id : SV_DispatchThreadID)
+{
+	for (uint i = 0; i < Resolution; i++)
+	{
+		RG0[uint3(id.xy, i)] *= 0.5;
 	}
 }
