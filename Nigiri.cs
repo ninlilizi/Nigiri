@@ -32,6 +32,7 @@ public class Nigiri : MonoBehaviour {
     public float shadowBoostPower;
 
     [Header("Light Propagation Settings")]
+    public bool propagateLight = true;
     [Range(1, 8)]
     public int LPVIterations = 1;
     [Range(0, 128)]
@@ -64,6 +65,7 @@ public class Nigiri : MonoBehaviour {
     private bool stochasticSampling = true;
 
     [Header("Reflection Settings")]
+    public bool traceReflections = true;
     //public int downsample = 2;
     [Range(0.1f, 0.25f)]
     public float rayOffset = 0.1f;
@@ -73,7 +75,6 @@ public class Nigiri : MonoBehaviour {
     public float BalanceGain = 1;
     [Range(1, 64)]
     public int maximumIterationsReflection = 16;
-    public bool DoReflections = true;
 
     [Header("Debug Settings")]
     public bool VisualiseGI = false;
@@ -368,7 +369,6 @@ public class Nigiri : MonoBehaviour {
 
         // Voxelize main cam
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-        //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagatedGrid);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
         nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
@@ -387,44 +387,54 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
 
         // Do light propagation
-
-        if (lpvSwitch == 0)
+        if (propagateLight)
         {
-            lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
-            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
-            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
-        }
-        else if (lpvSwitch == 1)
-        {
-            for (int i = 0; i < LPVIterations; i++)
+            if (lpvSwitch == 0)
             {
-                lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
-                lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
+                lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
+                lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
                 lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
                 lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-                lightPropagateCompute.Dispatch(1, voxelizationSliceDispatch, 1, 1);
+                lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
+            }
+            else if (lpvSwitch == 1)
+            {
+                for (int i = 0; i < LPVIterations; i++)
+                {
+                    lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
+                    lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
+                    lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+                    lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+                    lightPropagateCompute.Dispatch(1, voxelizationSliceDispatch, 1, 1);
+                }
+            }
+            else if (lpvSwitch == 2)
+            {
+                lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
+                lightPropagateCompute.SetTexture(0, "RG1", voxelPropagatedGrid);
+                lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+                lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+                lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
             }
         }
-        else if (lpvSwitch == 2)
-        {
-            lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
-            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagatedGrid);
-            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
-        }
 
 
 
-        if (mipSwitch == 0)
+        if (mipSwitch == 0 && propagateLight)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             if (firstResolveSwitch == 1 && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
             else if (firstResolveSwitch == 1 && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
             else mipFilterCompute.SetTexture(0, "Source", voxelPropagatedGrid);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
+        }
+        if (mipSwitch == 0 && !propagateLight)
+        {
+            int destinationRes = (int)highestVoxelResolution / 2;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
             mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
@@ -440,7 +450,8 @@ public class Nigiri : MonoBehaviour {
         {
             int destinationRes = (int)highestVoxelResolution / 8;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(1, "Source", voxelGrid3);
+            if (propagateLight) mipFilterCompute.SetTexture(1, "Source", voxelGrid3);
+            else mipFilterCompute.SetTexture(1, "Source", voxelGrid3);
             mipFilterCompute.SetTexture(1, "Destination", voxelGrid4);
             mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
         }
@@ -498,7 +509,7 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("BalanceGain", BalanceGain * 10);
         pvgiMaterial.SetFloat("maximumIterationsReflection", (float)maximumIterationsReflection);
         pvgiMaterial.SetVector("mainCameraPosition", GetComponent<Camera>().transform.position);
-        pvgiMaterial.SetInt("DoReflections", DoReflections ? 1 : 0);
+        pvgiMaterial.SetInt("DoReflections", traceReflections ? 1 : 0);
 
         Shader.SetGlobalInt("highestVoxelResolution", highestVoxelResolution);
         pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
@@ -521,10 +532,9 @@ public class Nigiri : MonoBehaviour {
 
         UpdateVoxelGrid();
 
-        if (firstResolveSwitch == 1 && lpvSwitch == 0) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelGrid1);
-        else if (firstResolveSwitch == 1 && lpvSwitch > 0) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelPropagationGrid);
-        else pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelPropagatedGrid);
-        pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
+        if (firstResolveSwitch == 1 && lpvSwitch == 0 && propagateLight) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelGrid1);
+        else if (firstResolveSwitch == 1 && lpvSwitch > 0  && propagateLight) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelPropagationGrid);
+        else pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
         pvgiMaterial.SetTexture("voxelGrid2", voxelGrid2);
         pvgiMaterial.SetTexture("voxelGrid3", voxelGrid3);
         pvgiMaterial.SetTexture("voxelGrid4", voxelGrid4);

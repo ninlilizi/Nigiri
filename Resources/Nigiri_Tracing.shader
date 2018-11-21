@@ -20,7 +20,6 @@
 			float4 value;
 		};
 
-		uniform sampler3D				voxelPropagatedGrid;
 		uniform sampler3D				voxelGrid1;
 		uniform sampler3D				voxelGrid2;
 		uniform sampler3D				voxelGrid3;
@@ -203,7 +202,7 @@
 	inline float4 GetVoxelInfo1(float3 voxelPosition)
 	{
 		//float4 info = tex3D(voxelGrid1, voxelPosition);
-		float4 info2 = tex3D(voxelPropagatedGrid, voxelPosition);
+		float4 info2 = tex3D(voxelGrid1, voxelPosition);
 		return info2;
 	}
 
@@ -310,7 +309,7 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 		worldPosition += worldVolumeBoundary;
 		worldPosition /= (2.0f * worldVolumeBoundary);
 
-		info = tex3D(voxelPropagatedGrid, worldPosition);
+		info = tex3D(voxelGrid1, worldPosition);
 	}
 
 	return info;
