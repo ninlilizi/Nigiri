@@ -405,8 +405,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb / (blueNoise.xyz * 8);
 			}
+			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		} 
 		occlusion = skyVisibility * skyVisibility;
 		interMult.x += currentVoxelInfo.a;
@@ -441,8 +441,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
+
 			}
+			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
 		occlusion = skyVisibility * skyVisibility;
 		interMult.x += currentVoxelInfo.a;
@@ -476,7 +477,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
@@ -511,7 +511,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
@@ -546,7 +545,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
 				voxelBufferCoord = GetVoxelPosition(currentPosition);
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;

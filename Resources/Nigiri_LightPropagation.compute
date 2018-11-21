@@ -126,63 +126,35 @@ inline uint3 index1dTo3d(int index1d, uint res)
 [numthreads(256, 1, 1)]
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-	//rng_state = id3.x * _Time;
-	//float f0 = float(rand_lcg()) * (1.0 / 4294967296.0);
+	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
-	//if (f0 > 0.1f )//&& f0 < 0.6f)
-	//{
-		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-
-		float4 mixedColor =
-			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
-
-		RG1[coordinate.xyz].rgba = float4(mixedColor.rgb, RG0[coordinate.xyz].a);
-	//}
+	RG1[coordinate.xyz].rgba = float4(RG0[coordinate.xyz].rgb, RG0[coordinate.xyz].a);
 }
 
 // 1
 [numthreads(256, 1, 1)]
 void CSMain1(uint3 id3 : SV_DispatchThreadID)
 {
-		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
+	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
-		float4 mixedColor =
-			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
+	float4 mixedColor =
+		(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
+			RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
+			RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
+			RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
+			RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
+			RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-		RG0[coordinate.xyz].rgba = float4(lerp(mixedColor.rgb, RG0[coordinate.xyz].rgb, 0.3), RG0[coordinate.xyz].a);
+	RG0[coordinate.xyz].rgba = float4(lerp(mixedColor.rgb, RG0[coordinate.xyz].rgb, 0.3), RG0[coordinate.xyz].a);
 }
 
 // 2
 [numthreads(16, 16, 1)]
 void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
-	//rng_state = id3.x * _Time;
-	//float f0 = float(rand_lcg()) * (1.0 / 4294967296.0);
+	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
-	//if (f0 > 0.1f)//&& f0 < 0.6f)
-	//{
-		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-
-		float4 mixedColor =
-			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
-				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
-
-		RG1[coordinate.xyz] = lerp((mixedColor * 0.9f), RG1[coordinate.xyz], 0.5);
-	//}
+	RG0[coordinate.xyz] = lerp(RG1[coordinate.xyz], RG0[coordinate.xyz], 0.5);
 }
 
 

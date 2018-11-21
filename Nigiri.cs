@@ -83,9 +83,10 @@ public class Nigiri : MonoBehaviour {
     public bool VisualiseGI = false;
     public bool VisualizeVoxels = false;
     public DebugVoxelGrid debugVoxelGrid = DebugVoxelGrid.GRID_1;
-
-    public Texture2D[] blueNoise;
     public bool forceImmediateRefresh = false;
+
+    private Texture2D[] blueNoise;
+    
 
     //[Header("Shaders")]
     private Shader tracingShader;
@@ -105,8 +106,8 @@ public class Nigiri : MonoBehaviour {
     private Material fxaaMaterial;
     private Material positionMaterial;
 
-    [Header("Render Textures")]
 
+    [Header("Render Textures")]
     private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
     public static RenderTexture voxelInjectionGrid;
@@ -143,8 +144,8 @@ public class Nigiri : MonoBehaviour {
     bool fastResolveSwitch = true;
 
     bool prevPropagateLight = false;
-    public Vector3 prevRoatation;
-    public Vector3 prevPosition;
+    private Vector3 prevRoatation;
+    private Vector3 prevPosition;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
