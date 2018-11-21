@@ -50,13 +50,13 @@ inline uint3 coordinateFromLinearIndex(uint index, uint res)
 
 inline uint3 index1dTo3d(int index1d)
 {
-	int res = 256; // resolution of the voxel grid
+	//int res = 256; // resolution of the voxel grid
 	int logRes = 8; // the log of the resolution (just a performance optimisation this way)
 	// LogRes: 16 = 4, 32 = 5, 64 = 6, 128 = 7, 256 = 8, 512 = 9, etc...
 
 	return uint3(index1d >> (logRes << 1),
-		(index1d >> logRes) & (res - 1),
-		index1d & (res - 1));
+		(index1d >> logRes) & (voxelResolution - 1),
+		index1d & (voxelResolution - 1));
 }
 
 // 0

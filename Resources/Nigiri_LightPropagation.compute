@@ -126,26 +126,27 @@ inline uint3 index1dTo3d(int index1d, uint res)
 [numthreads(256, 1, 1)]
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-
-	RG1[coordinate.xyz].rgba = float4(RG0[coordinate.xyz].rgb, RG0[coordinate.xyz].a);
+		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
+		//uint3 coordinate2 = coordinate * 0.5;
+		RG1[coordinate.xyz] = RG0[coordinate.xyz];
 }
 
 // 1
 [numthreads(256, 1, 1)]
 void CSMain1(uint3 id3 : SV_DispatchThreadID)
 {
-	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
+		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
+		//uint3 coordinate2 = coordinate * 0.5;
 
-	float4 mixedColor =
-		(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
-			RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
-			RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
-			RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
-			RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
-			RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
+		float4 mixedColor =
+			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-	RG0[coordinate.xyz].rgba = float4(lerp(mixedColor.rgb, RG0[coordinate.xyz].rgb, 0.3), RG0[coordinate.xyz].a);
+		RG0[coordinate.xyz].rgba = float4(lerp(mixedColor.rgb, RG0[coordinate.xyz].rgb, 0.3), RG0[coordinate.xyz].a);
 }
 
 // 2
@@ -153,8 +154,8 @@ void CSMain1(uint3 id3 : SV_DispatchThreadID)
 void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
 	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-
-	RG0[coordinate.xyz] = lerp(RG1[coordinate.xyz], RG0[coordinate.xyz], 0.5);
+	//uint3 coordinate2 = coordinate * 0.5;
+	RG1[coordinate.xyz] = float4(RG0[coordinate.xyz].rgb, RG1[coordinate.xyz].a);
 }
 
 
