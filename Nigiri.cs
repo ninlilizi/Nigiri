@@ -20,23 +20,29 @@ public class Nigiri : MonoBehaviour {
     public float AmbientStrength = 1.0f;
     [Range(0.0f, 8)]
     public float EmissiveIntensity = 1.0f;
-    [Range(0.0f, 16)]
+    [Range(0.01f, 16)]
     public float EmissiveAttribution = 1.0f;
 
     [Header("Voxelization Settings")]
     public LayerMask emissiveLayer;
-    public float worldVolumeBoundary = 100.0f;
+    public float worldVolumeBoundary = 50;
 	public int highestVoxelResolution = 256;
-    [Range(1, 16)]
-    public int LightPropagationPasses = 8;
-	public Vector2Int injectionTextureResolution = new Vector2Int(1280, 720);
+
+    [Header("Light Propagation Settings")]
+    [Range(1, 8)]
+    public int LPVIterations = 1;
+    [Range(0, 128)]
+    public float LPVInverseFalloff = 1;
+    [Range(1, 4)]
+    public int UpdateSpeedFactor = 1;
+	private Vector2Int injectionTextureResolution = new Vector2Int(1024, 1024);
 
 
 	[Header("Cone Trace Settings")]
     [Range(1, 64)]
 	public int maximumIterations = 8;
     [Range(0.01f, 2)]
-    public float coneLength = 0.1f;
+    public float coneLength = 1;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
     [Range(0.1f, 4)]
@@ -77,6 +83,7 @@ public class Nigiri : MonoBehaviour {
     private Shader tracingShader;
     private Shader blitGBufferShader;
     private Shader fxaaShader;
+    private Shader positionShader;
     private ComputeShader nigiri_VoxelEntry;
     private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
@@ -88,6 +95,7 @@ public class Nigiri : MonoBehaviour {
     private Material pvgiMaterial;
     private Material blitGBufferMaterial;
     private Material fxaaMaterial;
+    private Material positionMaterial;
 
     [Header("Render Textures")]
 
@@ -105,6 +113,7 @@ public class Nigiri : MonoBehaviour {
     public RenderTexture lightingTexture;
     public RenderTexture lightingTexture2;
     public RenderTexture positionTexture;
+    public RenderTexture orthographicPositionTexture;
 
     private RenderTexture blur;
     public RenderTexture gi;
@@ -116,9 +125,13 @@ public class Nigiri : MonoBehaviour {
 
     private float lengthOfCone = 0.0f;
 
+    int voxelizationSliceOffset;
+    int voxelizationSliceDispatch;
+
     int frameSwitch = 0;
-    int emmisiveSlice = 0;
+    int voxelizationSlice = 0;
     int mipSwitch = 0;
+    int lpvSwitch = 0;
     int lightPropagateCounter = 0;
 
     GameObject emissiveCameraGO;
@@ -134,6 +147,7 @@ public class Nigiri : MonoBehaviour {
         fxaaShader = Shader.Find("Hidden/Nigiri_BilateralBlur");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
+        positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
         fxaaMaterial = new Material(fxaaShader);
 
         nigiri_VoxelEntry = Resources.Load("nigiri_VoxelEntry") as ComputeShader;
@@ -148,11 +162,14 @@ public class Nigiri : MonoBehaviour {
 
         if (blitGBufferMaterial == null) blitGBufferMaterial = new Material(blitGBufferShader);
 
+        if (positionMaterial == null) positionMaterial = new Material(positionShader);
+
         InitializeVoxelGrid();
 
 		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
-        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBFloat);
+        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
+        orthographicPositionTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.filterMode = FilterMode.Bilinear;
@@ -164,10 +181,8 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.Create();
         blur.Create();
         positionTexture.Create();
+        orthographicPositionTexture.Create();
         gi.Create();
-
-
-
 
         voxelUpdateCounter = new ComputeBuffer((injectionTextureResolution.x / 4) * (injectionTextureResolution.y / 4), 4, ComputeBufferType.Default);
 
@@ -194,14 +209,15 @@ public class Nigiri : MonoBehaviour {
         {
             emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
             emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
-            emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
+            //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
+            emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
             emissiveCameraGO.hideFlags = HideFlags.DontSave;
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
             emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-            emissiveCamera.orthographicSize = (int)(worldVolumeBoundary * 0.125);
-            emissiveCamera.farClipPlane = (int)(worldVolumeBoundary * 0.5);
+            emissiveCamera.orthographicSize = (int)(worldVolumeBoundary * 0.25);
+            emissiveCamera.farClipPlane = (int)(worldVolumeBoundary * 0.25);
             emissiveCamera.enabled = false;
             Nigiri_EmissiveCameraHelper.injectionResolution = injectionTextureResolution;
             
@@ -256,6 +272,7 @@ public class Nigiri : MonoBehaviour {
         voxelInjectionGrid.filterMode = FilterMode.Bilinear;
 
         voxelPropagationGrid.filterMode = FilterMode.Bilinear;
+        voxelPropagatedGrid.filterMode = FilterMode.Bilinear;
         voxelGrid1.filterMode = FilterMode.Bilinear;
         voxelGrid2.filterMode = FilterMode.Bilinear;
 		voxelGrid3.filterMode = FilterMode.Bilinear;
@@ -264,12 +281,13 @@ public class Nigiri : MonoBehaviour {
 
         voxelInjectionGrid.Create();
 
-        voxelPropagationGrid.Create ();
+        voxelPropagationGrid.Create();
+        voxelPropagatedGrid.Create();
         voxelGrid1.Create();
-        voxelGrid2.Create ();
-		voxelGrid3.Create ();
-		voxelGrid4.Create ();
-		voxelGrid5.Create ();
+        voxelGrid2.Create();
+		voxelGrid3.Create();
+		voxelGrid4.Create();
+		voxelGrid5.Create();
 
 	}
 
@@ -278,17 +296,35 @@ public class Nigiri : MonoBehaviour {
     {
         Nigiri_EmissiveCameraHelper.DoRender();
 
+        orthographicPositionTexture = Nigiri_EmissiveCameraHelper.positionTexture;
+
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
 
-
-
-        //int sliceOffset = (emmisiveSlice + 1) * 4096;
-
-
-
-        //lightPropagateCounter = (lightPropagateCounter + 1) % (32);
-
-
+        if (UpdateSpeedFactor == 4)
+        {
+            voxelizationSlice = (voxelizationSlice + 1) % (8);
+            voxelizationSliceOffset = 2097152;
+            voxelizationSliceDispatch = 8192;
+        }
+        if (UpdateSpeedFactor == 3)
+        {
+            voxelizationSlice = (voxelizationSlice + 1) % (16);
+            voxelizationSliceOffset = 1048576;
+            voxelizationSliceDispatch = 4096;
+        }
+        if (UpdateSpeedFactor == 2)
+        {
+            voxelizationSlice = (voxelizationSlice + 1) % (32);
+            voxelizationSliceOffset = 524288;
+            voxelizationSliceDispatch = 2048;
+        }
+        if (UpdateSpeedFactor == 1)
+        {
+            voxelizationSlice = (voxelizationSlice + 1) % (64);
+            voxelizationSliceOffset = 262144;
+            voxelizationSliceDispatch = 1024;
+        }
+        if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_InjectionCompute.FindKernel("CSMain");
@@ -296,12 +332,12 @@ public class Nigiri : MonoBehaviour {
         
         nigiri_InjectionCompute.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_InjectionCompute.SetTexture(0, "voxelGrid", voxelInjectionGrid);
-        nigiri_InjectionCompute.SetInt("offsetStart", emmisiveSlice * 1048576);
+        nigiri_InjectionCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
         nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", worldVolumeBoundary);
-        nigiri_InjectionCompute.Dispatch(0, 4096, 1, 1);
-        emmisiveSlice = (emmisiveSlice + 1) % (15);
+        nigiri_InjectionCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
 
         // These apply to all grids
+        nigiri_VoxelEntry.SetTexture(0, "NoiseTexture", blueNoise[frameSwitch % 64]);
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
@@ -311,96 +347,64 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
 
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelPropagationGrid);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagatedGrid);
+        // Voxelize main cam
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+        //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagatedGrid);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", worldVolumeBoundary);
         nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
 
+        // Prepare to voxelize secondary cam
+        nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", emissiveCamera.cameraToWorldMatrix);
+        nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", emissiveCamera.projectionMatrix.inverse);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", orthographicPositionTexture);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
 
-        //lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-        //lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
-        //lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-        //lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        // Voxelize secondary cam
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagationGrid);
+        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
+        nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", worldVolumeBoundary);
+        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
 
+        // Do light propagation
 
-        lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
-        lightPropagateCompute.SetTexture(0, "RG1", voxelGrid1);
-        lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
-        lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-        lightPropagateCompute.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-        lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-        lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
-        lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-        lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-
-        lightPropagateCounter = (lightPropagateCounter + 1) % (16);
-
-        /*if (lightPropagateCounter > 32)
-        {
-            lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-            //lightPropagateCompute.SetTexture(2, "RG1", voxelPropagatedGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter - 32);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-            lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter - 32);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-            lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-            //lightPropagateCompute.SetTexture(2, "RG1", voxelPropagatedGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter - 32);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-            lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-            //lightPropagateCompute.SetTexture(2, "RG1", voxelPropagatedGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter - 32);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-        }
-        else
+        if (lpvSwitch == 0)
         {
             lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
             lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
+            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
             lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-        }*/
-
-        /*    lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
-            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
-            lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-        }*/
-
-
-        /*lightPropagateCompute.SetTexture(2, "RG0", voxelPropagationGrid);
-        lightPropagateCompute.SetTexture(2, "RG1", voxelPropagatedGrid);
-        lightPropagateCompute.SetInt("zStagger", lightPropagateCounter);
-        lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-        lightPropagateCompute.Dispatch(2, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);*/
-        /*}
-        else if (lightPropagateCounter < 64)
-        {
-
+            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
         }
-        else
+        else if (lpvSwitch == 1)
         {
+            for (int i = 0; i < LPVIterations; i++)
+            {
+                lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
+                lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
+                lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+                lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+                lightPropagateCompute.Dispatch(1, voxelizationSliceDispatch, 1, 1);
+            }
+        }
+        else if (lpvSwitch == 2)
+        {
+            lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
+            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagatedGrid);
+            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
+        }
+        lightPropagateCounter = (lightPropagateCounter + 1) % (16);
 
-        }*/
 
 
         if (mipSwitch == 0)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
+            mipFilterCompute.SetTexture(0, "Source", voxelPropagatedGrid);
             mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
@@ -408,7 +412,7 @@ public class Nigiri : MonoBehaviour {
         {
             int destinationRes = (int)highestVoxelResolution / 4;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(1, "Source", voxelGrid2);
+            mipFilterCompute.SetTexture(1, "Source", voxelGrid1);
             mipFilterCompute.SetTexture(1, "Destination", voxelGrid3);
             mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
         }
@@ -463,7 +467,7 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         pvgiMaterial.SetFloat("coneLength", coneLength);
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
-
+   
         pvgiMaterial.SetFloat("rayStep", rayStep);
         pvgiMaterial.SetFloat("rayOffset", rayOffset);
         pvgiMaterial.SetFloat("BalanceGain", BalanceGain * 10);
@@ -488,10 +492,11 @@ public class Nigiri : MonoBehaviour {
 
         // Configure emissive camera
         emissiveCamera.cullingMask = emissiveLayer;
-        emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
+        //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
 
         UpdateVoxelGrid();
 
+        pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelPropagatedGrid);
         pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
         pvgiMaterial.SetTexture("voxelGrid2", voxelGrid2);
         pvgiMaterial.SetTexture("voxelGrid3", voxelGrid3);
@@ -578,6 +583,7 @@ public class Nigiri : MonoBehaviour {
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (positionTexture != null) positionTexture.Release();
+        if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 

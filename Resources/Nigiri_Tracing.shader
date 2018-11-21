@@ -20,6 +20,7 @@
 			float4 value;
 		};
 
+		uniform sampler3D				voxelPropagatedGrid;
 		uniform sampler3D				voxelGrid1;
 		uniform sampler3D				voxelGrid2;
 		uniform sampler3D				voxelGrid3;
@@ -201,8 +202,9 @@
 	// Returns the voxel information from grid 1
 	inline float4 GetVoxelInfo1(float3 voxelPosition)
 	{
-		float4 info = tex3D(voxelGrid1, voxelPosition);
-		return info;
+		//float4 info = tex3D(voxelGrid1, voxelPosition);
+		float4 info2 = tex3D(voxelPropagatedGrid, voxelPosition);
+		return info2;
 	}
 
 	// Returns the voxel information from grid 2
@@ -308,7 +310,7 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 		worldPosition += worldVolumeBoundary;
 		worldPosition /= (2.0f * worldVolumeBoundary);
 
-		info = tex3D(voxelGrid1, worldPosition);
+		info = tex3D(voxelPropagatedGrid, worldPosition);
 	}
 
 	return info;
@@ -369,8 +371,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 
 
-	blueNoise.xy *= 0.125;
-	blueNoise.z *= 0.125;
+	blueNoise.xy *= 0.0625;
+	blueNoise.z *= 0.0625;
 	blueNoise.z -= blueNoise.z * 2;
 
 	float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0);
@@ -621,7 +623,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	tracedBuffer1[index] += float4(gi, 1);
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
-	if (DoReflections) gi *= RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
+	if (DoReflections) gi += RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
 
 	float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
 

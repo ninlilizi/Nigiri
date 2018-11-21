@@ -2,13 +2,47 @@
 #pragma kernel CSMain1
 #pragma kernel CSMain2
 
-RWTexture3D<float4> RG0;
-RWTexture3D<float4> RG1;
+uniform RWTexture3D<float4> RG0;
+uniform RWTexture3D<float4> RG1;
 
-uint Resolution;
-uint zStagger;
+uniform uint						offsetStart;
+uniform uint						highestVoxelResolution;
+uniform float						LPVInverseFalloff;
 
-float3 rgb2hsv(float3 c)
+uniform float4						_Time;
+
+uniform uint Resolution;
+uniform uint zStagger;
+
+uint rng_state;
+
+uint rand_lcg()
+{
+	// LCG values from Numerical Recipes
+	rng_state = 1664525 * rng_state + 1013904223;
+	return rng_state;
+}
+
+uint rand_xorshift()
+{
+	// Xorshift algorithm from George Marsaglia's paper
+	rng_state ^= (rng_state << 13);
+	rng_state ^= (rng_state >> 17);
+	rng_state ^= (rng_state << 5);
+	return rng_state;
+}
+
+uint wang_hash(uint seed)
+{
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	return seed;
+}
+
+inline float3 rgb2hsv(float3 c)
 {
 	float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
 	float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
@@ -20,14 +54,14 @@ float3 rgb2hsv(float3 c)
 	return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-float3 hsv2rgb(float3 c)
+inline float3 hsv2rgb(float3 c)
 {
 	float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
 	float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
 	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
 }
 
-float4 DecodeRGBAuint(uint value)
+inline float4 DecodeRGBAuint(uint value)
 {
 	uint ai = value & 0x0000007F;
 	uint vi = (value / 0x00000080) & 0x000007FF;
@@ -46,7 +80,7 @@ float4 DecodeRGBAuint(uint value)
 	return float4(color.rgb, a);
 }
 
-uint EncodeRGBAuint(float4 color)
+inline uint EncodeRGBAuint(float4 color)
 {
 	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
 	float3 hsv = rgb2hsv(color.rgb);
@@ -67,66 +101,88 @@ uint EncodeRGBAuint(float4 color)
 	return result;
 }
 
+inline uint3 coordinateFromLinearIndex(uint index, uint res)
+{
+	return uint3(
+		floor(index / (res * res)),
+		floor((index / res) % res),
+		index % res);
+}
+
+inline uint3 index1dTo3d(int index1d, uint res)
+{
+	//int res = 256; // resolution of the voxel grid
+	int logRes = 8; // the log of the resolution (just a performance optimisation this way)
+	// LogRes: 16 = 4, 32 = 5, 64 = 6, 128 = 7, 256 = 8, 512 = 9, etc...
+
+	return uint3(index1d >> (logRes << 1),
+		(index1d >> logRes) & (res - 1),
+
+		index1d & (res - 1));
+}
+
 // 0
 
-[numthreads(16, 16, 1)]
-void CSMain(uint3 id : SV_DispatchThreadID)
+[numthreads(256, 1, 1)]
+void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-	uint slice = Resolution / 16;
-	uint currentZ;
+	//rng_state = id3.x * _Time;
+	//float f0 = float(rand_lcg()) * (1.0 / 4294967296.0);
 
-	for (uint i = 0; i < slice; i++)
-	{
-		currentZ = zStagger * slice - slice + i;
+	//if (f0 > 0.1f )//&& f0 < 0.6f)
+	//{
+		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
 		float4 mixedColor =
-			(RG0[uint3(id.x - 1, id.y, currentZ)] +
-				RG0[uint3(id.x + 1, id.y, currentZ)] +
-				RG0[uint3(id.x, id.y - 1, currentZ)] +
-				RG0[uint3(id.x, id.y + 1, currentZ)] +
-				RG0[uint3(id.x, id.y, currentZ - 1)] +
-				RG0[uint3(id.x, id.y, currentZ + 1)]) / 6;
+			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-		RG1[uint3(id.xy, currentZ)] = mixedColor;
-	}
+		RG1[coordinate.xyz] = mixedColor * 0.9f;
+	//}
 }
 
 // 1
-[numthreads(16, 16, 1)]
-void CSMain1(uint3 id : SV_DispatchThreadID)
+[numthreads(256, 1, 1)]
+void CSMain1(uint3 id3 : SV_DispatchThreadID)
 {
-	uint slice = Resolution / 16;
-	uint currentZ;
-
-	for (uint i = 0; i < slice; i++)
-	{
-		currentZ = zStagger * slice - slice + i;
+		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
 		float4 mixedColor =
-			(RG0[uint3(id.x - 1, id.y, currentZ)] +
-				RG0[uint3(id.x + 1, id.y, currentZ)] +
-				RG0[uint3(id.x, id.y - 1, currentZ)] +
-				RG0[uint3(id.x, id.y + 1, currentZ)] +
-				RG0[uint3(id.x, id.y, currentZ - 1)] +
-				RG0[uint3(id.x, id.y, currentZ + 1)]) / 6;
+			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-		RG0[uint3(id.xy, currentZ)] = lerp(mixedColor, RG0[uint3(id.xy, currentZ)], 0);
-	}
+		RG0[coordinate.xyz] = lerp(mixedColor, RG0[coordinate.xyz], 0.3) * 0.9f;
 }
 
 // 2
 [numthreads(16, 16, 1)]
-void CSMain2(uint3 id : SV_DispatchThreadID)
+void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
-	uint slice = Resolution / 16;
-	uint currentZ;
+	//rng_state = id3.x * _Time;
+	//float f0 = float(rand_lcg()) * (1.0 / 4294967296.0);
 
-	for (uint i = 0; i < slice; i++)
-	{
-		currentZ = zStagger * slice - slice + i;
+	//if (f0 > 0.1f)//&& f0 < 0.6f)
+	//{
+		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
 
-		RG1[uint3(id.xy, currentZ)] = RG0[uint3(id.xy, currentZ)];
-	}
+		float4 mixedColor =
+			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y - 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y + 1, coordinate.z)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
+				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
+
+		RG1[coordinate.xyz] = lerp((mixedColor * 0.9f), RG1[coordinate.xyz], 0.5);
+	//}
 }
 
 

@@ -12,9 +12,9 @@ float EmissiveStrength;
 sampler2D _CameraDepthTexture;
 float worldVolumeBoundary;
 int highestVoxelResolution;
-sampler2D positionTexture;
 
 uniform RWStructuredBuffer<uint> lightMapBuffer : register(u5);
+uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
 
 float4x4 InverseProjectionMatrix;
 
@@ -34,6 +34,8 @@ struct vertOutput
 	float3 cPos : TEXCOORD3;	// Object center in world
 
 	float3 normal : TEXCOORD4;
+
+	float4 cameraRay : TEXCOORD5;
 };
 
 
@@ -49,6 +51,11 @@ vertOutput vert(appdata_full v)
 	o.cPos = mul(unity_ObjectToWorld, half4(0, 0, 0, 1));
 
 	o.normal = UnityObjectToWorldNormal(v.normal);
+
+	//transform clip pos to view space
+	float4 clipPos = float4(v.texcoord.xy * 2.0f - 1.0f, 1.0f, 1.0f);
+	float4 cameraRay = mul(InverseProjectionMatrix, clipPos);
+	o.cameraRay = cameraRay / cameraRay.w;
 
 	return o;
 }
@@ -314,16 +321,28 @@ float GetSmoothness(vertOutput i) {
 	return smoothness * _Smoothness;
 }
 
+uint twoD2oneD(float2 coord)
+{
+	return coord.x + 1024 * coord.y;
+}
+
 uint threeD2oneD(float3 coord)
 {
 	return coord.z * (highestVoxelResolution * highestVoxelResolution) + (coord.y * highestVoxelResolution) + coord.x;
 }
 
-half4 frag(vertOutput i) : COLOR
+float4x4 InverseViewMatrix;
+
+struct FragmentOutput {
+	float4 mrt0 : SV_Target0;
+	float4 mrt1 : SV_Target1;
+};
+
+FragmentOutput frag(vertOutput i)
 {
 	float3 albedo;
-	if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
-	{
+	//if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
+	//{
 		float3 index3d = GetVoxelPosition(i.wPos);
 		if (index3d.x < 0 || index3d.x >= 256 ||
 			index3d.y < 0 || index3d.y >= 256 ||
@@ -352,8 +371,7 @@ half4 frag(vertOutput i) : COLOR
 				oneMinusReflectivity, GetSmoothness(i),
 				i.normal, viewDir,
 				CreateLight(i), CreateIndirectLight(i, viewDir));
-
-			uint index1d = threeD2oneD(index3d);
+			
 			#if defined(_EMISSION_MAP)
 				float4 newColor = tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * EmissiveStrength,
 					_Emission.g * EmissiveStrength,
@@ -363,8 +381,14 @@ half4 frag(vertOutput i) : COLOR
 					_Emission.g * EmissiveStrength,
 					_Emission.b * EmissiveStrength, 2);
 			#endif
-			
+
+			uint index1d = threeD2oneD(index3d);
 			lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+
+			//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
+			//position /= (2.0 * worldVolumeBoundary);
+
+			//positionBuffer[twoD2oneD(i.sPos.xy)] = float4(position, 1);
 
 			/*newColor *= 0.125;
 			index1d = threeD2oneD(index3d0); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
@@ -374,9 +398,16 @@ half4 frag(vertOutput i) : COLOR
 			index1d = threeD2oneD(index3d4); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
 			index1d = threeD2oneD(index3d5); lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));*/
 		}
-	}
-	else albedo = float3(0, 0, 0);
+	//}
+	//else albedo = float3(0, 0, 0);
 
-return float4(albedo, 1);
+	float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
+	position /= (2.0 * worldVolumeBoundary);
+
+	FragmentOutput output;
+	output.mrt0 = float4(albedo, 1);
+	output.mrt1 = float4(position, Linear01Depth(i.wPos.z));
+	return output;
+
 }
 
