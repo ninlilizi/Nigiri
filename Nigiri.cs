@@ -32,7 +32,7 @@ public class Nigiri : MonoBehaviour {
     public float shadowBoostPower;
 
     [Header("Light Propagation Settings")]
-    public bool propagateLight = true;
+    public bool propagateLight;
     [Range(1, 8)]
     public int LPVIterations = 1;
     [Range(0, 128)]
@@ -139,6 +139,8 @@ public class Nigiri : MonoBehaviour {
     int lpvSwitch = 0;
     int firstResolveSwitch = 1;
 
+    bool prevPropagateLight = false;
+
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
 
@@ -232,7 +234,8 @@ public class Nigiri : MonoBehaviour {
             Nigiri_EmissiveCameraHelper.injectionResolution = injectionTextureResolution;
             
         }
-        firstResolveSwitch = 1;
+        prevPropagateLight = propagateLight;
+        UpdateForceGI();
     }
 
 	// Function to initialize the voxel grid data
@@ -438,7 +441,7 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
-        else if (mipSwitch == 1)
+        if (mipSwitch == 1)
         {
             int destinationRes = (int)highestVoxelResolution / 4;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
@@ -446,7 +449,7 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(1, "Destination", voxelGrid3);
             mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
         }
-        else if (mipSwitch == 2)
+        if (mipSwitch == 2)
         {
             int destinationRes = (int)highestVoxelResolution / 8;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
@@ -455,7 +458,7 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(1, "Destination", voxelGrid4);
             mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
         }
-        else
+        if (mipSwitch == 3)
         {
             int destinationRes = (int)highestVoxelResolution / 16;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
@@ -469,10 +472,11 @@ public class Nigiri : MonoBehaviour {
 	// This is called once per frame after the scene is rendered
 	void OnRenderImage (RenderTexture source, RenderTexture destination)
     {
-        if (forceImmediateRefresh)
+        if (forceImmediateRefresh || prevPropagateLight != propagateLight)
         {
-            UpdateForceGI();
+            prevPropagateLight = propagateLight;
             forceImmediateRefresh = false;
+            UpdateForceGI();
         }
 
         Camera localCam = GetComponent<Camera>();
@@ -532,9 +536,9 @@ public class Nigiri : MonoBehaviour {
 
         UpdateVoxelGrid();
 
-        if (firstResolveSwitch == 1 && lpvSwitch == 0 && propagateLight) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelGrid1);
-        else if (firstResolveSwitch == 1 && lpvSwitch > 0  && propagateLight) pvgiMaterial.SetTexture("voxelPropagatedGrid", voxelPropagationGrid);
-        else pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
+        if (firstResolveSwitch == 1 && lpvSwitch > 0  && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagationGrid);
+        else if (firstResolveSwitch == 0 && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
+        else pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
         pvgiMaterial.SetTexture("voxelGrid2", voxelGrid2);
         pvgiMaterial.SetTexture("voxelGrid3", voxelGrid3);
         pvgiMaterial.SetTexture("voxelGrid4", voxelGrid4);
@@ -668,6 +672,9 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.SetInt("Res", 256);
         clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
 
+        lpvSwitch = 0;
+        mipSwitch = 0;
+        voxelizationSlice = 0;
         firstResolveSwitch = 1;
     }
 
