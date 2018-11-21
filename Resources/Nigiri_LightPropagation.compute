@@ -141,7 +141,7 @@ void CSMain(uint3 id3 : SV_DispatchThreadID)
 				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
 				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-		RG1[coordinate.xyz] = mixedColor * 0.9f;
+		RG1[coordinate.xyz] = mixedColor * 0.99f;
 	//}
 }
 
@@ -159,7 +159,7 @@ void CSMain1(uint3 id3 : SV_DispatchThreadID)
 				RG0[uint3(coordinate.x, coordinate.y, coordinate.z - 1)] +
 				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
-		RG0[coordinate.xyz] = lerp(mixedColor, RG0[coordinate.xyz], 0.3) * 0.9f;
+		RG0[coordinate.xyz] = lerp(mixedColor, RG0[coordinate.xyz], 0.3) * 0.99f;
 }
 
 // 2

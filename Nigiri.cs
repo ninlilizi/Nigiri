@@ -38,12 +38,14 @@ public class Nigiri : MonoBehaviour {
     [Range(0, 128)]
     public float LPVInverseFalloff = 1;
     [Range(1, 4)]
-    public int UpdateSpeedFactor = 1;
-	private Vector2Int injectionTextureResolution = new Vector2Int(1024, 1024);
+    public int updateSpeedFactor = 1;
+    [Range(4, 5)]
+    public int fastResolveFactor = 1;
+    private Vector2Int injectionTextureResolution = new Vector2Int(1024, 1024);
 
 
 	[Header("Cone Trace Settings")]
-    [Range(1, 64)]
+    [Range(1, 32)]
 	public int maximumIterations = 8;
     [Range(0.01f, 2)]
     public float coneLength = 1;
@@ -73,7 +75,7 @@ public class Nigiri : MonoBehaviour {
     public float rayStep = 0.1f;
     [Range(0.1f, 4)]
     public float BalanceGain = 1;
-    [Range(1, 64)]
+    [Range(1, 32)]
     public int maximumIterationsReflection = 16;
 
     [Header("Debug Settings")]
@@ -137,7 +139,7 @@ public class Nigiri : MonoBehaviour {
     int voxelizationSlice = 0;
     int mipSwitch = 0;
     int lpvSwitch = 0;
-    int firstResolveSwitch = 1;
+    public bool fastResolveSwitch = true;
 
     bool prevPropagateLight = false;
 
@@ -146,7 +148,7 @@ public class Nigiri : MonoBehaviour {
 
     private void Start()
     {
-        firstResolveSwitch = 1;
+        UpdateForceGI();
     }
 
     // Use this for initialization
@@ -234,7 +236,6 @@ public class Nigiri : MonoBehaviour {
             Nigiri_EmissiveCameraHelper.injectionResolution = injectionTextureResolution;
             
         }
-        prevPropagateLight = propagateLight;
         UpdateForceGI();
     }
 
@@ -314,37 +315,51 @@ public class Nigiri : MonoBehaviour {
 
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
 
-        if (UpdateSpeedFactor == 4 || firstResolveSwitch == 1)
+        if (fastResolveSwitch)
         {
-            voxelizationSlice = (voxelizationSlice + 1) % (8);
-            voxelizationSliceOffset = 2097152;
-            voxelizationSliceDispatch = 8192;
+            if (fastResolveFactor == 5)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (4);
+                voxelizationSliceOffset = 4194304;
+                voxelizationSliceDispatch = 16384;
 
-            if (voxelizationSlice == 7 && lpvSwitch == 2) firstResolveSwitch = 0;
+                if (voxelizationSlice == 3 && lpvSwitch == 2) fastResolveSwitch = false;
+            }
+            if (fastResolveFactor == 4)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (8);
+                voxelizationSliceOffset = 2097152;
+                voxelizationSliceDispatch = 8192;
+
+                if (voxelizationSlice == 7 && lpvSwitch == 2) fastResolveSwitch = false;
+            }
         }
-        else if (UpdateSpeedFactor == 3)
+        else
         {
-            voxelizationSlice = (voxelizationSlice + 1) % (16);
-            voxelizationSliceOffset = 1048576;
-            voxelizationSliceDispatch = 4096;
-
-            if (voxelizationSlice == 15 && lpvSwitch == 2) firstResolveSwitch = 0;
-        }
-        else if (UpdateSpeedFactor == 2)
-        {
-            voxelizationSlice = (voxelizationSlice + 1) % (32);
-            voxelizationSliceOffset = 524288;
-            voxelizationSliceDispatch = 2048;
-
-            if (voxelizationSlice == 31 && lpvSwitch == 2) firstResolveSwitch = 0;
-        }
-        else if (UpdateSpeedFactor == 1)
-        {
-            voxelizationSlice = (voxelizationSlice + 1) % (64);
-            voxelizationSliceOffset = 262144;
-            voxelizationSliceDispatch = 1024;
-
-            if (voxelizationSlice == 63 && lpvSwitch == 2) firstResolveSwitch = 0;
+            if (updateSpeedFactor == 4)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (8);
+                voxelizationSliceOffset = 2097152;
+                voxelizationSliceDispatch = 8192;
+            }
+            else if (updateSpeedFactor == 3)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (16);
+                voxelizationSliceOffset = 1048576;
+                voxelizationSliceDispatch = 4096;
+            }
+            else if (updateSpeedFactor == 2)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (32);
+                voxelizationSliceOffset = 524288;
+                voxelizationSliceDispatch = 2048;
+            }
+            else if (updateSpeedFactor == 1)
+            {
+                voxelizationSlice = (voxelizationSlice + 1) % (64);
+                voxelizationSliceOffset = 262144;
+                voxelizationSliceDispatch = 1024;
+            }
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
@@ -427,8 +442,8 @@ public class Nigiri : MonoBehaviour {
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            if (firstResolveSwitch == 1 && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
-            else if (firstResolveSwitch == 1 && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
+            if (fastResolveSwitch && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
+            else if (fastResolveSwitch && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
             else mipFilterCompute.SetTexture(0, "Source", voxelPropagatedGrid);
             mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
@@ -474,7 +489,6 @@ public class Nigiri : MonoBehaviour {
     {
         if (forceImmediateRefresh || prevPropagateLight != propagateLight)
         {
-            prevPropagateLight = propagateLight;
             forceImmediateRefresh = false;
             UpdateForceGI();
         }
@@ -536,8 +550,8 @@ public class Nigiri : MonoBehaviour {
 
         UpdateVoxelGrid();
 
-        if (firstResolveSwitch == 1 && lpvSwitch > 0  && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagationGrid);
-        else if (firstResolveSwitch == 0 && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
+        if (fastResolveSwitch && lpvSwitch > 0  && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagationGrid);
+        else if (!fastResolveSwitch && propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
         else pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
         pvgiMaterial.SetTexture("voxelGrid2", voxelGrid2);
         pvgiMaterial.SetTexture("voxelGrid3", voxelGrid3);
@@ -675,7 +689,8 @@ public class Nigiri : MonoBehaviour {
         lpvSwitch = 0;
         mipSwitch = 0;
         voxelizationSlice = 0;
-        firstResolveSwitch = 1;
+        fastResolveSwitch = true;
+        prevPropagateLight = propagateLight;
     }
 
 
