@@ -647,7 +647,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//directLighting = gBufferSample.rgb;
 
-	float3 emissive = tex2D(_CameraGBufferTexture1, i.uv).rgb;
+	float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
 
 
 	// read low res depth and reconstruct world position
@@ -662,13 +662,9 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	float3 worldSpaceNormal = 1 - GetWorldNormal(i.uv);
 
-	//albedo * albedoTex.a * albedoTex.rgb;
-	float emissiveMult;
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
-	float3 indirectLighting = max(directLighting, ((ao * indirectLightingStrength * albedo + emissive) / PI) * indirectContribution);
+	float3 indirectLighting = max(directLighting, ((ao * indirectLightingStrength * (1.0f - metallic) * albedo) / PI) * indirectContribution);
 	if (VisualiseGI) indirectLighting = indirectContribution / maximumIterations;
-
-	//indirectLighting = ao;
 
 	return float4(indirectLighting, 1.0f);
 }

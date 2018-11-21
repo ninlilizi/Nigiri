@@ -15,7 +15,7 @@ A fully-dynamic voxel-based global illumination system for Unity. More details a
 
 <p align="center" style="display: inline-block;">
   <img height="248px" width="440px" src="https://i.imgur.com/xoR4ab6.jpg">
-  <img height="248px" width="440px" src="https://i.imgur.com/m0S2k0C.jpg">
+  <img height="248px" width="440px" src="https://i.imgur.com/MMexVfi.png">
 </p>
 
 # Installation

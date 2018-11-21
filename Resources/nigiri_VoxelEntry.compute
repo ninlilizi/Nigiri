@@ -26,6 +26,8 @@ uniform uint						voxelResolution;
 // World-space boundary of the voxel grid
 uniform float 						worldVolumeBoundary;
 
+uniform float						shadowStrength;
+
 #define unity_ColorSpaceLuminance half4(0.0396819152, 0.458021790, 0.00609653955, 1.0)
 
 // Function to get position of voxel in the grid
@@ -137,12 +139,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 
 	if (voxelGrid[voxelPosition].r == 0 || voxelGrid[voxelPosition].g == 0 || voxelGrid[voxelPosition].b == 0)
 	{
-		voxelGrid[voxelPosition] = voxelInjectionGrid[voxelPosition] + (lightingTexture[id.xy] + ((lightingTexture2[id.xy] * 0.05)) * 0.5);
+		voxelGrid[voxelPosition] = voxelInjectionGrid[voxelPosition] + (lightingTexture[id.xy] + ((lightingTexture2[id.xy] * (1 - shadowStrength))) * 0.5);
 	}
 	else if ((voxelUpdateCounter[index] > lindepth + noiseCoord.x) && (lindepth < 0.999f))
 	{
 
-		float4 newMixedColor = (voxelGrid[voxelPosition] + (lightingTexture[id.xy] + ((lightingTexture2[id.xy] * 0.05)) * 0.5)) * 0.5;
+		float4 newMixedColor = (voxelGrid[voxelPosition] + (lightingTexture[id.xy] + ((lightingTexture2[id.xy] * (1 - shadowStrength))) * 0.5)) * 0.5;
 
 		voxelGrid[voxelPosition] = lerp(voxelInjectionGrid[voxelPosition] + newMixedColor, voxelGrid[voxelPosition], 0.99);
 		voxelUpdateCounter[index] = 0;
