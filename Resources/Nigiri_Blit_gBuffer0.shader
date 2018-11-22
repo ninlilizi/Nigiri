@@ -5,6 +5,7 @@
 #include "UnityCG.cginc"
 		//#include "Common.cginc"
 
+
 		struct Varyings
 	{
 		float2 uv : TEXCOORD0;
@@ -26,16 +27,14 @@
 
 	half4 FragBlit(Varyings i) : SV_Target
 	{
-		half4 col = tex2D(_CameraGBufferTexture0, i.uv);
-
-		return col;
+		return tex2D(_CameraGBufferTexture0, i.uv);
 	}
 
 		ENDCG
 
 		SubShader
 	{
-		Cull Off ZWrite Off ZTest Always
+		//Cull Off ZWrite Off ZTest Always
 
 			Pass
 		{
