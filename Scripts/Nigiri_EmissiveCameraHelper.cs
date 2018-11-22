@@ -65,7 +65,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
         positionBuffer = new ComputeBuffer(1024 * 1024, sizeof(float) * 4, ComputeBufferType.Default);
 
-        cam.depthTextureMode = DepthTextureMode.None;
+        cam.depthTextureMode = DepthTextureMode.Depth;
         cam.clearFlags = CameraClearFlags.Color;
         cam.useOcclusionCulling = false;
         cam.backgroundColor = Color.black;
@@ -96,7 +96,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         }
     }
 
-    private void OnRenderImage(RenderTexture source, RenderTexture destination)
+    private void OnpostRender()
     {
         lightingTextureDebug = lightingTexture;
     }

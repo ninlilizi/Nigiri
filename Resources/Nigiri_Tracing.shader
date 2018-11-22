@@ -614,8 +614,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	}
 	else
 	{
-		gi.rgb /= maximumIterations;
-		gi.rgb *= GIGain * 0.15;
+		// gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
+		gi *= GIGain * occlusionGain;
 	}
 
 	computedColor.rgb = gi.rgb;
@@ -721,7 +721,7 @@ float4 frag_lighting(v2f i) : SV_Target
 	float3 worldSpaceNormal = 1 - GetWorldNormal(i.uv);
 
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
-	float3 indirectLighting = max(directLighting, ((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
+	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
 	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
 
 	return float4(indirectLighting, 1.0f);

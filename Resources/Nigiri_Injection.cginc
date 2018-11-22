@@ -340,7 +340,7 @@ struct FragmentOutput {
 
 FragmentOutput frag(vertOutput i)
 {
-	float3 albedo;
+	float3 albedo = (0).xxx;
 	//if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
 	//{
 		float3 index3d = GetVoxelPosition(i.wPos);
@@ -406,7 +406,7 @@ FragmentOutput frag(vertOutput i)
 
 	FragmentOutput output;
 	output.mrt0 = float4(albedo, 1);
-	output.mrt1 = float4(position, Linear01Depth(i.wPos.z));
+	output.mrt1 = float4(i.wPos, Linear01Depth(i.wPos.z));
 	return output;
 
 }

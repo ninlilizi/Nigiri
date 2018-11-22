@@ -26,8 +26,8 @@
 			Blend[_SrcBlend][_DstBlend]
 			//ZWrite[_ZWrite]
 			ZWrite On
-			//Cull Off
-			//ZTest Always
+			Cull Off
+			ZTest Always
 
 			CGPROGRAM
 				#pragma target 5.0
@@ -49,8 +49,8 @@
 			Blend[_SrcBlend][_DstBlend]
 			//ZWrite[_ZWrite]
 			ZWrite On
-			//Cull Off
-			//ZTest Always
+			Cull Off
+			ZTest Always
 
 			CGPROGRAM
 				#pragma target 5.0

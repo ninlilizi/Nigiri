@@ -36,8 +36,8 @@ public class Nigiri : MonoBehaviour {
     public bool propagateLight = false;
     [Range(1, 8)]
     public int LPVIterations = 1;
-    [Range(0, 128)]
-    private float LPVInverseFalloff = 1;
+    //[Range(0, 128)]
+    //private float LPVInverseFalloff = 1;
     [Range(1, 4)]
     public int updateSpeedFactor = 1;
     [Range(4, 5)]
@@ -66,7 +66,7 @@ public class Nigiri : MonoBehaviour {
     public float OcclusionPower = 0.65f;
     [Range(0.1f, 2)]
     public float coneTraceBias = 1;
-    public bool usePathCache = false;
+    private bool usePathCache = false;
     public bool depthStopOptimization = true;
     public bool stochasticSampling = true;
     [Range(0.1f, 2)]
@@ -85,7 +85,7 @@ public class Nigiri : MonoBehaviour {
     public int maximumIterationsReflection = 16;
 
     [Header("Occlusion Settings")]
-    [SerializeField, Range(1, 10)] float _thicknessModifier = 4;
+    [SerializeField, Range(1, 10)] float _thicknessModifier = 1;
 
     public float thicknessModifier
     {
@@ -93,7 +93,7 @@ public class Nigiri : MonoBehaviour {
         set { _thicknessModifier = value; }
     }
 
-    [SerializeField, Range(0, 4)] float _intensity = 1.5f;
+    [SerializeField, Range(0, 4)] float _intensity = 1;
 
     public float intensity
     {
@@ -244,10 +244,10 @@ public class Nigiri : MonoBehaviour {
 
         InitializeVoxelGrid();
 
-		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
-        lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
-        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 32, RenderTextureFormat.ARGBHalf);
-        orthographicPositionTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.ARGBHalf);
+		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        //orthographicPositionTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.filterMode = FilterMode.Bilinear;
@@ -259,7 +259,7 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.Create();
         blur.Create();
         positionTexture.Create();
-        orthographicPositionTexture.Create();
+        //orthographicPositionTexture.Create();
         gi.Create();
 
         voxelUpdateCounter = new ComputeBuffer((injectionTextureResolution.x / 4) * (injectionTextureResolution.y / 4), 4, ComputeBufferType.Default);
@@ -289,13 +289,13 @@ public class Nigiri : MonoBehaviour {
             emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
             //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
             emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            emissiveCameraGO.hideFlags = HideFlags.DontSave;
+            emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.25);
-            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.25);
+            emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
+            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.5f);
+            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.5f);
             emissiveCamera.enabled = false;
             Nigiri_EmissiveCameraHelper.injectionResolution = injectionTextureResolution;
             
@@ -375,7 +375,7 @@ public class Nigiri : MonoBehaviour {
     {
         Nigiri_EmissiveCameraHelper.DoRender();
 
-        //orthographicPositionTexture = Nigiri_EmissiveCameraHelper.positionTexture;
+        orthographicPositionTexture = Nigiri_EmissiveCameraHelper.positionTexture;
 
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
 
@@ -1292,7 +1292,7 @@ public class Nigiri : MonoBehaviour {
         set { _ambientOnly = value; }
     }
 
-    [SerializeField] bool _ambientOnly = true;
+    private bool _ambientOnly = true;
 
     #endregion
 
