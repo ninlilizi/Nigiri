@@ -11,11 +11,7 @@ Texture3D<float4> PrevResult;
 //We use a struct as a float4 (to align with 128 byte cache addressing for performance)
 cbuffer PerFrame: register(b0)
 {
-	struct colorStruct
-	{
-		float4 value;
-	};
-	uniform StructuredBuffer<colorStruct> InputBuffer;
+	uniform StructuredBuffer<float4> InputBuffer;
 
 	Texture3D<uint> RG0;
 	float4 VoxelOriginDelta;
@@ -178,7 +174,7 @@ void CSMain3(uint3 id : SV_DispatchThreadID)
 	for (uint i = 0; i < Resolution; i++)
 	{
 		double index = id.x * Resolution * Resolution + id.y * Resolution + i;
-		ResultBuffer[index] = float4(InputBuffer[index]);
+		ResultBuffer[index] = InputBuffer[index];
 	}
 }
 
@@ -195,11 +191,11 @@ void CSMain4(uint3 id : SV_DispatchThreadID)
 	{
 		currentZ = zStagger * slice - slice + i;
 		double index = id.x * Resolution * Resolution + id.y * Resolution + currentZ;
-		color = float4(InputBuffer[index]) / 32768;
+		color = float4(InputBuffer[index]) / 32;
 		//color = float4(1, 1, 1, 1);
 		if (color.r > 0 || color.g > 0 || color.b > 0)
 		{
-			ResultBuffer[index].rgba = lerp(ResultBuffer[index].rgba, color.rgba, 0.5);
+			ResultBuffer[index] = lerp(ResultBuffer[index], color, 0.5);
 		}
 	}
 }

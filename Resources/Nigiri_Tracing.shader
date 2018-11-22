@@ -179,97 +179,97 @@
 			// read low res depth and reconstruct world position
 			float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture , i.uv);
 
-			//linearise depth		
-			float lindepth = Linear01Depth(depth);
+		//linearise depth		
+		float lindepth = Linear01Depth(depth);
 
-			//get view and then world positions		
-			float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-			float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+		//get view and then world positions		
+		float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+		float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
-			return float4(worldPos, lindepth);
-	}
+		return float4(worldPos, lindepth);
+}
 
-		// Returns the voxel position in the grids
-		inline float3 GetVoxelPosition(float3 worldPosition)
-		{
-			float3 voxelPosition = worldPosition / worldVolumeBoundary;
-			voxelPosition += float3(1.0f, 1.0f, 1.0f);
-			voxelPosition /= 2.0f;
-			return voxelPosition;
-		}
+// Returns the voxel position in the grids
+inline float3 GetVoxelPosition(float3 worldPosition)
+{
+	float3 voxelPosition = worldPosition / worldVolumeBoundary;
+	voxelPosition += float3(1.0f, 1.0f, 1.0f);
+	voxelPosition /= 2.0f;
+	return voxelPosition;
+}
 
-	// Returns the voxel information from grid 1
-	inline float4 GetVoxelInfo1(float3 voxelPosition)
-	{
-		//float4 info = tex3D(voxelGrid1, voxelPosition);
-		float4 info2 = tex3D(voxelGrid1, voxelPosition);
-		return info2;
-	}
+// Returns the voxel information from grid 1
+inline float4 GetVoxelInfo1(float3 voxelPosition)
+{
+	//float4 info = tex3D(voxelGrid1, voxelPosition);
+	float4 info2 = tex3D(voxelGrid1, voxelPosition);
+	return info2;
+}
 
-	// Returns the voxel information from grid 2
-	inline float4 GetVoxelInfo2(float3 voxelPosition)
-	{
-		float4 info = tex3D(voxelGrid2, voxelPosition);
-		return info;
-	}
+// Returns the voxel information from grid 2
+inline float4 GetVoxelInfo2(float3 voxelPosition)
+{
+	float4 info = tex3D(voxelGrid2, voxelPosition);
+	return info;
+}
 
-	// Returns the voxel information from grid 3
-	inline float4 GetVoxelInfo3(float3 voxelPosition)
-	{
-		float4 info = tex3D(voxelGrid3, voxelPosition);
-		return info;
-	}
+// Returns the voxel information from grid 3
+inline float4 GetVoxelInfo3(float3 voxelPosition)
+{
+	float4 info = tex3D(voxelGrid3, voxelPosition);
+	return info;
+}
 
-	// Returns the voxel information from grid 4
-	inline float4 GetVoxelInfo4(float3 voxelPosition)
-	{
-		float4 info = tex3D(voxelGrid4, voxelPosition);
-		return info;
-	}
+// Returns the voxel information from grid 4
+inline float4 GetVoxelInfo4(float3 voxelPosition)
+{
+	float4 info = tex3D(voxelGrid4, voxelPosition);
+	return info;
+}
 
-	// Returns the voxel information from grid 5
-	inline float4 GetVoxelInfo5(float3 voxelPosition)
-	{
-		float4 info = tex3D(voxelGrid5, voxelPosition);
-		return info;
-	}
+// Returns the voxel information from grid 5
+inline float4 GetVoxelInfo5(float3 voxelPosition)
+{
+	float4 info = tex3D(voxelGrid5, voxelPosition);
+	return info;
+}
 
-	float4 frag_debug(v2f i) : SV_Target
-	{
-		// read low res depth and reconstruct world position
-		float depth = tex2D(_CameraDepthTexture, i.uv);
+float4 frag_debug(v2f i) : SV_Target
+{
+	// read low res depth and reconstruct world position
+	float depth = tex2D(_CameraDepthTexture, i.uv);
 
-	//linearise depth		
-	float lindepth = Linear01Depth(depth);
+//linearise depth		
+float lindepth = Linear01Depth(depth);
 
-	//get view and then world positions		
-	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+//get view and then world positions		
+float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
-	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-	#if defined(GRID_1)
-	voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
-	#endif
+#if defined(GRID_1)
+voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
+#endif
 
-	#if defined(GRID_2)
-	voxelInfo = GetVoxelInfo2(GetVoxelPosition(worldPos));
-	#endif
+#if defined(GRID_2)
+voxelInfo = GetVoxelInfo2(GetVoxelPosition(worldPos));
+#endif
 
-	#if defined(GRID_3)
-	voxelInfo = GetVoxelInfo3(GetVoxelPosition(worldPos));
-	#endif
+#if defined(GRID_3)
+voxelInfo = GetVoxelInfo3(GetVoxelPosition(worldPos));
+#endif
 
-	#if defined(GRID_4)
-	voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
-	#endif
+#if defined(GRID_4)
+voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
+#endif
 
-	#if defined(GRID_5)
-	voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
-	#endif
+#if defined(GRID_5)
+voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
+#endif
 
-	float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
-	return float4(resultingColor, 1.0f);
+float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
+return float4(resultingColor, 1.0f);
 }
 
 float GetDepthTexture(float2 uv)
@@ -381,11 +381,12 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	float hitFound = 0.0f;
 
+	int coordSet = 0;
 	float skyVisibility = 1.0f;
 	float skyVisibility2 = 1.0f;
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
-	float2 interMult = float2(0, 0);
+	//float2 interMult = float2(0, 0);
 
 	// Sample voxel grid 1
 	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
@@ -404,13 +405,17 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);
+				if (coordSet == 0) 
+				{
+					coordSet = 1;
+					voxelBufferCoord = GetVoxelPosition(currentPosition);
+				}
 			}
-			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
-		} 
+			//if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
+		}
 		occlusion = skyVisibility * skyVisibility;
-		interMult.x += currentVoxelInfo.a;
-		interMult.y++;
+		//interMult.x += currentVoxelInfo.a;
+		//interMult.y++;
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -424,6 +429,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	// Sample voxel grid 2
 	skyVisibility = 1.0f;
+	hitFound = 0;
+	coneOrigin = worldPosition + (coneDirection * coneStep * iteration2);
+	currentPosition = coneOrigin;
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
 		currentPosition += (coneStep * coneDirection) * coneLength;
@@ -440,14 +448,12 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);
-
 			}
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
 		occlusion = skyVisibility * skyVisibility;
-		interMult.x += currentVoxelInfo.a;
-		interMult.y++;
+		//interMult.x += currentVoxelInfo.a;
+		//interMult.y++;
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -460,6 +466,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	// Sample voxel grid 3
 	skyVisibility = 1.0f;
+	hitFound = 0;
+	coneOrigin = worldPosition + (coneDirection * coneStep * iteration2);
+	currentPosition = coneOrigin;
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection * coneLength;
@@ -476,12 +485,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
-		interMult.x += currentVoxelInfo.a;
-		interMult.y++;
+		//interMult.x += currentVoxelInfo.a;
+		//interMult.y++;
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -494,6 +502,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	// Sample voxel grid 4
 	skyVisibility = 1.0f;
+	hitFound = 0;
+	coneOrigin = worldPosition + (coneDirection * coneStep * iteration2);
+	currentPosition = coneOrigin;
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection * coneLength;
@@ -510,12 +521,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
-		interMult.x += currentVoxelInfo.a;
-		interMult.y++;
+		//interMult.x += currentVoxelInfo.a;
+		//interMult.y++;
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -528,6 +538,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	// Sample voxel grid 5
 	skyVisibility = 1.0f;
+	hitFound = 0;
+	coneOrigin = worldPosition + (coneDirection * coneStep * iteration2);
+	currentPosition = coneOrigin;
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection * coneLength;
@@ -544,12 +557,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				voxelBufferCoord = GetVoxelPosition(currentPosition);
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
-		interMult.x += currentVoxelInfo.a;
-		interMult.y++;
+		//interMult.x += currentVoxelInfo.a;
+		//interMult.y++;
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -594,6 +606,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	float2 noiseCoord = (uv.xy * _MainTex_TexelSize.zw) / (64.0).xx;
 	float4 blueNoise = tex2Dlod(NoiseTexture, float4(noiseCoord, 0.0, 0.0)).x;
 	blueNoise *= (1 - depth);
+	blueNoise * 0.125;
 
 
 	float fi = (float)tracedTexture1UpdateCount + blueNoise.x * StochasticSampling;
@@ -627,8 +640,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	voxelBufferCoord.x += blueNoise.x * StochasticSampling;
 	voxelBufferCoord.y += blueNoise.y * StochasticSampling;
 	voxelBufferCoord.z += blueNoise.z * StochasticSampling;
-	double index = voxelBufferCoord.x * (256) * (256) + voxelBufferCoord.y * (256) + voxelBufferCoord.z;
-	tracedBuffer1[index] += float4(gi, 1);
+	uint index = voxelBufferCoord.x * (highestVoxelResolution) * (highestVoxelResolution) + voxelBufferCoord.y * (highestVoxelResolution) + voxelBufferCoord.z;
+	tracedBuffer1[index] += float4(gi, 1) / maximumIterations;
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
 	if (DoReflections) gi += RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
@@ -641,6 +654,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	gi.rgb *= cachedResult.rgb * EmissiveAttribution;
 	giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
 	gi.rgb += hsv2rgb(giHSV);
+
+	//gi.rgb = cachedResult.rgb;
 
 	return gi;
 }

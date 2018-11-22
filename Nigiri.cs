@@ -239,7 +239,7 @@ public class Nigiri : MonoBehaviour {
         }
 
         pathCacheBuffer = new PathCacheBuffer();
-        pathCacheBuffer.Init(256);
+        pathCacheBuffer.Init(highestVoxelResolution);
 
         if (!emissiveCameraGO)
         {
@@ -437,7 +437,7 @@ public class Nigiri : MonoBehaviour {
 
             for (int i = 0; i < LPVIterations; i++)
             {
-                lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
+                //lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
                 lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
                 lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
                 lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
@@ -477,25 +477,25 @@ public class Nigiri : MonoBehaviour {
         {
             int destinationRes = (int)highestVoxelResolution / 4;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(1, "Source", voxelGrid2);
-            mipFilterCompute.SetTexture(1, "Destination", voxelGrid3);
-            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+            mipFilterCompute.SetTexture(0, "Source", voxelGrid2);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid3);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 2)
         {
             int destinationRes = (int)highestVoxelResolution / 8;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(1, "Source", voxelGrid3);
-            mipFilterCompute.SetTexture(1, "Destination", voxelGrid4);
-            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+            mipFilterCompute.SetTexture(0, "Source", voxelGrid3);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid4);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 3)
         {
             int destinationRes = (int)highestVoxelResolution / 16;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(1, "Source", voxelGrid4);
-            mipFilterCompute.SetTexture(1, "Destination", voxelGrid5);
-            mipFilterCompute.Dispatch(1, destinationRes / 8, destinationRes / 8, 1);
+            mipFilterCompute.SetTexture(0, "Source", voxelGrid4);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid5);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
     }
@@ -515,13 +515,13 @@ public class Nigiri : MonoBehaviour {
         {
             Debug.Log("<SEGI> Creating path cache buffers");
             pathCacheBuffer = new PathCacheBuffer();
-            pathCacheBuffer.Init(256);
+            pathCacheBuffer.Init(highestVoxelResolution);
         }
 
         if (pathCacheBuffer.front == null || pathCacheBuffer.back == null)
         {
             Debug.Log("<SEGI> Recreating patch cache buffers");
-            pathCacheBuffer.Init(256);
+            pathCacheBuffer.Init(highestVoxelResolution);
         }
 
         // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
