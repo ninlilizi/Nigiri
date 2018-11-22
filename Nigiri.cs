@@ -29,10 +29,10 @@ public class Nigiri : MonoBehaviour {
     public float GIAreaSize = 50;
     public int highestVoxelResolution = 256;
     [Range(0, 1)]
-    public float shadowBoostPower;
+    public float shadowStrength = 1.0f;
 
     [Header("Light Propagation Settings")]
-    public bool propagateLight;
+    public bool propagateLight = false;
     [Range(1, 8)]
     public int LPVIterations = 1;
     [Range(0, 128)]
@@ -63,9 +63,13 @@ public class Nigiri : MonoBehaviour {
     public float FarOcclusionStrength = 1;
     [Range(0.1f, 1)]
     public float OcclusionPower = 0.65f;
+    [Range(0.1f, 2)]
+    public float coneTraceBias = 1;
+    public bool usePathCache = false;
     public bool depthStopOptimization = true;
-
-    private bool stochasticSampling = true;
+    public bool stochasticSampling = true;
+    [Range(0.1f, 2)]
+    public float stochasticFactor = 1;
 
     [Header("Reflection Settings")]
     public bool traceReflections = true;
@@ -81,7 +85,10 @@ public class Nigiri : MonoBehaviour {
 
     [Header("Debug Settings")]
     public bool VisualiseGI = false;
+    public bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
+    public bool visualizeOcclusion = false;
+    public bool visualizeReflections = false;
     public DebugVoxelGrid debugVoxelGrid = DebugVoxelGrid.GRID_1;
     public bool forceImmediateRefresh = false;
 
@@ -405,7 +412,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
-        nigiri_VoxelEntry.SetFloat("shadowStrength", shadowBoostPower);
+        nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
 
         // Voxelize main cam
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
@@ -539,9 +546,19 @@ public class Nigiri : MonoBehaviour {
 
         lengthOfCone = (32.0f * GIAreaSize) / (highestVoxelResolution * Mathf.Tan (Mathf.PI / 6.0f));
 
+        // NOTE: code was ported from: https://gamedev.stackexchange.com/questions/131978/shader-reconstructing-position-from-depth-in-vr-through-projection-matrix
+        // More clerification of whats going on is needed!
+        var p = GL.GetGPUProjectionMatrix(GetComponent<Camera>().projectionMatrix, false);// Unity flips its 'Y' vector depending on if its in VR, Editor view or game view etc... (facepalm)
+        p[2, 3] = p[3, 2] = 0.0f;
+        p[3, 3] = 1.0f;
+        var clipToWorld = Matrix4x4.Inverse(p * GetComponent<Camera>().worldToCameraMatrix) * Matrix4x4.TRS(new Vector3(0, 0, -p[2, 2]), Quaternion.identity, Vector3.one);
+        pvgiMaterial.SetMatrix("clipToWorld", clipToWorld);
+
         pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
-		pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
-		Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
+        pvgiMaterial.SetMatrix("ViewMatrix", GetComponent<Camera>().worldToCameraMatrix);
+        pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        pvgiMaterial.SetMatrix("ProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
 		pvgiMaterial.SetFloat ("maximumIterations", maximumIterations);
         pvgiMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
         pvgiMaterial.SetFloat ("indirectLightingStrength", AmbientStrength);
@@ -550,6 +567,8 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         pvgiMaterial.SetFloat("coneLength", coneLength);
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
+        pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
+        pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
 
         pvgiMaterial.SetFloat("rayStep", rayStep);
         pvgiMaterial.SetFloat("rayOffset", rayOffset);
@@ -560,7 +579,11 @@ public class Nigiri : MonoBehaviour {
 
         Shader.SetGlobalInt("highestVoxelResolution", highestVoxelResolution);
         pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
+        pvgiMaterial.SetFloat("stochasticSamplingScale", stochasticFactor);
         pvgiMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
+        pvgiMaterial.SetInt("visualiseCache", VisualiseCache ? 1 : 0);
+        pvgiMaterial.SetInt("visualizeOcclusion", visualizeOcclusion ? 1 : 0);
+        pvgiMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
         pvgiMaterial.SetFloat("coneLength", coneLength);
         pvgiMaterial.SetFloat("GIGain", GIGain);
         pvgiMaterial.SetFloat("NearLightGain", NearLightGain);

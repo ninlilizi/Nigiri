@@ -92,6 +92,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
             Graphics.SetRandomWriteTarget(6, positionBuffer);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
             cam.RenderWithShader(emissiveShader, "");
+            Graphics.ClearRandomWriteTargets();
         }
     }
 

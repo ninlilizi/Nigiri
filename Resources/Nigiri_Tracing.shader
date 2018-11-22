@@ -45,7 +45,10 @@
 
 		uniform float					lengthOfCone;
 		uniform int						StochasticSampling;
+		uniform float					stochasticSamplingScale;
 		uniform float					maximumIterations;
+
+		uniform int						usePathCache;
 
 		// Reflection
 		uniform float					rayStep;
@@ -70,6 +73,9 @@
 		uniform float					FarOcclusionStrength;
 		uniform float					OcclusionPower;
 		uniform int						VisualiseGI;
+		uniform int						visualiseCache;
+		uniform int						visualizeOcclusion;
+		uniform int						visualizeReflections;
 
 		uniform float					skyVisibility;
 
@@ -84,6 +90,8 @@
 
 		uniform StructuredBuffer<colorStruct> tracedBuffer0;
 		uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
+
+		float ConeTraceBias;
 
 		const float phi = 1.618033988;
 		const float gAngle = 5.083203603249289;
@@ -349,7 +357,6 @@ inline float3 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float
 inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord)
 {
 	//Temp consts till integration
-	float ConeTraceBias = 1.01f;
 	int SEGISphericalSkylight = 0;
 	float3 SEGISunlightVector = _WorldSpaceLightPos0;
 	float3 SEGISkyColor = unity_AmbientSky;
@@ -368,16 +375,21 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float iteration4 = maximumIterations / 4.0f;
 	float iteration5 = maximumIterations / 2.0f;
 
-
+	float3 worldNormal = tex2D(_CameraGBufferTexture2, uv).rgb;
 
 	blueNoise.xy *= 0.0625;
 	blueNoise.z *= 0.0625;
 	blueNoise.z -= blueNoise.z * 2;
 
-	float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0);
+
+	//float3 cacheOrigin = worldPosition + worldNormal * 0.003 * ConeTraceBias * 1.25;
+	float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0) * ConeTraceBias;
 
 	float3 currentPosition = coneOrigin;
 	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+	float3 adjustedKernel = normalize(coneDirection.xyz + worldNormal.xyz * coneWidth);
+
 
 	float hitFound = 0.0f;
 
@@ -393,7 +405,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	{
 		currentPosition += (coneStep * coneDirection) * coneLength;
 
-		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / maximumIterations;
+		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
@@ -405,15 +417,15 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
-				if (coordSet == 0) 
-				{
+				//if (coordSet == 0) 
+				//{
 					coordSet = 1;
-					voxelBufferCoord = GetVoxelPosition(currentPosition);
-				}
+					voxelBufferCoord = adjustedKernel.xyz * (coneDistance * 1.12 * coneLength + 0.000);
+				//}
 			}
 			//if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
-		occlusion = skyVisibility * skyVisibility;
+		occlusion = skyVisibility;
 		//interMult.x += currentVoxelInfo.a;
 		//interMult.y++;
 
@@ -421,7 +433,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		if (visualizeOcclusion) gi.rgb += occlusion;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 + currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -451,7 +464,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
-		occlusion = skyVisibility * skyVisibility;
+		occlusion = skyVisibility;
 		//interMult.x += currentVoxelInfo.a;
 		//interMult.y++;
 
@@ -459,7 +472,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		if (visualizeOcclusion) gi.rgb += occlusion;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -487,7 +501,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
-		occlusion = skyVisibility * skyVisibility;
+		occlusion = skyVisibility;
 		//interMult.x += currentVoxelInfo.a;
 		//interMult.y++;
 
@@ -495,7 +509,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		if (visualizeOcclusion) gi.rgb += occlusion;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -523,7 +538,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
-		occlusion = skyVisibility * skyVisibility;
+		occlusion = skyVisibility;
 		//interMult.x += currentVoxelInfo.a;
 		//interMult.y++;
 
@@ -531,7 +546,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		if (visualizeOcclusion) gi.rgb += occlusion;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -559,7 +575,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
-		occlusion = skyVisibility * skyVisibility;
+		occlusion = skyVisibility;
 		//interMult.x += currentVoxelInfo.a;
 		//interMult.y++;
 
@@ -567,7 +583,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		if (visualizeOcclusion) gi.rgb += occlusion;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -607,6 +624,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	float4 blueNoise = tex2Dlod(NoiseTexture, float4(noiseCoord, 0.0, 0.0)).x;
 	blueNoise *= (1 - depth);
 	blueNoise * 0.125;
+	blueNoise *= stochasticSamplingScale;
 
 
 	float fi = (float)tracedTexture1UpdateCount + blueNoise.x * StochasticSampling;
@@ -618,6 +636,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	kernel.x = cos(latitude) * cos(longitude);
 	kernel.z = cos(latitude) * sin(longitude);
 	kernel.y = sin(latitude);
+
+	//kernel = normalize(kernel + worldNormal.xyz * 1.0);
 
 	float3 randomVector = normalize(kernel);
 	float3 direction1 = normalize(cross(worldNormal, randomVector));
@@ -634,28 +654,38 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	reflectedRayDirection *= -1.0;
 	///
 
+	uint index;
 	float3 voxelBufferCoord;
-	gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord);
+	if (usePathCache)
+	{
+		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord);
 
-	voxelBufferCoord.x += blueNoise.x * StochasticSampling;
-	voxelBufferCoord.y += blueNoise.y * StochasticSampling;
-	voxelBufferCoord.z += blueNoise.z * StochasticSampling;
-	uint index = voxelBufferCoord.x * (highestVoxelResolution) * (highestVoxelResolution) + voxelBufferCoord.y * (highestVoxelResolution) + voxelBufferCoord.z;
-	tracedBuffer1[index] += float4(gi, 1) / maximumIterations;
+		voxelBufferCoord.x += (blueNoise.x * 0.03125) * StochasticSampling;
+		voxelBufferCoord.y += (blueNoise.y * 0.03125) * StochasticSampling;
+		voxelBufferCoord.z += (blueNoise.z * 0.03125) * StochasticSampling;
+		//voxelBufferCoord.xy *= uv;
+		//voxelBufferCoord.z = depth;
+		index = voxelBufferCoord.x * (highestVoxelResolution) * (highestVoxelResolution)+voxelBufferCoord.y * (highestVoxelResolution)+voxelBufferCoord.z;
+		tracedBuffer1[index] += float4(gi, 1);
+	}
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
 	if (DoReflections) gi += RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
 
-	float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
+	if (usePathCache)
+	{
+		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
 
-	//Average HSV values independantly for prettier result
-	half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
-	half4 giHSV = float4(rgb2hsv(gi), 0);
-	gi.rgb *= cachedResult.rgb * EmissiveAttribution;
-	giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
-	gi.rgb += hsv2rgb(giHSV);
+		//Average HSV values independantly for prettier result
+		half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
+		half4 giHSV = float4(rgb2hsv(gi), 0);
+		gi.rgb *= cachedResult.rgb * EmissiveAttribution;
+		giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
+		gi.rgb += hsv2rgb(giHSV);
 
-	//gi.rgb = cachedResult.rgb;
+		if (visualiseCache) gi.rgb = cachedResult.rgb;
+		if (visualizeReflections) gi.rgb = RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
+	}
 
 	return gi;
 }
@@ -667,8 +697,6 @@ float4 frag_lighting(v2f i) : SV_Target
 	float4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
 	float3 albedo = gBufferSample.rgb;
 	float ao = (gBufferSample.a);
-
-	//directLighting = gBufferSample.rgb;
 
 	float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
 
@@ -687,7 +715,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
 	float3 indirectLighting = max(directLighting, ((ao * indirectLightingStrength * (1.0f - metallic) * albedo) / PI) * indirectContribution);
-	if (VisualiseGI) indirectLighting = indirectContribution / maximumIterations;
+	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
 
 	return float4(indirectLighting, 1.0f);
 }

@@ -191,7 +191,7 @@ void CSMain4(uint3 id : SV_DispatchThreadID)
 	{
 		currentZ = zStagger * slice - slice + i;
 		double index = id.x * Resolution * Resolution + id.y * Resolution + currentZ;
-		color = float4(InputBuffer[index]) / 32;
+		color = float4(InputBuffer[index]) / 128;
 		//color = float4(1, 1, 1, 1);
 		if (color.r > 0 || color.g > 0 || color.b > 0)
 		{
