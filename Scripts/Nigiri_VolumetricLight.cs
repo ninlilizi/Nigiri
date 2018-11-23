@@ -130,10 +130,12 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         if (_light == null || _light.gameObject == null)
         {
             Nigiri.PreRenderEvent -= Nigiri_PreRenderEvent;
+            return;
+
         }
 
 
-        if (!_light.gameObject.activeInHierarchy || _light.enabled == false || _light == null)
+        if (!_light.gameObject.activeInHierarchy || _light.enabled == false)
             return;
 
         _material.SetVector("_CameraForward", Camera.current.transform.forward);
