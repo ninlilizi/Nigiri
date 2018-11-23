@@ -17,7 +17,7 @@ public class Nigiri : MonoBehaviour {
     };
 
     [Header("General Settings")]
-    private Vector2Int resolution = new Vector2Int(256, 256);
+    //private Vector2Int resolution = new Vector2Int(256, 256);
     [Range(0.01f, 8)]
     public float indirectLightingStrength = 1.0f;
     [Range(0.0f, 8)]
@@ -373,17 +373,19 @@ public class Nigiri : MonoBehaviour {
 
     private void createRenderTextures()
     {
+        if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
+
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (positionTexture != null) positionTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
-        lightingTexture = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBHalf);
-        lightingTexture2 = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBHalf);
-        positionTexture = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBHalf);
-        gi = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBHalf);
-        blur = new RenderTexture(Screen.width, Screen.height, 0, RenderTextureFormat.ARGBHalf);
+        lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
