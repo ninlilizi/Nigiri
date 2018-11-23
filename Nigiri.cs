@@ -90,6 +90,8 @@ public class Nigiri : MonoBehaviour {
     public float BalanceGain = 1;
     [Range(1, 32)]
     public int reflectionSteps = 16;
+    [Range(0, 1)]
+    public float skyReflectionIntensity;
 
     [Header("Occlusion Settings")]
     [SerializeField, Range(1, 10)] float _thicknessModifier = 1;
@@ -328,6 +330,7 @@ public class Nigiri : MonoBehaviour {
         if (positionMaterial == null) positionMaterial = new Material(positionShader);
 
         InitializeVoxelGrid();
+        createRenderTextures();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
@@ -555,8 +558,8 @@ public class Nigiri : MonoBehaviour {
 
         // These apply to all grids
         nigiri_VoxelEntry.SetTexture(0, "NoiseTexture", blueNoise[frameSwitch % 64]);
-        nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
-        nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
+        nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
@@ -720,7 +723,7 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
         Shader.SetGlobalFloat("EmissiveAttribution", EmissiveAttribution); 
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        pvgiMaterial.SetFloat("coneLength", coneLength);
+        pvgiMaterial.SetFloat("coneLength", (coneLength - 0.99f));
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
         pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
@@ -735,8 +738,9 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("rayOffset", rayOffset);
         pvgiMaterial.SetFloat("BalanceGain", BalanceGain * 10);
         pvgiMaterial.SetFloat("maximumIterationsReflection", (float)reflectionSteps);
-        pvgiMaterial.SetVector("mainCameraPosition", GetComponent<Camera>().transform.position);
+        pvgiMaterial.SetVector("mainCameraPosition", localCam.transform.position);
         pvgiMaterial.SetInt("DoReflections", traceReflections ? 1 : 0);
+        pvgiMaterial.SetFloat("skyReflectionIntensity", skyReflectionIntensity);
 
         Shader.SetGlobalInt("highestVoxelResolution", highestVoxelResolution);
         pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
@@ -745,7 +749,6 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetInt("visualiseCache", VisualiseCache ? 1 : 0);
         pvgiMaterial.SetInt("visualizeOcclusion", visualizeOcclusion ? 1 : 0);
         pvgiMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
-        pvgiMaterial.SetFloat("coneLength", coneLength);
         pvgiMaterial.SetFloat("GIGain", GIGain);
         pvgiMaterial.SetFloat("NearLightGain", NearLightGain);
         pvgiMaterial.SetFloat("OcclusionStrength", OcclusionStrength);

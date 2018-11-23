@@ -57,6 +57,7 @@
 		uniform int						maximumIterationsReflection;
 		uniform int						DoReflections;
 		uniform float					BalanceGain;
+		uniform float					skyReflectionIntensity;
 		///
 
 		uniform float					occlusionGain;
@@ -127,6 +128,20 @@
 			o.cameraRay = cameraRay / cameraRay.w;
 
 			return o;
+		}
+
+		float4 GetViewSpacePosition(float2 coord)
+		{
+			float depth = tex2Dlod(_CameraDepthTexture, float4(coord.x, coord.y, 0.0, 0.0)).x;
+
+#if defined(UNITY_REVERSED_Z)
+			depth = 1.0 - depth;
+#endif
+
+			float4 viewPosition = mul(InverseProjectionMatrix, float4(coord.x * 2.0 - 1.0, coord.y * 2.0 - 1.0, 2.0 * depth - 1.0, 1.0));
+			viewPosition /= viewPosition.w;
+
+			return viewPosition;
 		}
 
 		float GISampleWeight(float3 pos)
@@ -229,7 +244,6 @@ inline float3 GetVoxelPosition(float3 worldPosition)
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfo1(float3 voxelPosition)
 {
-	//float4 info = tex3D(voxelGrid1, voxelPosition);
 	float4 info2 = tex3D(voxelGrid1, voxelPosition);
 	return info2;
 }
@@ -338,16 +352,20 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 		worldPosition /= (2.0f * worldVolumeBoundary);
 
 		info = tex3D(voxelGrid1, worldPosition);
+		info += tex3D(voxelGrid2, worldPosition);
+		info += tex3D(voxelGrid3, worldPosition);
+		info += tex3D(voxelGrid4, worldPosition);
+		info += tex3D(voxelGrid5, worldPosition);
 	}
 
 	return info;
 }
 
 // Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
-inline float3 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
+inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
 {
 	// Color for storing all the samples
-	float3 accumulatedColor = float3(0.0f, 0.0f, 0.0f);
+	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	float3 currentPosition = worldPosition + (rayOffset * pixelNormal);
 	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -366,13 +384,14 @@ inline float3 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float
 		// At the currently traced sample
 		if ((currentVoxelInfo.w > 0.0f) && (!hitFound))
 		{
-			accumulatedColor = (currentVoxelInfo.xyz);
-			hitFound = true;
+			accumulatedColor += currentVoxelInfo;
+			//hitFound = true;
 		}
 	}
 
-	return accumulatedColor;
+	return accumulatedColor / maximumIterationsReflection;
 }
+
 
 inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord)
 {
@@ -446,6 +465,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 			//if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
+		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
 		currentVoxelInfo.a *= occlusionGain;
 		occlusion = skyVisibility2 * skyVisibility2;
 
@@ -459,6 +479,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		skyVisibility2 *= pow(saturate(1.0 + currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
 	skyVisibility2 = skyVisibility;
+	computedColor = gi / iteration1;
 
 	// Sample voxel grid 2
 	skyVisibility = 1.0f;
@@ -485,6 +506,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
+		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
 		currentVoxelInfo.a *= occlusionGain;
 		occlusion = skyVisibility * skyVisibility;
 
@@ -497,6 +519,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
+	computedColor += gi / iteration2;
 
 	// Sample voxel grid 3
 	skyVisibility = 1.0f;
@@ -522,6 +545,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
+		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
 		currentVoxelInfo.a *= occlusionGain;
 		occlusion = skyVisibility * skyVisibility;
 
@@ -534,6 +558,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
+	computedColor += gi / iteration3;
 
 	// Sample voxel grid 4
 	skyVisibility = 1.0f;
@@ -559,6 +584,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
+		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
 		currentVoxelInfo.a *= occlusionGain;
 		occlusion = skyVisibility * skyVisibility;
 
@@ -571,6 +597,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
+	computedColor += gi / iteration4;
 
 	// Sample voxel grid 5
 	skyVisibility = 1.0f;
@@ -596,6 +623,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (!depthStopOptimization) hitFound = 1.0f;
 			}
 		}
+		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
 		currentVoxelInfo.a *= occlusionGain;
 		occlusion = skyVisibility * skyVisibility;
 
@@ -608,6 +636,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
+	computedColor = gi / iteration5;
 
 	//gi.rgb /= maximumIterations;
 	//skyVisibility /= 32;
@@ -622,7 +651,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		float NdotL = pow(saturate(dot(worldSpaceNormal, coneDirection) * 1.0 - 0.0), 0.5);
 
-		gi *= NdotL;
+		computedColor *= NdotL;
 		skyVisibility2 *= NdotL;
 		skyVisibility2 *= lerp(saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0, sphericalSunlight);
 		float3 skyColor = float3(0.0, 0.0, 0.0);
@@ -632,17 +661,17 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		skyColor += lerp(skyColor.rgb * 1.0, skyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
 		skyColor += sunColor.rgb * pow(sunGradient, (4.0).xxx) * sunLightInjection;
 
-		gi.rgb *= GIGain * 0.15;
+		computedColor.rgb *= GIGain * 0.15;
 
-		gi.rgb += (skyColor * skyVisibility2);
+		computedColor.rgb += (skyColor * skyVisibility2);
 	}
 	else
 	{
 		// gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
-		gi *= GIGain * occlusionGain;
+		computedColor *= GIGain * occlusionGain;
 	}
 
-	computedColor.rgb = gi.rgb;
+	//computedColor.rgb = gi.rgb;
 
 	return computedColor;
 }
@@ -680,10 +709,10 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, uv), depthValue, viewSpaceNormal);
 	viewSpaceNormal = normalize(viewSpaceNormal);
 	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
-
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
-	float3 reflectedRayDirection = normalize(reflect(pixelToCameraUnitVector, pixelNormal));
+	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
 	reflectedRayDirection *= -1.0;
+	float4 reflection = (0).xxxx;
 	///
 
 	uint index = 0;
@@ -702,11 +731,32 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	}
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
-	if (DoReflections && !visualizeOcclusion) gi += RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
+	if (DoReflections && !visualizeOcclusion && !VisualiseGI || visualizeReflections)
+	{
+		float4 viewSpacePosition = GetViewSpacePosition(uv);
+		float3 viewVector = normalize(viewSpacePosition.xyz);
+		float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
+
+		float4 spec = tex2D(_CameraGBufferTexture1, uv);
+		
+		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
+		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+
+		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal);
+		reflection.rgb *= maximumIterationsReflection * BalanceGain;
+
+		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
+
+		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+		fresnel *= saturate(spec.a * 4.0);
+
+		if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
+		else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
+	}
 
 	if (usePathCache && !visualizeOcclusion)
 	{
-		float4 cachedResult = float4(tracedBuffer0[index]) * indirectLightingStrength;// *0.000003;
+		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
 
 		//Average HSV values independantly for prettier result
 		half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
@@ -717,7 +767,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 
 		if (visualiseCache) gi.rgb = cachedResult.rgb;	
 	}
-	if (visualizeReflections) gi.rgb = RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
+	if (visualizeReflections) gi.rgb = reflection.rgb;
 
 	return gi;
 }
@@ -740,10 +790,11 @@ float4 frag_lighting(v2f i) : SV_Target
 	float lindepth = Linear01Depth(1 - depth);
 
 	//get view and then world positions		
-	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+
+	float4 viewPos = GetViewSpacePosition(i.uv);
 	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
-	float3 worldSpaceNormal = 1 - GetWorldNormal(i.uv);
+	float3 worldSpaceNormal = GetWorldNormal(i.uv);
 
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
 	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
