@@ -107,7 +107,7 @@ public class Nigiri : MonoBehaviour {
     public bool _ambientOnly = true;
 
     [Header("Volumetric Lighting")]
-    public bool renderVolumetricLighting;
+    public bool renderVolumetricLighting = false;
     public VolumtericResolution Resolution = VolumtericResolution.Half;
     public Texture DefaultSpotCookie;
 

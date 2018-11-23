@@ -19,7 +19,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
         float4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 0.0f);
 
-		Destination[uint3(id.xy, i)] = tex * 1.5;
+		Destination[uint3(id.xy, i)] = tex;
     }
 }
 

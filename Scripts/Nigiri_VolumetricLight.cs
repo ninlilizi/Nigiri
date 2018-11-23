@@ -130,6 +130,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             Nigiri.PreRenderEvent -= Nigiri_PreRenderEvent;
         }
 
+
         if (!_light.gameObject.activeInHierarchy || _light.enabled == false)
             return;
 
