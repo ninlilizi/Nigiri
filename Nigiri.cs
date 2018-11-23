@@ -1,10 +1,11 @@
-﻿using System.Collections;
+﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
 [ExecuteInEditMode]
-[ImageEffectAllowedInSceneView]
+[RequireComponent(typeof(Camera))]
 public class Nigiri : MonoBehaviour {
 
     public enum DebugVoxelGrid {
@@ -17,7 +18,7 @@ public class Nigiri : MonoBehaviour {
 
     [Header("General Settings")]
     public Vector2Int resolution = new Vector2Int(256, 256);
-    [Range(0.05f, 8)]
+    [Range(0.01f, 8)]
     public float AmbientStrength = 1.0f;
     [Range(0.0f, 8)]
     public float EmissiveIntensity = 1.0f;
@@ -41,7 +42,7 @@ public class Nigiri : MonoBehaviour {
     [Range(1, 4)]
     public int updateSpeedFactor = 1;
     [Range(4, 5)]
-    public int fastResolveFactor = 1;
+    public int fastResolveFactor = 4;
     private Vector2Int injectionTextureResolution = new Vector2Int(1024, 1024);
 
 
@@ -49,7 +50,7 @@ public class Nigiri : MonoBehaviour {
     [Range(1, 32)]
     public int maximumIterations = 8;
     [Range(0.01f, 2)]
-    public float coneLength = 1;
+    public float coneLength = 0.5f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
     [Range(0.1f, 4)]
@@ -103,6 +104,14 @@ public class Nigiri : MonoBehaviour {
 
     [Range(0.1f, 2)]
     public float occlusionGain = 1;
+    public bool _ambientOnly = true;
+
+    [Header("Volumetric Lighting")]
+    public bool renderVolumetricLighting;
+    public VolumtericResolution Resolution = VolumtericResolution.Half;
+    public Texture DefaultSpotCookie;
+
+
 
     [Header("Debug Settings")]
     public bool VisualiseGI = false;
@@ -150,6 +159,7 @@ public class Nigiri : MonoBehaviour {
     public RenderTexture lightingTexture;
     public RenderTexture lightingTexture2;
     public RenderTexture positionTexture;
+    //public RenderTexture occlusionTexture;
     public RenderTexture orthographicPositionTexture;
 
     private RenderTexture blur;
@@ -186,7 +196,56 @@ public class Nigiri : MonoBehaviour {
 
     private void Awake()
     {
+        Debug.Log("<Nigiri> Global Illumination System: (Development release!)");
         localCam = GetComponent<Camera>();
+
+        if (localCam.actualRenderingPath == RenderingPath.Forward)
+            localCam.depthTextureMode = DepthTextureMode.Depth;
+
+        _currentResolution = Resolution;
+
+        Shader shader = Shader.Find("Nigiri_VolumeLight_BlitAdd");
+        if (shader == null)
+            throw new Exception("Critical Error: \"Hidden/BlitAdd\" shader is missing. Make sure it is included in \"Always Included Shaders\" in ProjectSettings/Graphics.");
+        _blitAddMaterial = new Material(shader);
+
+        shader = Shader.Find("Nigiri_VolumeLight_BilateralBlur");
+        if (shader == null)
+            throw new Exception("Critical Error: \"Hidden/BilateralBlur\" shader is missing. Make sure it is included in \"Always Included Shaders\" in ProjectSettings/Graphics.");
+        _bilateralBlurMaterial = new Material(shader);
+
+        _preLightPass = new CommandBuffer();
+        _preLightPass.name = "<Nigiri> Volumetric Prepass";
+
+        ChangeResolution();
+
+        if (_pointLightMesh == null)
+        {
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            _pointLightMesh = go.GetComponent<MeshFilter>().sharedMesh;
+            DestroyImmediate(go);
+        }
+
+        if (_spotLightMesh == null)
+        {
+            _spotLightMesh = CreateSpotLightMesh();
+        }
+
+        if (_lightMaterial == null)
+        {
+            shader = Shader.Find("Nigiri_VolumeLight_VolumetricLight");
+            if (shader == null)
+                throw new Exception("Critical Error: \"Sandbox/VolumetricLight\" shader is missing. Make sure it is included in \"Always Included Shaders\" in ProjectSettings/Graphics.");
+            _lightMaterial = new Material(shader);
+        }
+
+        if (_defaultSpotCookie == null)
+        {
+            _defaultSpotCookie = DefaultSpotCookie;
+        }
+
+        LoadNoise3dTexture();
+        GenerateDitherTexture();
     }
 
     private void ResetCounters()
@@ -207,9 +266,27 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);*/
     }
 
+    void Update()
+    {
+        //#if UNITY_EDITOR
+        if (_currentResolution != Resolution)
+        {
+            _currentResolution = Resolution;
+            ChangeResolution();
+        }
+
+        if (_volumeLightTexture == null) ChangeResolution();
+
+        if ((_volumeLightTexture.width != localCam.pixelWidth || _volumeLightTexture.height != localCam.pixelHeight))
+            ChangeResolution();
+        //#endif
+    }
+
     // Use this for initialization
     void OnEnable ()
     {
+        if (_preLightPass == null) Awake();
+
         if (_renderCommand != null) RegisterCommandBuffers();
 
         clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
@@ -228,7 +305,7 @@ public class Nigiri : MonoBehaviour {
         _upsampleCompute = Resources.Load("Nigiri_AO_Upsample") as ComputeShader; ;
         _blitShader = Shader.Find("Hidden/Nigiri_AO_Blit");
 
-    nigiri_VoxelEntry = Resources.Load("nigiri_VoxelEntry") as ComputeShader;
+        nigiri_VoxelEntry = Resources.Load("Nigiri_VoxelEntry") as ComputeShader;
         nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
         Screen.SetResolution(resolution.x, resolution.y, true);
@@ -247,19 +324,21 @@ public class Nigiri : MonoBehaviour {
 		lightingTexture = new RenderTexture (injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        //occlusionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         //orthographicPositionTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
+        //occlusionTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
 
         lightingTexture.Create();
         lightingTexture2.Create();
-        blur.Create();
+        //occlusionTexture.Create();
         positionTexture.Create();
-        //orthographicPositionTexture.Create();
+        blur.Create();
         gi.Create();
 
         voxelUpdateCounter = new ComputeBuffer((injectionTextureResolution.x / 4) * (injectionTextureResolution.y / 4), 4, ComputeBufferType.Default);
@@ -301,6 +380,10 @@ public class Nigiri : MonoBehaviour {
             
         }
         UpdateForceGI();
+
+        //Volumetric Lighting
+        localCam.AddCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
+        ///
     }
 
 	// Function to initialize the voxel grid data
@@ -373,8 +456,6 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid ()
     {
-        Nigiri_EmissiveCameraHelper.DoRender();
-
         orthographicPositionTexture = Nigiri_EmissiveCameraHelper.positionTexture;
 
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
@@ -444,6 +525,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+        //nigiri_VoxelEntry.render(kernelHandle, "_AOTexture", _result.id);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
@@ -543,6 +625,7 @@ public class Nigiri : MonoBehaviour {
     }
 
 	// This is called once per frame after the scene is rendered
+    [ImageEffectOpaque]
 	void OnRenderImage (RenderTexture source, RenderTexture destination)
     {
         if (forceImmediateRefresh || prevPropagateLight != propagateLight)
@@ -669,6 +752,7 @@ public class Nigiri : MonoBehaviour {
 			}
 
 			Graphics.Blit (source, destination, pvgiMaterial, 1);
+            return;
 		} else {
 
             if (tracedTexture1UpdateCount > 48)
@@ -698,14 +782,74 @@ public class Nigiri : MonoBehaviour {
             Graphics.Blit(gi, blur, fxaaMaterial, 0);
             Graphics.Blit(blur, gi, fxaaMaterial, 1);
 
-             Graphics.Blit(gi, destination);
+             //Graphics.Blit(gi, destination);
 
             //Advance the frame counter
             frameSwitch = (frameSwitch + 1) % (64);
 
         }
 
-	}
+        //Volumetric Lighting
+        if (renderVolumetricLighting)
+        {
+            if (Resolution == VolumtericResolution.Quarter)
+            {
+                if (_quarterDepthBuffer == null) ChangeResolution();
+                RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf);
+                temp.filterMode = FilterMode.Bilinear;
+
+                // horizontal bilateral blur at quarter res
+                Graphics.Blit(_quarterVolumeLightTexture, temp, _bilateralBlurMaterial, 8);
+                // vertical bilateral blur at quarter res
+                Graphics.Blit(temp, _quarterVolumeLightTexture, _bilateralBlurMaterial, 9);
+
+                // upscale to full res
+                Graphics.Blit(_quarterVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 7);
+
+                RenderTexture.ReleaseTemporary(temp);
+            }
+            else if (Resolution == VolumtericResolution.Half)
+            {
+                if (_halfVolumeLightTexture == null) ChangeResolution();
+
+                RenderTexture temp = RenderTexture.GetTemporary(_halfVolumeLightTexture.width, _halfVolumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf);
+                temp.filterMode = FilterMode.Bilinear;
+
+                // horizontal bilateral blur at half res
+                Graphics.Blit(_halfVolumeLightTexture, temp, _bilateralBlurMaterial, 2);
+
+                // vertical bilateral blur at half res
+                Graphics.Blit(temp, _halfVolumeLightTexture, _bilateralBlurMaterial, 3);
+
+                // upscale to full res
+                Graphics.Blit(_halfVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 5);
+                RenderTexture.ReleaseTemporary(temp);
+            }
+            else
+            {
+                if (_volumeLightTexture == null) ChangeResolution();
+
+                RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf);
+                temp.filterMode = FilterMode.Bilinear;
+
+                // horizontal bilateral blur at full res
+                Graphics.Blit(_volumeLightTexture, temp, _bilateralBlurMaterial, 0);
+                // vertical bilateral blur at full res
+                Graphics.Blit(temp, _volumeLightTexture, _bilateralBlurMaterial, 1);
+                RenderTexture.ReleaseTemporary(temp);
+            }
+
+            // add volume light buffer to rendered scene
+            _blitAddMaterial.SetTexture("_Source", gi);
+            Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
+        }
+        else
+        {
+            Graphics.Blit(gi, destination);
+        }
+        ///
+
+    }
 
     private void OnDisable()
     {
@@ -715,6 +859,7 @@ public class Nigiri : MonoBehaviour {
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (positionTexture != null) positionTexture.Release();
+        //if (occlusionTexture != null) occlusionTexture.Release();
         if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
@@ -731,6 +876,11 @@ public class Nigiri : MonoBehaviour {
         if (voxelGrid3 != null) voxelGrid3.Release();
         if (voxelGrid4 != null) voxelGrid4.Release();
         if (voxelGrid5 != null) voxelGrid5.Release();
+
+        //Volumetric Lighting
+        //_camera.RemoveAllCommandBuffers();
+        localCam.RemoveCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
+        ///
     }
 
     public void UpdateForceGI()
@@ -890,10 +1040,10 @@ public class Nigiri : MonoBehaviour {
         if (_renderCommand == null)
         {
             _renderCommand = new CommandBuffer();
-            _renderCommand.name = "SSAO";
+            _renderCommand.name = "<Nigiri> Occlusion";
 
             _compositeCommand = new CommandBuffer();
-            _compositeCommand.name = "SSAO Composite";
+            _compositeCommand.name = "<Nigiri> Occlusion Composition";
         }
 
         // Materials
@@ -1286,13 +1436,11 @@ public class Nigiri : MonoBehaviour {
 
     [Range(0, 17)] private int _debug;
 
-    private bool ambientOnly
+    public bool ambientOnly
     {
         get { return _ambientOnly; }
         set { _ambientOnly = value; }
     }
-
-    private bool _ambientOnly = true;
 
     #endregion
 
@@ -1567,7 +1715,66 @@ public class Nigiri : MonoBehaviour {
 
     void OnPreRender()
     {
+        //Secondary Voxelizor
+        Nigiri_EmissiveCameraHelper.DoRender();
+        ///
+
+        //Occlusion
         _drawCountPerFrame++;
+        ///
+
+        //Volumetric Lighting
+        if (renderVolumetricLighting)
+        {
+            // use very low value for near clip plane to simplify cone/frustum intersection
+            Matrix4x4 proj = Matrix4x4.Perspective(localCam.fieldOfView, localCam.aspect, 0.01f, localCam.farClipPlane);
+
+#if UNITY_2017_2_OR_NEWER
+            if (UnityEngine.XR.XRSettings.enabled)
+            {
+                // when using VR override the used projection matrix
+                proj = Camera.current.projectionMatrix;
+            }
+#endif
+
+            proj = GL.GetGPUProjectionMatrix(proj, true);
+            _viewProj = proj * localCam.worldToCameraMatrix;
+
+            _preLightPass.Clear();
+
+            bool dx11 = SystemInfo.graphicsShaderLevel > 40;
+
+            if (Resolution == VolumtericResolution.Quarter)
+            {
+                Texture nullTexture = null;
+                // down sample depth to half res
+                _preLightPass.Blit(nullTexture, _halfDepthBuffer, _bilateralBlurMaterial, dx11 ? 4 : 10);
+                // down sample depth to quarter res
+                _preLightPass.Blit(nullTexture, _quarterDepthBuffer, _bilateralBlurMaterial, dx11 ? 6 : 11);
+
+                _preLightPass.SetRenderTarget(_quarterVolumeLightTexture);
+            }
+            else if (Resolution == VolumtericResolution.Half)
+            {
+                Texture nullTexture = null;
+                // down sample depth to half res
+                _preLightPass.Blit(nullTexture, _halfDepthBuffer, _bilateralBlurMaterial, dx11 ? 4 : 10);
+
+                _preLightPass.SetRenderTarget(_halfVolumeLightTexture);
+            }
+            else
+            {
+                _preLightPass.SetRenderTarget(_volumeLightTexture);
+            }
+
+            _preLightPass.ClearRenderTarget(false, true, new Color(0, 0, 0, 1));
+
+            UpdateMaterialParameters();
+
+            PreRenderEvent?.Invoke(this, _viewProj);
+        }
+        ///
+
     }
 
     void OnDestroy()
@@ -1597,4 +1804,419 @@ public class Nigiri : MonoBehaviour {
     }
 
     #endregion
+
+    #region Volumetric Light Rendering
+
+    public enum VolumtericResolution
+    {
+        Full,
+        Half,
+        Quarter
+    };
+
+    public static event Action<Nigiri, Matrix4x4> PreRenderEvent;
+
+    private static Mesh _pointLightMesh;
+    private static Mesh _spotLightMesh;
+    private static Material _lightMaterial;
+
+    private CommandBuffer _preLightPass;
+
+    private Matrix4x4 _viewProj;
+    private Material _blitAddMaterial;
+    private Material _bilateralBlurMaterial;
+
+    private RenderTexture _volumeLightTexture;
+    private RenderTexture _halfVolumeLightTexture;
+    private RenderTexture _quarterVolumeLightTexture;
+    private static Texture _defaultSpotCookie;
+
+    private RenderTexture _halfDepthBuffer;
+    private RenderTexture _quarterDepthBuffer;
+    private VolumtericResolution _currentResolution = VolumtericResolution.Half;
+    private Texture2D _ditheringTexture;
+    private Texture3D _noiseTexture;
+
+    public CommandBuffer GlobalCommandBuffer { get { return _preLightPass; } }
+
+    public static Material GetLightMaterial()
+    {
+        return _lightMaterial;
+    }
+
+    public static Mesh GetPointLightMesh()
+    {
+        return _pointLightMesh;
+    }
+
+    public static Mesh GetSpotLightMesh()
+    {
+        return _spotLightMesh;
+    }
+
+    public RenderTexture GetVolumeLightBuffer()
+    {
+        if (Resolution == VolumtericResolution.Quarter)
+            return _quarterVolumeLightTexture;
+        else if (Resolution == VolumtericResolution.Half)
+            return _halfVolumeLightTexture;
+        else
+            return _volumeLightTexture;
+    }
+
+    public RenderTexture GetVolumeLightDepthBuffer()
+    {
+        if (Resolution == VolumtericResolution.Quarter)
+            return _quarterDepthBuffer;
+        else if (Resolution == VolumtericResolution.Half)
+            return _halfDepthBuffer;
+        else
+            return null;
+    }
+
+    public static Texture GetDefaultSpotCookie()
+    {
+        return _defaultSpotCookie;
+    }
+
+    void ChangeResolution()
+    {
+        int width = localCam.pixelWidth;
+        int height = localCam.pixelHeight;
+
+        if (_volumeLightTexture != null)
+            DestroyImmediate(_volumeLightTexture);
+
+        _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf);
+        _volumeLightTexture.name = "VolumeLightBuffer";
+        _volumeLightTexture.filterMode = FilterMode.Bilinear;
+
+        if (_halfDepthBuffer != null)
+            DestroyImmediate(_halfDepthBuffer);
+        if (_halfVolumeLightTexture != null)
+            DestroyImmediate(_halfVolumeLightTexture);
+
+        if (Resolution == VolumtericResolution.Half || Resolution == VolumtericResolution.Quarter)
+        {
+            _halfVolumeLightTexture = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.ARGBHalf);
+            _halfVolumeLightTexture.name = "VolumeLightBufferHalf";
+            _halfVolumeLightTexture.filterMode = FilterMode.Bilinear;
+
+            _halfDepthBuffer = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.RFloat);
+            _halfDepthBuffer.name = "VolumeLightHalfDepth";
+            _halfDepthBuffer.Create();
+            _halfDepthBuffer.filterMode = FilterMode.Point;
+        }
+
+        if (_quarterVolumeLightTexture != null)
+            DestroyImmediate(_quarterVolumeLightTexture);
+        if (_quarterDepthBuffer != null)
+            DestroyImmediate(_quarterDepthBuffer);
+
+        if (Resolution == VolumtericResolution.Quarter)
+        {
+            _quarterVolumeLightTexture = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.ARGBHalf);
+            _quarterVolumeLightTexture.name = "VolumeLightBufferQuarter";
+            _quarterVolumeLightTexture.filterMode = FilterMode.Bilinear;
+
+            _quarterDepthBuffer = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.RFloat);
+            _quarterDepthBuffer.name = "VolumeLightQuarterDepth";
+            _quarterDepthBuffer.Create();
+            _quarterDepthBuffer.filterMode = FilterMode.Point;
+        }
+    }
+
+    private void UpdateMaterialParameters()
+    {
+        _bilateralBlurMaterial.SetTexture("_HalfResDepthBuffer", _halfDepthBuffer);
+        _bilateralBlurMaterial.SetTexture("_HalfResColor", _halfVolumeLightTexture);
+        _bilateralBlurMaterial.SetTexture("_QuarterResDepthBuffer", _quarterDepthBuffer);
+        _bilateralBlurMaterial.SetTexture("_QuarterResColor", _quarterVolumeLightTexture);
+
+        Shader.SetGlobalTexture("_DitherTexture", _ditheringTexture);
+        Shader.SetGlobalTexture("_NoiseTexture", _noiseTexture);
+    }
+
+    void LoadNoise3dTexture()
+    {
+        // basic dds loader for 3d texture - !not very robust!
+
+        TextAsset data = Resources.Load("NoiseVolume") as TextAsset;
+
+        byte[] bytes = data.bytes;
+
+        uint height = BitConverter.ToUInt32(data.bytes, 12);
+        uint width = BitConverter.ToUInt32(data.bytes, 16);
+        uint pitch = BitConverter.ToUInt32(data.bytes, 20);
+        uint depth = BitConverter.ToUInt32(data.bytes, 24);
+        uint formatFlags = BitConverter.ToUInt32(data.bytes, 20 * 4);
+        //uint fourCC = BitConverter.ToUInt32(data.bytes, 21 * 4);
+        uint bitdepth = BitConverter.ToUInt32(data.bytes, 22 * 4);
+        if (bitdepth == 0)
+            bitdepth = pitch / width * 8;
+
+
+        // doesn't work with TextureFormat.Alpha8 for some reason
+        _noiseTexture = new Texture3D((int)width, (int)height, (int)depth, TextureFormat.RGBA32, false);
+        _noiseTexture.name = "3D Noise";
+
+        Color[] c = new Color[width * height * depth];
+
+        uint index = 128;
+        if (data.bytes[21 * 4] == 'D' && data.bytes[21 * 4 + 1] == 'X' && data.bytes[21 * 4 + 2] == '1' && data.bytes[21 * 4 + 3] == '0' &&
+            (formatFlags & 0x4) != 0)
+        {
+            uint format = BitConverter.ToUInt32(data.bytes, (int)index);
+            if (format >= 60 && format <= 65)
+                bitdepth = 8;
+            else if (format >= 48 && format <= 52)
+                bitdepth = 16;
+            else if (format >= 27 && format <= 32)
+                bitdepth = 32;
+
+            //Debug.Log("DXGI format: " + format);
+            // dx10 format, skip dx10 header
+            //Debug.Log("DX10 format");
+            index += 20;
+        }
+
+        uint byteDepth = bitdepth / 8;
+        pitch = (width * bitdepth + 7) / 8;
+
+        for (int d = 0; d < depth; ++d)
+        {
+            //index = 128;
+            for (int h = 0; h < height; ++h)
+            {
+                for (int w = 0; w < width; ++w)
+                {
+                    float v = (bytes[index + w * byteDepth] / 255.0f);
+                    c[w + h * width + d * width * height] = new Color(v, v, v, v);
+                }
+
+                index += pitch;
+            }
+        }
+
+        _noiseTexture.SetPixels(c);
+        _noiseTexture.Apply();
+    }
+
+    private void GenerateDitherTexture()
+    {
+        if (_ditheringTexture != null)
+        {
+            return;
+        }
+
+        int size = 8;
+#if DITHER_4_4
+        size = 4;
+#endif
+        // again, I couldn't make it work with Alpha8
+        _ditheringTexture = new Texture2D(size, size, TextureFormat.Alpha8, false, true);
+        _ditheringTexture.filterMode = FilterMode.Point;
+        Color32[] c = new Color32[size * size];
+
+        byte b;
+#if DITHER_4_4
+        b = (byte)(0.0f / 16.0f * 255); c[0] = new Color32(b, b, b, b);
+        b = (byte)(8.0f / 16.0f * 255); c[1] = new Color32(b, b, b, b);
+        b = (byte)(2.0f / 16.0f * 255); c[2] = new Color32(b, b, b, b);
+        b = (byte)(10.0f / 16.0f * 255); c[3] = new Color32(b, b, b, b);
+
+        b = (byte)(12.0f / 16.0f * 255); c[4] = new Color32(b, b, b, b);
+        b = (byte)(4.0f / 16.0f * 255); c[5] = new Color32(b, b, b, b);
+        b = (byte)(14.0f / 16.0f * 255); c[6] = new Color32(b, b, b, b);
+        b = (byte)(6.0f / 16.0f * 255); c[7] = new Color32(b, b, b, b);
+
+        b = (byte)(3.0f / 16.0f * 255); c[8] = new Color32(b, b, b, b);
+        b = (byte)(11.0f / 16.0f * 255); c[9] = new Color32(b, b, b, b);
+        b = (byte)(1.0f / 16.0f * 255); c[10] = new Color32(b, b, b, b);
+        b = (byte)(9.0f / 16.0f * 255); c[11] = new Color32(b, b, b, b);
+
+        b = (byte)(15.0f / 16.0f * 255); c[12] = new Color32(b, b, b, b);
+        b = (byte)(7.0f / 16.0f * 255); c[13] = new Color32(b, b, b, b);
+        b = (byte)(13.0f / 16.0f * 255); c[14] = new Color32(b, b, b, b);
+        b = (byte)(5.0f / 16.0f * 255); c[15] = new Color32(b, b, b, b);
+#else
+        int i = 0;
+        b = (byte)(1.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(49.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(13.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(61.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(4.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(52.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(16.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(64.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(33.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(17.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(45.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(29.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(36.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(20.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(48.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(32.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(9.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(57.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(5.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(53.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(12.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(60.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(8.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(56.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(41.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(25.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(37.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(21.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(44.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(28.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(40.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(24.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(3.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(51.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(15.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(63.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(2.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(50.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(14.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(62.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(35.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(19.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(47.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(31.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(34.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(18.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(46.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(30.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(11.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(59.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(7.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(55.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(10.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(58.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(6.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(54.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+
+        b = (byte)(43.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(27.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(39.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(23.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(42.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(26.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(38.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+        b = (byte)(22.0f / 65.0f * 255); c[i++] = new Color32(b, b, b, b);
+#endif
+
+        _ditheringTexture.SetPixels32(c);
+        _ditheringTexture.Apply();
+    }
+
+    private Mesh CreateSpotLightMesh()
+    {
+        // copy & pasted from other project, the geometry is too complex, should be simplified
+        Mesh mesh = new Mesh();
+
+        const int segmentCount = 16;
+        Vector3[] vertices = new Vector3[2 + segmentCount * 3];
+        Color32[] colors = new Color32[2 + segmentCount * 3];
+
+        vertices[0] = new Vector3(0, 0, 0);
+        vertices[1] = new Vector3(0, 0, 1);
+
+        float angle = 0;
+        float step = Mathf.PI * 2.0f / segmentCount;
+        float ratio = 0.9f;
+
+        for (int i = 0; i < segmentCount; ++i)
+        {
+            vertices[i + 2] = new Vector3(-Mathf.Cos(angle) * ratio, Mathf.Sin(angle) * ratio, ratio);
+            colors[i + 2] = new Color32(255, 255, 255, 255);
+            vertices[i + 2 + segmentCount] = new Vector3(-Mathf.Cos(angle), Mathf.Sin(angle), 1);
+            colors[i + 2 + segmentCount] = new Color32(255, 255, 255, 0);
+            vertices[i + 2 + segmentCount * 2] = new Vector3(-Mathf.Cos(angle) * ratio, Mathf.Sin(angle) * ratio, 1);
+            colors[i + 2 + segmentCount * 2] = new Color32(255, 255, 255, 255);
+            angle += step;
+        }
+
+        mesh.vertices = vertices;
+        mesh.colors32 = colors;
+
+        int[] indices = new int[segmentCount * 3 * 2 + segmentCount * 6 * 2];
+        int index = 0;
+
+        for (int i = 2; i < segmentCount + 1; ++i)
+        {
+            indices[index++] = 0;
+            indices[index++] = i;
+            indices[index++] = i + 1;
+        }
+
+        indices[index++] = 0;
+        indices[index++] = segmentCount + 1;
+        indices[index++] = 2;
+
+        for (int i = 2; i < segmentCount + 1; ++i)
+        {
+            indices[index++] = i;
+            indices[index++] = i + segmentCount;
+            indices[index++] = i + 1;
+
+            indices[index++] = i + 1;
+            indices[index++] = i + segmentCount;
+            indices[index++] = i + segmentCount + 1;
+        }
+
+        indices[index++] = 2;
+        indices[index++] = 1 + segmentCount;
+        indices[index++] = 2 + segmentCount;
+
+        indices[index++] = 2 + segmentCount;
+        indices[index++] = 1 + segmentCount;
+        indices[index++] = 1 + segmentCount + segmentCount;
+
+        //------------
+        for (int i = 2 + segmentCount; i < segmentCount + 1 + segmentCount; ++i)
+        {
+            indices[index++] = i;
+            indices[index++] = i + segmentCount;
+            indices[index++] = i + 1;
+
+            indices[index++] = i + 1;
+            indices[index++] = i + segmentCount;
+            indices[index++] = i + segmentCount + 1;
+        }
+
+        indices[index++] = 2 + segmentCount;
+        indices[index++] = 1 + segmentCount * 2;
+        indices[index++] = 2 + segmentCount * 2;
+
+        indices[index++] = 2 + segmentCount * 2;
+        indices[index++] = 1 + segmentCount * 2;
+        indices[index++] = 1 + segmentCount * 3;
+
+        ////-------------------------------------
+        for (int i = 2 + segmentCount * 2; i < segmentCount * 3 + 1; ++i)
+        {
+            indices[index++] = 1;
+            indices[index++] = i + 1;
+            indices[index++] = i;
+        }
+
+        indices[index++] = 1;
+        indices[index++] = 2 + segmentCount * 2;
+        indices[index++] = segmentCount * 3 + 1;
+
+        mesh.triangles = indices;
+        mesh.RecalculateBounds();
+
+        return mesh;
+    }
 }
+#endregion

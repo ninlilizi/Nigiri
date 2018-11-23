@@ -1,4 +1,4 @@
-Shader "Nigiri_AO_"
+Shader "Hidden/Nigiri_AO_Blit"
 {
     Properties
     {
@@ -107,7 +107,7 @@ Shader "Nigiri_AO_"
 
             float4 frag(v2f_img i) : SV_Target
             {
-                return tex2D(_AOTexture, i.uv).r;
+                return tex2D(_AOTexture, i.uv).rrrr;
             }
 
             ENDCG
