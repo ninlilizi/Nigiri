@@ -1796,7 +1796,8 @@ public class Nigiri : MonoBehaviour {
 
             UpdateMaterialParameters();
 
-            PreRenderEvent?.Invoke(this, _viewProj);
+            if (PreRenderEvent != null)
+                PreRenderEvent(this, _viewProj);
         }
         ///
 
