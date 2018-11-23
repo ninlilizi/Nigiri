@@ -129,6 +129,20 @@
 			return o;
 		}
 
+		float GISampleWeight(float3 pos)
+		{
+			float weight = 1.0;
+
+			if (pos.x < 0.0 || pos.x > 1.0 ||
+				pos.y < 0.0 || pos.y > 1.0 ||
+				pos.z < 0.0 || pos.z > 1.0)
+			{
+				weight = 0.0;
+			}
+
+			return weight;
+		}
+
 		float3 rgb2hsv(float3 c)
 		{
 			float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
@@ -404,6 +418,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
 	float2 interMult = float2(0, 0);
+	float3 voxelPosition = (0).xxx;
 
 	// Sample voxel grid 1
 	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
@@ -418,7 +433,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			currentVoxelInfo = GetVoxelInfo1(GetVoxelPosition(currentPosition));
+			voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfo1(voxelPosition) * GISampleWeight(voxelPosition);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -461,7 +477,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			currentVoxelInfo = GetVoxelInfo2(GetVoxelPosition(currentPosition));
+			voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfo2(voxelPosition) * GISampleWeight(voxelPosition);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -498,7 +515,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			currentVoxelInfo = GetVoxelInfo3(GetVoxelPosition(currentPosition));
+			voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfo3(voxelPosition) * GISampleWeight(voxelPosition);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -534,7 +552,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			currentVoxelInfo = GetVoxelInfo4(GetVoxelPosition(currentPosition));
+			voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfo4(voxelPosition) * GISampleWeight(voxelPosition);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -570,7 +589,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			currentVoxelInfo = GetVoxelInfo5(GetVoxelPosition(currentPosition));
+			voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfo5(voxelPosition) * GISampleWeight(voxelPosition);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -660,6 +680,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, uv), depthValue, viewSpaceNormal);
 	viewSpaceNormal = normalize(viewSpaceNormal);
 	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
 	float3 reflectedRayDirection = normalize(reflect(pixelToCameraUnitVector, pixelNormal));
 	reflectedRayDirection *= -1.0;
