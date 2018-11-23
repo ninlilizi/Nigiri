@@ -1,4 +1,4 @@
-﻿Shader "NKLI/Nigiri_Spherical Harmonics" {
+﻿Shader "NKLI/Nigiri_SphericalHarmonics" {
 
 	Properties {
 		_Color ("Tint", Color) = (1, 1, 1, 1)
@@ -89,7 +89,7 @@
 
 			#define FORWARD_BASE_PASS
 
-			#include "NKGI_EmissionLighting.cginc"
+			#include "Nigiri_SphericalHarmonics_EmissionLighting.cginc"
 
 			ENDCG
 		}
@@ -123,7 +123,7 @@
 			#pragma vertex MyVertexProgram
 			#pragma fragment MyFragmentProgram
 
-			#include "NKGI_EmissionLighting.cginc"
+			#include "Nigiri_SphericalHarmonics_EmissionLighting.cginc"
 
 			ENDCG
 		}
@@ -161,7 +161,7 @@
 
 			#define DEFERRED_PASS
 
-			#include "NKGI_EmissionLighting.cginc"
+			#include "Nigiri_SphericalHarmonics_EmissionLighting.cginc"
 
 			ENDCG
 		}
@@ -188,7 +188,7 @@
 			#pragma vertex MyShadowVertexProgram
 			#pragma fragment MyShadowFragmentProgram
 
-			#include "NKGI_EmissionShadows.cginc"
+			#include "Nigiri_SphericalHarmonics_EmissionShadows.cginc"
 
 			ENDCG
 		}
@@ -211,7 +211,7 @@
 			#pragma shader_feature _DETAIL_MASK
 			#pragma shader_feature _DETAIL_ALBEDO_MAP
 
-			#include "NKGI_EmissionLightmapping.cginc"
+			#include "Nigiri_SphericalHarmonics_EmissionLightmapping.cginc"
 
 			ENDCG
 		}

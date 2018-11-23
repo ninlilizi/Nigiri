@@ -77,6 +77,11 @@
 		uniform int						visualiseCache;
 		uniform int						visualizeOcclusion;
 		uniform int						visualizeReflections;
+		uniform float					sunLightInjection;
+		uniform int						sphericalSunlight;
+		uniform half4					sunColor;
+		uniform half4					skyColor;
+		uniform float3					sunLight;
 
 		uniform float					skyVisibility;
 
@@ -358,11 +363,10 @@ inline float3 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float
 inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord)
 {
 	//Temp consts till integration
-	int SEGISphericalSkylight = 0;
-	float3 SEGISunlightVector = _WorldSpaceLightPos0;
-	float3 SEGISkyColor = unity_AmbientSky;
-	float SunlightInjection = 1.0f;
-	float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);
+	//float3 SEGISunlightVector = _WorldSpaceLightPos0;
+	//float3 skyColor = unity_AmbientSky;
+	//float SunlightInjection = 5.5f;
+	//float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);
 	///
 
 	float3 computedColor = float3(0.0f, 0.0f, 0.0f);
@@ -600,13 +604,13 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		gi *= NdotL;
 		skyVisibility2 *= NdotL;
-		skyVisibility2 *= lerp(saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0, SEGISphericalSkylight);
+		skyVisibility2 *= lerp(saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0, sphericalSunlight);
 		float3 skyColor = float3(0.0, 0.0, 0.0);
 
 		float upGradient = saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)));
-		float sunGradient = saturate(dot(coneDirection, -SEGISunlightVector.xyz));
-		skyColor += lerp(SEGISkyColor.rgb * 1.0, SEGISkyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
-		skyColor += GISunColor.rgb * pow(sunGradient, (4.0).xxx) * SunlightInjection;
+		float sunGradient = saturate(dot(coneDirection, -sunLight.xyz));
+		skyColor += lerp(skyColor.rgb * 1.0, skyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
+		skyColor += sunColor.rgb * pow(sunGradient, (4.0).xxx) * sunLightInjection;
 
 		gi.rgb *= GIGain * 0.15;
 
@@ -673,7 +677,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 		//voxelBufferCoord.xy *= uv;
 		//voxelBufferCoord.z = depth;
 		index = voxelBufferCoord.x * (highestVoxelResolution) * (highestVoxelResolution)+voxelBufferCoord.y * (highestVoxelResolution)+voxelBufferCoord.z;
-		tracedBuffer1[index] += float4(gi, 1);
+		tracedBuffer1[index] += float4(gi, 1) * indirectLightingStrength;
 	}
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
@@ -681,7 +685,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 
 	if (usePathCache && !visualizeOcclusion)
 	{
-		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
+		float4 cachedResult = float4(tracedBuffer0[index]) * indirectLightingStrength;// *0.000003;
 
 		//Average HSV values independantly for prettier result
 		half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
@@ -690,9 +694,9 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 		giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
 		gi.rgb += hsv2rgb(giHSV);
 
-		if (visualiseCache) gi.rgb = cachedResult.rgb;
-		if (visualizeReflections) gi.rgb = RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
+		if (visualiseCache) gi.rgb = cachedResult.rgb;	
 	}
+	if (visualizeReflections) gi.rgb = RayTrace(worldPosition, reflectedRayDirection, pixelNormal).rgb * BalanceGain;
 
 	return gi;
 }

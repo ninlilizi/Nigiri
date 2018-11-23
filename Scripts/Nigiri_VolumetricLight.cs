@@ -46,11 +46,11 @@ public class Nigiri_VolumetricLight : MonoBehaviour
     [Range(1, 64)]
     public int SampleCount = 8;
     [Range(0.0f, 1.0f)]
-    public float ScatteringCoef = 0.5f;
+    public float ScatteringCoef = 0.1f;
     [Range(0.0f, 0.1f)]
     public float ExtinctionCoef = 0.01f;
     [Range(0.0f, 1.0f)]
-    public float SkyboxExtinctionCoef = 0.9f;
+    public float SkyboxExtinctionCoef = 0.33f;
     [Range(0.0f, 0.999f)]
     public float MieG = 0.1f;
     public bool HeightFog = false;
@@ -92,6 +92,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         _cascadeShadowCommandBuffer.SetGlobalTexture("_CascadeShadowMapTexture", new UnityEngine.Rendering.RenderTargetIdentifier(UnityEngine.Rendering.BuiltinRenderTextureType.CurrentActive));
 
         _light = GetComponent<Light>();
+        _light.RemoveAllCommandBuffers();
         if(_light.type == LightType.Directional)
         {
             _light.AddCommandBuffer(LightEvent.BeforeScreenspaceMask, _commandBuffer);
@@ -115,11 +116,12 @@ public class Nigiri_VolumetricLight : MonoBehaviour
     void OnDisable()
     {
         Nigiri.PreRenderEvent -= Nigiri_PreRenderEvent;
+        GetComponent<Light>().RemoveAllCommandBuffers();
     }
 
     public void OnDestroy()
     {        
-        Destroy(_material);
+        DestroyImmediate(_material);
     }
 
     private void Nigiri_PreRenderEvent(Nigiri renderer, Matrix4x4 viewProj)
@@ -131,7 +133,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         }
 
 
-        if (!_light.gameObject.activeInHierarchy || _light.enabled == false)
+        if (!_light.gameObject.activeInHierarchy || _light.enabled == false || _light == null)
             return;
 
         _material.SetVector("_CameraForward", Camera.current.transform.forward);
