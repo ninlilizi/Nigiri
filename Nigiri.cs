@@ -139,11 +139,12 @@ public class Nigiri : MonoBehaviour {
     private Shader fxaaShader;
     private Shader positionShader;
     private ComputeShader nigiri_VoxelEntry;
-    private ComputeShader nigiri_InjectionCompute;
+    //private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
     private ComputeShader transferIntsCompute;
     private ComputeShader mipFilterCompute;
     private ComputeShader lightPropagateCompute;
+    public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
     private Material pvgiMaterial;
@@ -155,7 +156,7 @@ public class Nigiri : MonoBehaviour {
     //[Header("Render Textures")]
     private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-    public static RenderTexture voxelInjectionGrid;
+    //public static RenderTexture voxelInjectionGrid;
     public static RenderTexture voxelPropagationGrid;
     public static RenderTexture voxelPropagatedGrid;
     public static RenderTexture voxelGrid1;
@@ -170,12 +171,15 @@ public class Nigiri : MonoBehaviour {
     //public RenderTexture occlusionTexture;
     private RenderTexture orthographicPositionTexture;
 
+    public RenderTexture lightingCurveLUT;
+
     private RenderTexture blur;
     private RenderTexture gi;
 
 
     private PathCacheBuffer pathCacheBuffer;
     private ComputeBuffer voxelUpdateCounter;
+    private ComputeBuffer computeLUTBuffer;
     private int tracedTexture1UpdateCount;
 
     private float lengthOfCone = 0.0f;
@@ -305,6 +309,7 @@ public class Nigiri : MonoBehaviour {
         transferIntsCompute = Resources.Load("Nigiri_TransferInts") as ComputeShader;
         mipFilterCompute = Resources.Load("Nigiri_MipFilter") as ComputeShader;
         lightPropagateCompute = Resources.Load("Nigiri_LightPropagation") as ComputeShader;
+        nigiri_lightingCurveLUTCompute = Resources.Load("Nigiri_lightingCurveLUT") as ComputeShader;
         //blur = Shader.Find("Hidden/Nigiri_BilateralBlur");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
@@ -318,7 +323,7 @@ public class Nigiri : MonoBehaviour {
         _blitShader = Shader.Find("Hidden/Nigiri_AO_Blit");
 
         nigiri_VoxelEntry = Resources.Load("Nigiri_VoxelEntry") as ComputeShader;
-        nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
+        //nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
 		GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals;
 
@@ -384,21 +389,30 @@ public class Nigiri : MonoBehaviour {
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
+        if (lightingCurveLUT != null) lightingCurveLUT.Release();
+
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
+
+        lightingCurveLUT.filterMode = FilterMode.Point;
+
+        lightingCurveLUT.enableRandomWrite = true;
 
         lightingTexture.Create();
         lightingTexture2.Create();
         positionTexture.Create();
         blur.Create();
         gi.Create();
+
+        lightingCurveLUT.Create();
 
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         voxelUpdateCounter = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
@@ -420,7 +434,7 @@ public class Nigiri : MonoBehaviour {
 		voxelGridDescriptorFloat4.msaaSamples = 1;
 		voxelGridDescriptorFloat4.sRGB = true;
 
-        voxelInjectionGrid = new RenderTexture(voxelGridDescriptorFloat4);
+        //voxelInjectionGrid = new RenderTexture(voxelGridDescriptorFloat4);
 
         voxelPropagationGrid = new RenderTexture (voxelGridDescriptorFloat4);
         voxelPropagatedGrid = new RenderTexture(voxelGridDescriptorFloat4);
@@ -450,7 +464,7 @@ public class Nigiri : MonoBehaviour {
 
 		voxelGrid5 = new RenderTexture (voxelGridDescriptorFloat4);
 
-        voxelInjectionGrid.filterMode = FilterMode.Bilinear;
+        //voxelInjectionGrid.filterMode = FilterMode.Bilinear;
 
         voxelPropagationGrid.filterMode = FilterMode.Bilinear;
         voxelPropagatedGrid.filterMode = FilterMode.Bilinear;
@@ -460,7 +474,7 @@ public class Nigiri : MonoBehaviour {
 		voxelGrid4.filterMode = FilterMode.Bilinear;
 		voxelGrid5.filterMode = FilterMode.Bilinear;
 
-        voxelInjectionGrid.Create();
+        //voxelInjectionGrid.Create();
 
         voxelPropagationGrid.Create();
         voxelPropagatedGrid.Create();
@@ -546,15 +560,71 @@ public class Nigiri : MonoBehaviour {
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
-        // Kernel index for the entry point in compute shader
-        int kernelHandle = nigiri_InjectionCompute.FindKernel("CSMain");
 
+        //Debug.ClearDeveloperConsole();
+
+        // Generate positional curve table
+        //computeLUTBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
+        //System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
+        //stopwatch.Start();
+        //double before = stopwatch.Elapsed.TotalMilliseconds;
+
+        /*for (int i = 0; i < 1000; i++)
+        {
+            nigiri_lightingCurveLUTCompute.SetTexture(0, "lightingTexture2", lightingTexture2);
+            nigiri_lightingCurveLUTCompute.SetTexture(0, "Result", lightingCurveLUT);
+            nigiri_lightingCurveLUTCompute.SetBuffer(0, "computeLUTBuffer", computeLUTBuffer);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
+            nigiri_lightingCurveLUTCompute.Dispatch(0, (injectionTextureResolution.x * injectionTextureResolution.y) / 1024, 1, 1);
+        }
+        double after = stopwatch.Elapsed.TotalMilliseconds;*/
         
+        //Debug.Log("<Nigiri> 0 Read took " + (after - before) + "ms");
+
+        /*before = stopwatch.Elapsed.TotalMilliseconds;
+        for (int i = 0; i < 1000; i++)
+        {
+            nigiri_lightingCurveLUTCompute.SetTexture(1, "lightingTexture2", lightingTexture2);
+            nigiri_lightingCurveLUTCompute.SetTexture(1, "Result", lightingCurveLUT);
+            nigiri_lightingCurveLUTCompute.SetBuffer(1, "computeLUTBuffer", computeLUTBuffer);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
+            nigiri_lightingCurveLUTCompute.Dispatch(1, (injectionTextureResolution.x * injectionTextureResolution.y) / 1024, 1, 1);
+        }
+        after = stopwatch.Elapsed.TotalMilliseconds;
+        Debug.Log("<Nigiri> 1 read took " + (after - before) + "ms");*/
+
+        //before = stopwatch.Elapsed.TotalMilliseconds;
+        /*for (int i = 0; i < 1000; i++)
+        {
+            nigiri_lightingCurveLUTCompute.SetTexture(2, "lightingTexture2", lightingTexture2);
+            nigiri_lightingCurveLUTCompute.SetTexture(2, "Result", lightingCurveLUT);
+            nigiri_lightingCurveLUTCompute.SetBuffer(2, "computeLUTBuffer", computeLUTBuffer);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
+            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
+            nigiri_lightingCurveLUTCompute.Dispatch(1, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        }
+        double after = stopwatch.Elapsed.TotalMilliseconds;
+        Debug.Log("<Nigiri> Control read took " + (after - before) + "ms");*/
+
+
+        // For performance profiling
+       // before = stopwatch.Elapsed.TotalMilliseconds;
+
+
+        /*
+        //nigiri_InjectionCompute.SetBuffer(0, "computeLUTBuffer", computeLUTBuffer);
         nigiri_InjectionCompute.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_InjectionCompute.SetTexture(0, "voxelGrid", voxelInjectionGrid);
-        nigiri_InjectionCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+        //nigiri_InjectionCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+        nigiri_InjectionCompute.SetInt("highestVoxelResolution", highestVoxelResolution);
         nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", GIAreaSize);
-        nigiri_InjectionCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
+        nigiri_InjectionCompute.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+*/
+
+        // Kernel index for the entry point in compute shader
+        int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids
         nigiri_VoxelEntry.SetTexture(0, "NoiseTexture", blueNoise[frameSwitch % 64]);
@@ -563,10 +633,11 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+        nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         //nigiri_VoxelEntry.render(kernelHandle, "_AOTexture", _result.id);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
+        //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
         nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
 
@@ -661,6 +732,11 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
+
+        //stopwatch.Stop();
+        //double after = stopwatch.Elapsed.TotalMilliseconds;
+        //Debug.Log("<Nigiri> Voxelization completed in " + (after - before) + "ms");
+        //computeLUTBuffer.Release();
     }
 
 	// This is called once per frame after the scene is rendered
@@ -920,10 +996,12 @@ public class Nigiri : MonoBehaviour {
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
+        if (lightingCurveLUT != null) lightingCurveLUT.Release();
+                
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
-        if (voxelInjectionGrid != null) voxelInjectionGrid.Release();
+        //if (voxelInjectionGrid != null) voxelInjectionGrid.Release();
 
         if (voxelPropagationGrid != null) voxelPropagationGrid.Release();
         if (voxelPropagatedGrid != null) voxelPropagatedGrid.Release();
@@ -1893,7 +1971,7 @@ public class Nigiri : MonoBehaviour {
     private Material _blitAddMaterial;
     private Material _bilateralBlurMaterial;
 
-    private RenderTexture _volumeLightTexture;
+    public RenderTexture _volumeLightTexture;
     private RenderTexture _halfVolumeLightTexture;
     private RenderTexture _quarterVolumeLightTexture;
     private static Texture _defaultSpotCookie;

@@ -6,6 +6,8 @@ uniform RWStructuredBuffer<uint>	lightMapBuffer;
 
 uniform uint						offsetStart;
 
+uniform uint						highestVoxelResolution;
+
 inline uint3 CoordinateFromLinearIndex(uint index, uint res)
 {
 	return uint3(
@@ -73,11 +75,19 @@ uint EncodeRGBAuint(float4 color)
 	return result;
 }
 
+uint threeD2oneD(float3 coord)
+{
+	return coord.z * (highestVoxelResolution * highestVoxelResolution) + (coord.y * highestVoxelResolution) + coord.x;
+}
+
 // Entry point of the voxelization compute shader
-[numthreads(256, 1, 1)]
+[numthreads(16, 16, 1)]
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-	float4 decodedColor = DecodeRGBAuint(lightMapBuffer[id3.x + offsetStart]);
-	voxelGrid[CoordinateFromLinearIndex(id3.x + offsetStart, 256)] = float4(decodedColor.rgb / (decodedColor.a + 1), decodedColor.a);
-	lightMapBuffer[id3.x + offsetStart] = 0;
+	for (uint z = 0; z < highestVoxelResolution; z++)
+	{
+		float4 decodedColor = DecodeRGBAuint(lightMapBuffer[threeD2oneD(float3(id3.xy, z))]);
+		voxelGrid[float3(id3.xy, z)] = float4(lerp(decodedColor.rgb / (decodedColor.a + 1), voxelGrid[float3(id3.xy, z)], 0.8), decodedColor.a);
+		lightMapBuffer[threeD2oneD(float3(id3.xy, z))] = 0;
+	}
 }

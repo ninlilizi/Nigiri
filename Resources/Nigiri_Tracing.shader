@@ -460,7 +460,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				//if (coordSet == 0) 
 				//{
 					coordSet = 1;
-					voxelBufferCoord = adjustedKernel.xyz * (coneDistance * 1.12 * coneLength + 0.000);
+					voxelBufferCoord = voxelPosition * (coneDistance * 1.72);
 				//}
 			}
 			//if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
@@ -721,13 +721,13 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	{
 		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord);
 
-		voxelBufferCoord.x += (blueNoise.x * 0.03125) * StochasticSampling;
-		voxelBufferCoord.y += (blueNoise.y * 0.03125) * StochasticSampling;
-		voxelBufferCoord.z += (blueNoise.z * 0.03125) * StochasticSampling;
+		//voxelBufferCoord.x += (blueNoise.x * 0.00000001) * StochasticSampling;
+		//voxelBufferCoord.y += (blueNoise.y * 0.00000001) * StochasticSampling;
+		//voxelBufferCoord.z += (blueNoise.z * 0.00000001) * StochasticSampling;
 		//voxelBufferCoord.xy *= uv;
-		//voxelBufferCoord.z = depth;
+		voxelBufferCoord.z *= depth;
 		index = voxelBufferCoord.x * (highestVoxelResolution) * (highestVoxelResolution)+voxelBufferCoord.y * (highestVoxelResolution)+voxelBufferCoord.z;
-		tracedBuffer1[index] += float4(gi, 1) * indirectLightingStrength;
+		tracedBuffer1[index] += float4(gi, 1);
 	}
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);

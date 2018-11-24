@@ -1,0 +1,65 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel BlitSlow
+#pragma kernel BlitFast
+#pragma kernel BlitControl
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+uniform Texture2D<float4> lightingTexture2;
+uniform RWTexture2D<float4> Result;
+
+uniform int injectionTextureResolutionX;
+uniform int injectionTextureResolutionY;
+
+groupshared uint orderCounter = 0;
+groupshared uint2 coord;
+
+RWStructuredBuffer<uint> computeLUTBuffer;
+
+inline uint2 CoordinateFromLinearIndex(uint index, uint res)
+{
+	return uint2(
+		index % res,
+		floor((index / res) % res)
+		);
+}
+
+[numthreads(1024, 1, 1)]
+void BlitSlow (uint3 id : SV_DispatchThreadID)
+{
+	float offset = 0.0;
+    InterlockedAdd(computeLUTBuffer[0], 1, offset);
+	   
+	uint2 writeCoord = CoordinateFromLinearIndex(computeLUTBuffer[0], injectionTextureResolutionX);
+	uint2 Coord = CoordinateFromLinearIndex(id.x, injectionTextureResolutionX);
+
+	Result[writeCoord] = lightingTexture2[writeCoord];
+
+}
+
+
+[numthreads(1024, 1, 1)]
+void BlitFast(uint3 id : SV_DispatchThreadID)
+{
+	float offset = 0.0;
+	InterlockedAdd(computeLUTBuffer[0], 1, offset);
+
+	uint2 Coord = CoordinateFromLinearIndex(computeLUTBuffer[0], injectionTextureResolutionX);
+	//uint2 readCoord = CoordinateFromLinearIndex(id.x, injectionTextureResolutionX);
+
+	Result[Coord] = lightingTexture2[Coord];
+
+}
+
+[numthreads(16, 16, 1)]
+void BlitControl(uint3 id : SV_DispatchThreadID)
+{
+	float offset = 0.0;
+	InterlockedAdd(computeLUTBuffer[0], 1, offset);
+
+	uint2 Coord = CoordinateFromLinearIndex(computeLUTBuffer[0], injectionTextureResolutionX);
+	uint2 readCoord = CoordinateFromLinearIndex(id.x, injectionTextureResolutionX);
+
+	Result[id.xy] = lightingTexture2[id.xy];
+
+}
