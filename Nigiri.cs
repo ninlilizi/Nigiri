@@ -144,7 +144,7 @@ public class Nigiri : MonoBehaviour {
     private ComputeShader transferIntsCompute;
     private ComputeShader mipFilterCompute;
     private ComputeShader lightPropagateCompute;
-    public ComputeShader nigiri_lightingCurveLUTCompute;
+    //public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
     private Material pvgiMaterial;
@@ -171,7 +171,7 @@ public class Nigiri : MonoBehaviour {
     //public RenderTexture occlusionTexture;
     private RenderTexture orthographicPositionTexture;
 
-    public RenderTexture lightingCurveLUT;
+    //public RenderTexture lightingCurveLUT;
 
     private RenderTexture blur;
     private RenderTexture gi;
@@ -309,7 +309,7 @@ public class Nigiri : MonoBehaviour {
         transferIntsCompute = Resources.Load("Nigiri_TransferInts") as ComputeShader;
         mipFilterCompute = Resources.Load("Nigiri_MipFilter") as ComputeShader;
         lightPropagateCompute = Resources.Load("Nigiri_LightPropagation") as ComputeShader;
-        nigiri_lightingCurveLUTCompute = Resources.Load("Nigiri_lightingCurveLUT") as ComputeShader;
+        //nigiri_lightingCurveLUTCompute = Resources.Load("Nigiri_lightingCurveLUT") as ComputeShader;
         //blur = Shader.Find("Hidden/Nigiri_BilateralBlur");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
@@ -389,22 +389,22 @@ public class Nigiri : MonoBehaviour {
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
-        if (lightingCurveLUT != null) lightingCurveLUT.Release();
+        //if (lightingCurveLUT != null) lightingCurveLUT.Release();
 
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
+        //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
 
-        lightingCurveLUT.filterMode = FilterMode.Point;
+        //lightingCurveLUT.filterMode = FilterMode.Point;
 
-        lightingCurveLUT.enableRandomWrite = true;
+        //lightingCurveLUT.enableRandomWrite = true;
 
         lightingTexture.Create();
         lightingTexture2.Create();
@@ -412,7 +412,7 @@ public class Nigiri : MonoBehaviour {
         blur.Create();
         gi.Create();
 
-        lightingCurveLUT.Create();
+        //lightingCurveLUT.Create();
 
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         voxelUpdateCounter = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
@@ -996,7 +996,7 @@ public class Nigiri : MonoBehaviour {
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
-        if (lightingCurveLUT != null) lightingCurveLUT.Release();
+        //if (lightingCurveLUT != null) lightingCurveLUT.Release();
                 
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
@@ -1971,7 +1971,7 @@ public class Nigiri : MonoBehaviour {
     private Material _blitAddMaterial;
     private Material _bilateralBlurMaterial;
 
-    public RenderTexture _volumeLightTexture;
+    private RenderTexture _volumeLightTexture;
     private RenderTexture _halfVolumeLightTexture;
     private RenderTexture _quarterVolumeLightTexture;
     private static Texture _defaultSpotCookie;
