@@ -24,10 +24,11 @@ cbuffer cbSettings : register(b0)
 	uniform Texture2D<float4>			lightingTexture;
 	uniform Texture2D<float4>			lightingTexture2;
 
-	uniform Texture2D<float4>			volumeLightTexture;
+	//uniform Texture2D<float4>			volumeLightTexture;
 
 	uniform Texture2D<float4>			positionTexture;
 	uniform Texture2D<float4>			orthographicPositionTexture;
+	uniform Texture2D<float4>			depthTexture;
 };
 
 
@@ -148,7 +149,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	float currentVoxelLuma = GetLuma(voxelGrid[voxelPosition].rgb);
 	float lumaDiff = abs(saturate(currentVoxelLuma - pixelLuma));
 
-	if ((voxelGrid[voxelPosition].a == 0.0f) || ((lumaDiff < lumaThreshold) && (volumeLightTexture[id.xy].a > positionTexture[id.xy].a)))
+	if ((voxelGrid[voxelPosition].a == 0.0f) || ((lumaDiff < lumaThreshold) && (depthTexture[id.xy].a > positionTexture[id.xy].a)))
 	{
 		voxelGrid[voxelPosition] = lerp(newMixedColor, voxelGrid[voxelPosition], positionTexture[id.xy].a);
 	}

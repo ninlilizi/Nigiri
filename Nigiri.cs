@@ -47,6 +47,8 @@ public class Nigiri : MonoBehaviour {
     public int fastResolveFactor = 2;
 
     [Header("Cone Trace Settings")]
+    [Range(1, 4)]
+    public int subsamplingRatio = 1;
     [Range(1, 32)]
     public int maximumIterations = 8;
     [Range(0.01f, 2)]
@@ -135,24 +137,24 @@ public class Nigiri : MonoBehaviour {
     private Texture2D[] blueNoise;
     
 
-    [Header("Shaders")]
-    public Shader tracingShader;
-    public Shader blitGBufferShader;
-    public Shader fxaaShader;
-    public Shader positionShader;
-    public ComputeShader nigiri_VoxelEntry;
+    //[Header("Shaders")]
+    private Shader tracingShader;
+    private Shader blitGBufferShader;
+    private Shader fxaaShader;
+    private Shader depthShader;
+    private ComputeShader nigiri_VoxelEntry;
     //private ComputeShader nigiri_InjectionCompute;
-    public ComputeShader clearComputeCache;
-    public ComputeShader transferIntsCompute;
-    public ComputeShader mipFilterCompute;
-    public ComputeShader lightPropagateCompute;
+    private ComputeShader clearComputeCache;
+    private ComputeShader transferIntsCompute;
+    private ComputeShader mipFilterCompute;
+    private ComputeShader lightPropagateCompute;
     //public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
     private Material pvgiMaterial;
     private Material blitGBuffer0Material;
     private Material fxaaMaterial;
-    //private Material positionMaterial;
+    private Material depthMaterial;
 
 
     //[Header("Render Textures")]
@@ -170,6 +172,7 @@ public class Nigiri : MonoBehaviour {
     private RenderTexture lightingTexture;
     private RenderTexture lightingTexture2;
     private RenderTexture positionTexture;
+    private RenderTexture depthTexture;
     //public RenderTexture occlusionTexture;
     private RenderTexture orthographicPositionTexture;
 
@@ -314,6 +317,7 @@ public class Nigiri : MonoBehaviour {
         lightPropagateCompute = Resources.Load("Nigiri_LightPropagation") as ComputeShader;
         //nigiri_lightingCurveLUTCompute = Resources.Load("Nigiri_lightingCurveLUT") as ComputeShader;
         //blur = Shader.Find("Hidden/Nigiri_BilateralBlur");
+        depthShader = Shader.Find("Hidden/Nigiri_Blit_CameraDepthTexture");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
         //positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
@@ -334,6 +338,7 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial = new Material(tracingShader);
 
         if (blitGBuffer0Material == null) blitGBuffer0Material = new Material(blitGBufferShader);
+        if (depthMaterial == null) depthMaterial = new Material(depthShader);
 
         //if (positionMaterial == null) positionMaterial = new Material(positionShader);
 
@@ -389,7 +394,7 @@ public class Nigiri : MonoBehaviour {
 
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
-        if (positionTexture != null) positionTexture.Release();
+        if (depthTexture != null) depthTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
 
@@ -398,11 +403,13 @@ public class Nigiri : MonoBehaviour {
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
+        depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
 
@@ -413,6 +420,7 @@ public class Nigiri : MonoBehaviour {
         lightingTexture.Create();
         lightingTexture2.Create();
         positionTexture.Create();
+        depthTexture.Create();
         blur.Create();
         gi.Create();
 
@@ -589,6 +597,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "maskClearBuffer", maskClearBuffer);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", depthTexture);
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
@@ -698,23 +707,22 @@ public class Nigiri : MonoBehaviour {
 
 
 	// This is called once per frame after the scene is rendered
-    [ImageEffectOpaque]
 	void OnRenderImage (RenderTexture source, RenderTexture destination)
     {
         if (forceImmediateRefresh || prevPropagateLight != propagateLight)
         {
-            injectionTextureResolution.x = source.width;
-            injectionTextureResolution.y = source.height;
+            injectionTextureResolution.x = source.width / subsamplingRatio;
+            injectionTextureResolution.y = source.height / subsamplingRatio;
 
             forceImmediateRefresh = false;
             UpdateForceGI();
         }
 
-        if (injectionTextureResolution.x != source.width || injectionTextureResolution.y != source.height)
+        if ((injectionTextureResolution.x != (int)source.width / subsamplingRatio) || (injectionTextureResolution.y != (int)source.height / subsamplingRatio))
         {
             Debug.Log("<Nigiri> Resizing render textures");
-            injectionTextureResolution.x = source.width;
-            injectionTextureResolution.y = source.height;
+            injectionTextureResolution.x = (int)source.width / subsamplingRatio;
+            injectionTextureResolution.y = (int)source.height / subsamplingRatio;
             createRenderTextures();
             CreateComputeBuffers();
         }
@@ -794,6 +802,7 @@ public class Nigiri : MonoBehaviour {
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
+        Graphics.Blit(null, depthTexture, depthMaterial);
         Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
 
         // Configure emissive camera
@@ -952,6 +961,7 @@ public class Nigiri : MonoBehaviour {
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (positionTexture != null) positionTexture.Release();
+        if (depthTexture != null) depthTexture.Release();
         //if (occlusionTexture != null) occlusionTexture.Release();
         if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
@@ -1544,11 +1554,11 @@ public class Nigiri : MonoBehaviour {
 
     #region Built-in resources
 
-    public ComputeShader _downsample1Compute;
-    public ComputeShader _downsample2Compute;
-    public ComputeShader _renderCompute;
-    public ComputeShader _upsampleCompute;
-    public  Shader _blitShader;
+    private ComputeShader _downsample1Compute;
+    private ComputeShader _downsample2Compute;
+    private ComputeShader _renderCompute;
+    private ComputeShader _upsampleCompute;
+    private Shader _blitShader;
 
     #endregion
 
