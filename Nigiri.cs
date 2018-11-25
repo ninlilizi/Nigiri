@@ -572,12 +572,12 @@ public class Nigiri : MonoBehaviour {
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
         // Clear voxels that were not just updated
-        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.SetBuffer(1, "maskClearBuffer", maskClearBuffer);
-        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
-        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
+            clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+            clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+            clearComputeCache.SetBuffer(1, "maskClearBuffer", maskClearBuffer);
+            clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+            clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+            clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
 
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
