@@ -32,6 +32,8 @@ public class Nigiri : MonoBehaviour {
     public int highestVoxelResolution = 256;
     [Range(0, 1)]
     public float shadowStrength = 1.0f;
+    [Range(0.5f, 0.999f)]
+    public float temporalStablityVsRefreshRate = 0.999f;
 
     [Header("Light Propagation Settings")]
     public bool propagateLight = false;
@@ -133,30 +135,30 @@ public class Nigiri : MonoBehaviour {
     private Texture2D[] blueNoise;
     
 
-    //[Header("Shaders")]
-    private Shader tracingShader;
-    private Shader blitGBufferShader;
-    private Shader fxaaShader;
-    private Shader positionShader;
-    private ComputeShader nigiri_VoxelEntry;
+    [Header("Shaders")]
+    public Shader tracingShader;
+    public Shader blitGBufferShader;
+    public Shader fxaaShader;
+    public Shader positionShader;
+    public ComputeShader nigiri_VoxelEntry;
     //private ComputeShader nigiri_InjectionCompute;
-    private ComputeShader clearComputeCache;
-    private ComputeShader transferIntsCompute;
-    private ComputeShader mipFilterCompute;
-    private ComputeShader lightPropagateCompute;
+    public ComputeShader clearComputeCache;
+    public ComputeShader transferIntsCompute;
+    public ComputeShader mipFilterCompute;
+    public ComputeShader lightPropagateCompute;
     //public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
     private Material pvgiMaterial;
     private Material blitGBuffer0Material;
     private Material fxaaMaterial;
-    private Material positionMaterial;
+    //private Material positionMaterial;
 
 
     //[Header("Render Textures")]
     private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-    //public static RenderTexture voxelInjectionGrid;
+    public static RenderTexture voxelInjectionGrid;
     public static RenderTexture voxelPropagationGrid;
     public static RenderTexture voxelPropagatedGrid;
     public static RenderTexture voxelGrid1;
@@ -179,7 +181,7 @@ public class Nigiri : MonoBehaviour {
 
     private PathCacheBuffer pathCacheBuffer;
     private ComputeBuffer voxelUpdateCounter;
-    private ComputeBuffer computeLUTBuffer;
+    private ComputeBuffer maskClearBuffer;
     private int tracedTexture1UpdateCount;
 
     private float lengthOfCone = 0.0f;
@@ -233,6 +235,7 @@ public class Nigiri : MonoBehaviour {
         _preLightPass.name = "<Nigiri> Volumetric Prepass";
 
         createRenderTextures();
+        CreateComputeBuffers();
         ChangeResolution();
 
         if (_pointLightMesh == null)
@@ -313,7 +316,7 @@ public class Nigiri : MonoBehaviour {
         //blur = Shader.Find("Hidden/Nigiri_BilateralBlur");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
-        positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
+        //positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
         fxaaMaterial = new Material(fxaaShader);
 
         _downsample1Compute = Resources.Load("Nigiri_AO_Downsample1") as ComputeShader; ;
@@ -332,10 +335,11 @@ public class Nigiri : MonoBehaviour {
 
         if (blitGBuffer0Material == null) blitGBuffer0Material = new Material(blitGBufferShader);
 
-        if (positionMaterial == null) positionMaterial = new Material(positionShader);
+        //if (positionMaterial == null) positionMaterial = new Material(positionShader);
 
         InitializeVoxelGrid();
         createRenderTextures();
+        CreateComputeBuffers();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
@@ -414,9 +418,16 @@ public class Nigiri : MonoBehaviour {
 
         //lightingCurveLUT.Create();
 
+    }
+
+    private void CreateComputeBuffers()
+    {
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         voxelUpdateCounter = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
 
+
+        if (maskClearBuffer != null) maskClearBuffer.Release();
+        maskClearBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(uint));
     }
 
 	// Function to initialize the voxel grid data
@@ -560,68 +571,13 @@ public class Nigiri : MonoBehaviour {
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
-
-        //Debug.ClearDeveloperConsole();
-
-        // Generate positional curve table
-        //computeLUTBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
-        //System.Diagnostics.Stopwatch stopwatch = new System.Diagnostics.Stopwatch();
-        //stopwatch.Start();
-        //double before = stopwatch.Elapsed.TotalMilliseconds;
-
-        /*for (int i = 0; i < 1000; i++)
-        {
-            nigiri_lightingCurveLUTCompute.SetTexture(0, "lightingTexture2", lightingTexture2);
-            nigiri_lightingCurveLUTCompute.SetTexture(0, "Result", lightingCurveLUT);
-            nigiri_lightingCurveLUTCompute.SetBuffer(0, "computeLUTBuffer", computeLUTBuffer);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
-            nigiri_lightingCurveLUTCompute.Dispatch(0, (injectionTextureResolution.x * injectionTextureResolution.y) / 1024, 1, 1);
-        }
-        double after = stopwatch.Elapsed.TotalMilliseconds;*/
-        
-        //Debug.Log("<Nigiri> 0 Read took " + (after - before) + "ms");
-
-        /*before = stopwatch.Elapsed.TotalMilliseconds;
-        for (int i = 0; i < 1000; i++)
-        {
-            nigiri_lightingCurveLUTCompute.SetTexture(1, "lightingTexture2", lightingTexture2);
-            nigiri_lightingCurveLUTCompute.SetTexture(1, "Result", lightingCurveLUT);
-            nigiri_lightingCurveLUTCompute.SetBuffer(1, "computeLUTBuffer", computeLUTBuffer);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
-            nigiri_lightingCurveLUTCompute.Dispatch(1, (injectionTextureResolution.x * injectionTextureResolution.y) / 1024, 1, 1);
-        }
-        after = stopwatch.Elapsed.TotalMilliseconds;
-        Debug.Log("<Nigiri> 1 read took " + (after - before) + "ms");*/
-
-        //before = stopwatch.Elapsed.TotalMilliseconds;
-        /*for (int i = 0; i < 1000; i++)
-        {
-            nigiri_lightingCurveLUTCompute.SetTexture(2, "lightingTexture2", lightingTexture2);
-            nigiri_lightingCurveLUTCompute.SetTexture(2, "Result", lightingCurveLUT);
-            nigiri_lightingCurveLUTCompute.SetBuffer(2, "computeLUTBuffer", computeLUTBuffer);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
-            nigiri_lightingCurveLUTCompute.SetInt("injectionTextureResolutionY", injectionTextureResolution.y);
-            nigiri_lightingCurveLUTCompute.Dispatch(1, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
-        }
-        double after = stopwatch.Elapsed.TotalMilliseconds;
-        Debug.Log("<Nigiri> Control read took " + (after - before) + "ms");*/
-
-
-        // For performance profiling
-       // before = stopwatch.Elapsed.TotalMilliseconds;
-
-
-        /*
-        //nigiri_InjectionCompute.SetBuffer(0, "computeLUTBuffer", computeLUTBuffer);
-        nigiri_InjectionCompute.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
-        nigiri_InjectionCompute.SetTexture(0, "voxelGrid", voxelInjectionGrid);
-        //nigiri_InjectionCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-        nigiri_InjectionCompute.SetInt("highestVoxelResolution", highestVoxelResolution);
-        nigiri_InjectionCompute.SetFloat ("worldVolumeBoundary", GIAreaSize);
-        nigiri_InjectionCompute.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-*/
+        // Clear voxels that were not just updated
+        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.SetBuffer(1, "maskClearBuffer", maskClearBuffer);
+        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
 
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
@@ -630,16 +586,17 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(0, "NoiseTexture", blueNoise[frameSwitch % 64]);
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
         nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
-        nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateCounter", voxelUpdateCounter);
+        nigiri_VoxelEntry.SetBuffer(kernelHandle, "maskClearBuffer", maskClearBuffer);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
-        //nigiri_VoxelEntry.render(kernelHandle, "_AOTexture", _result.id);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
-        //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelInjectionGrid", voxelInjectionGrid);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "orthographicPositionTexture", orthographicPositionTexture);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
         nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "volumeLightTexture", _volumeLightTexture);
+
 
         // Voxelize main cam
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
@@ -739,6 +696,7 @@ public class Nigiri : MonoBehaviour {
         //computeLUTBuffer.Release();
     }
 
+
 	// This is called once per frame after the scene is rendered
     [ImageEffectOpaque]
 	void OnRenderImage (RenderTexture source, RenderTexture destination)
@@ -758,6 +716,7 @@ public class Nigiri : MonoBehaviour {
             injectionTextureResolution.x = source.width;
             injectionTextureResolution.y = source.height;
             createRenderTextures();
+            CreateComputeBuffers();
         }
 
         Camera localCam = GetComponent<Camera>();
@@ -886,23 +845,25 @@ public class Nigiri : MonoBehaviour {
 			Graphics.Blit (source, destination, pvgiMaterial, 1);
             return;
 		} else {
-
-            if (tracedTexture1UpdateCount > 48)
+            if (usePathCache)
             {
-                clearComputeCache.SetInt("Resolution", 256);
-                clearComputeCache.SetBuffer(1, "RG1", pathCacheBuffer.back);
-                clearComputeCache.SetInt("zStagger", tracedTexture1UpdateCount - 48);
-                clearComputeCache.Dispatch(1, 256 / 16, 256 / 16, 1);
+                if (tracedTexture1UpdateCount > 48)
+                {
+                    clearComputeCache.SetInt("Resolution", 256);
+                    clearComputeCache.SetBuffer(1, "RG1", pathCacheBuffer.back);
+                    clearComputeCache.SetInt("zStagger", tracedTexture1UpdateCount - 48);
+                    clearComputeCache.Dispatch(1, 256 / 16, 256 / 16, 1);
+                }
+                else if (tracedTexture1UpdateCount > 32)
+                {
+                    transferIntsCompute.SetBuffer(3, "ResultBuffer", pathCacheBuffer.front);
+                    transferIntsCompute.SetBuffer(3, "InputBuffer", pathCacheBuffer.back);
+                    transferIntsCompute.SetInt("zStagger", tracedTexture1UpdateCount - 32);
+                    transferIntsCompute.SetInt("Resolution", 256);
+                    transferIntsCompute.Dispatch(3, 256 / 16, 256 / 16, 1);
+                }
+                tracedTexture1UpdateCount = (tracedTexture1UpdateCount + 1) % (65);
             }
-            else if (tracedTexture1UpdateCount > 32)
-            {
-                transferIntsCompute.SetBuffer(3, "ResultBuffer", pathCacheBuffer.front);
-                transferIntsCompute.SetBuffer(3, "InputBuffer", pathCacheBuffer.back);
-                transferIntsCompute.SetInt("zStagger", tracedTexture1UpdateCount - 32);
-                transferIntsCompute.SetInt("Resolution", 256);
-                transferIntsCompute.Dispatch(3, 256 / 16, 256 / 16, 1);
-            }
-            tracedTexture1UpdateCount = (tracedTexture1UpdateCount + 1) % (65);
 
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
             Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
@@ -1011,6 +972,8 @@ public class Nigiri : MonoBehaviour {
         if (voxelGrid4 != null) voxelGrid4.Release();
         if (voxelGrid5 != null) voxelGrid5.Release();
 
+        if (maskClearBuffer != null) maskClearBuffer.Release();
+
         //Volumetric Lighting
         //_camera.RemoveAllCommandBuffers();
         localCam.RemoveCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
@@ -1020,32 +983,33 @@ public class Nigiri : MonoBehaviour {
     public void UpdateForceGI()
     {
         /*clearComputeCache.SetTexture(0, "RG0", voxelPropagationGrid);
-        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.SetInt("Resolution", 256);
         clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);*/
 
         /*clearComputeCache.SetTexture(0, "RG0", voxelPropagatedGrid);
-        clearComputeCache.SetInt("Res", 256);
+        clearComputeCache.SetInt("Resolution", 256);
         clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);*/
 
-        clearComputeCache.SetTexture(3, "RG0", voxelGrid1);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-        clearComputeCache.SetTexture(3, "RG0", voxelGrid2);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
+
+        /*clearComputeCache.SetTexture(3, "RG0", voxelGrid2);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(3, "RG0", voxelGrid3);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(3, "RG0", voxelGrid4);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(3, "RG0", voxelGrid5);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
+        clearComputeCache.SetInt("Resolution", 256);
+        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);*/
 
         lpvSwitch = 0;
         mipSwitch = 0;
@@ -1580,11 +1544,11 @@ public class Nigiri : MonoBehaviour {
 
     #region Built-in resources
 
-    private ComputeShader _downsample1Compute;
-    private ComputeShader _downsample2Compute;
-    private ComputeShader _renderCompute;
-    private ComputeShader _upsampleCompute;
-    private Shader _blitShader;
+    public ComputeShader _downsample1Compute;
+    public ComputeShader _downsample2Compute;
+    public ComputeShader _renderCompute;
+    public ComputeShader _upsampleCompute;
+    public  Shader _blitShader;
 
     #endregion
 

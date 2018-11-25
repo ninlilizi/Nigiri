@@ -1,4 +1,6 @@
-﻿#include "UnityCG.cginc"
+﻿// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
+#include "UnityCG.cginc"
 #include "UnityPBSLighting.cginc"
 #include "AutoLight.cginc"
 
@@ -36,6 +38,8 @@ struct vertOutput
 	float3 normal : TEXCOORD4;
 
 	float4 cameraRay : TEXCOORD5;
+
+	float4 vertPos : TEXCOORD6;
 };
 
 
@@ -56,6 +60,10 @@ vertOutput vert(appdata_full v)
 	float4 clipPos = float4(v.texcoord.xy * 2.0f - 1.0f, 1.0f, 1.0f);
 	float4 cameraRay = mul(InverseProjectionMatrix, clipPos);
 	o.cameraRay = cameraRay / cameraRay.w;
+
+	float4 clipSpace = UnityObjectToClipPos(v.vertex);
+	clipSpace.xy /= clipSpace.w;
+	clipSpace.xy = 0.5*(clipSpace.xy + 1.0);
 
 	return o;
 }
@@ -401,8 +409,8 @@ FragmentOutput frag(vertOutput i)
 	//}
 	//else albedo = float3(0, 0, 0);
 
-	float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
-	position /= (2.0 * worldVolumeBoundary);
+	//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
+	//position /= (2.0 * worldVolumeBoundary);
 
 	FragmentOutput output;
 	output.mrt0 = float4(albedo, 1);
