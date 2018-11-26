@@ -113,7 +113,8 @@ public class Nigiri : MonoBehaviour {
         get { return _intensity; }
         set { _intensity = value; }
     }
-
+       
+    public Color occlusionColor;
     [Range(0.1f, 2)]
     public float occlusionGain = 1;
     public bool _ambientOnly = false;
@@ -129,6 +130,7 @@ public class Nigiri : MonoBehaviour {
     public bool VisualiseGI = false;
     public bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
+    public bool visualizeDepth = false;
     public bool visualizeOcclusion = false;
     public bool visualizeReflections = false;
     public DebugVoxelGrid debugVoxelGrid = DebugVoxelGrid.GRID_1;
@@ -799,11 +801,19 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
         pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
         pvgiMaterial.SetFloat("occlusionGain", 2 - occlusionGain);
+        pvgiMaterial.SetColor("occlusionColor", occlusionColor);
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
         Graphics.Blit(null, depthTexture, depthMaterial);
         Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
+
+        if (visualizeDepth)
+        {
+            Graphics.Blit(depthTexture, destination);
+            return;
+        }
+
 
         // Configure emissive camera
         emissiveCamera.cullingMask = emissiveLayer;

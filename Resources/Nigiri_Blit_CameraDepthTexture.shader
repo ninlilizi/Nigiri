@@ -70,7 +70,7 @@
 				
 				return float4(worldPos, lindepth);*/
 
-				return tex2D(_CameraDepthTexture, i.uv);
+				return Linear01Depth(tex2D(_CameraDepthTexture, i.uv));
 
 			}
 			ENDCG
