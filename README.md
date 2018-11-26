@@ -39,5 +39,7 @@ If you need some help, feel free to ask any questions in the [official thread](h
 # Credits
 * Sonic Ether for SEGI (https://github.com/sonicether/SEGI)<br>
 * Cat Like Coding for FXAA (https://catlikecoding.com/unity/tutorials/advanced-rendering/fxaa/)<br>
+* Cat Like Coding for Bulk of Spherical Harmics shader (https://catlikecoding.com/unity/tutorials/rendering/part-20/)<br>
+* keijiro for MiniEngineAO (https://github.com/keijiro/MiniEngineAO)<br>
 * keijiro for Gaussian Blur(https://github.com/keijiro)
 * For depth based voxelization (https://github.com/parikshit6321/PVGI/blob/master/Assets/ProgressiveVoxelizedGI/Shaders/VoxelGridEntry.compute)

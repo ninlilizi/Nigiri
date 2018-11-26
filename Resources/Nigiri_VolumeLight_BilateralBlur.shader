@@ -153,13 +153,13 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 		float4 BilateralUpsample(v2fUpsample input, Texture2D hiDepth, Texture2D loDepth, Texture2D loColor, SamplerState linearSampler, SamplerState pointSampler)
 		{
             const float threshold = UPSAMPLE_DEPTH_THRESHOLD;
-            float4 highResDepth = LinearEyeDepth(hiDepth.Sample(pointSampler, input.uv)).xxxx;
+            float4 highResDepth = LinearEyeDepth(hiDepth.Sample(pointSampler, UnityStereoTransformScreenSpaceTex(input.uv))).xxxx;
 			float4 lowResDepth;
 
-            lowResDepth[0] = LinearEyeDepth(loDepth.Sample(pointSampler, input.uv00));
-            lowResDepth[1] = LinearEyeDepth(loDepth.Sample(pointSampler, input.uv10));
-            lowResDepth[2] = LinearEyeDepth(loDepth.Sample(pointSampler, input.uv01));
-            lowResDepth[3] = LinearEyeDepth(loDepth.Sample(pointSampler, input.uv11));
+            lowResDepth[0] = LinearEyeDepth(loDepth.Sample(pointSampler, UnityStereoTransformScreenSpaceTex(input.uv00)));
+            lowResDepth[1] = LinearEyeDepth(loDepth.Sample(pointSampler, UnityStereoTransformScreenSpaceTex(input.uv10)));
+            lowResDepth[2] = LinearEyeDepth(loDepth.Sample(pointSampler, UnityStereoTransformScreenSpaceTex(input.uv01)));
+            lowResDepth[3] = LinearEyeDepth(loDepth.Sample(pointSampler, UnityStereoTransformScreenSpaceTex(input.uv11)));
 
 			float4 depthDiff = abs(lowResDepth - highResDepth);
 
@@ -168,28 +168,28 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			[branch]
 			if (accumDiff < threshold) // small error, not an edge -> use bilinear filter
 			{
-				return loColor.Sample(linearSampler, input.uv);
+				return loColor.Sample(linearSampler, UnityStereoTransformScreenSpaceTex(input.uv));
 			}
             
 			// find nearest sample
 			float minDepthDiff = depthDiff[0];
-			float2 nearestUv = input.uv00;
+			float2 nearestUv = UnityStereoTransformScreenSpaceTex(input.uv00);
 
 			if (depthDiff[1] < minDepthDiff)
 			{
-				nearestUv = input.uv10;
+				nearestUv = UnityStereoTransformScreenSpaceTex(input.uv10);
 				minDepthDiff = depthDiff[1];
 			}
 
 			if (depthDiff[2] < minDepthDiff)
 			{
-				nearestUv = input.uv01;
+				nearestUv = UnityStereoTransformScreenSpaceTex(input.uv01);
 				minDepthDiff = depthDiff[2];
 			}
 
 			if (depthDiff[3] < minDepthDiff)
 			{
-				nearestUv = input.uv11;
+				nearestUv = UnityStereoTransformScreenSpaceTex(input.uv11);
 				minDepthDiff = depthDiff[3];
 			}
 
@@ -202,13 +202,13 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 		float DownsampleDepth(v2fDownsample input, Texture2D depthTexture, SamplerState depthSampler)
 		{
 #if SHADER_TARGET > 40
-            float4 depth = depthTexture.Gather(depthSampler, input.uv);
+            float4 depth = depthTexture.Gather(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv));
 #else
 			float4 depth;
-			depth.x = depthTexture.Sample(depthSampler, input.uv00).x;
-			depth.y = depthTexture.Sample(depthSampler, input.uv01).x;
-			depth.z = depthTexture.Sample(depthSampler, input.uv10).x;
-			depth.w = depthTexture.Sample(depthSampler, input.uv11).x;
+			depth.x = depthTexture.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv00)).x;
+			depth.y = depthTexture.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv01)).x;
+			depth.z = depthTexture.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv10)).x;
+			depth.w = depthTexture.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv11)).x;
 
 #endif
 
@@ -246,7 +246,7 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			//const float deviation = kernelRadius / 2.5;
 			const float deviation = kernelRadius / GAUSS_BLUR_DEVIATION; // make it really strong
 
-			float2 uv = input.uv;
+			float2 uv = UnityStereoTransformScreenSpaceTex(input.uv);
 			float4 centerColor = _MainTex.Sample(sampler_MainTex, uv);
 			float3 color = centerColor.xyz;
 			//return float4(color, 1);
@@ -262,8 +262,8 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			[unroll] for (int i = -kernelRadius; i < 0; i += 1)
 			{
                 float2 offset = (direction * i);
-                float3 sampleColor = _MainTex.Sample(sampler_MainTex, input.uv, offset);
-                float sampleDepth = (LinearEyeDepth(depth.Sample(depthSampler, input.uv, offset)));
+                float3 sampleColor = _MainTex.Sample(sampler_MainTex, UnityStereoTransformScreenSpaceTex(input.uv), offset);
+                float sampleDepth = (LinearEyeDepth(depth.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv), offset)));
 
 				float depthDiff = abs(centerDepth - sampleDepth);
                 float dFactor = depthDiff * BLUR_DEPTH_FACTOR;
@@ -279,8 +279,8 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			[unroll] for (i = 1; i <= kernelRadius; i += 1)
 			{
 				float2 offset = (direction * i);
-                float3 sampleColor = _MainTex.Sample(sampler_MainTex, input.uv, offset);
-                float sampleDepth = (LinearEyeDepth(depth.Sample(depthSampler, input.uv, offset)));
+                float3 sampleColor = _MainTex.Sample(sampler_MainTex, UnityStereoTransformScreenSpaceTex(input.uv), offset);
+                float sampleDepth = (LinearEyeDepth(depth.Sample(depthSampler, UnityStereoTransformScreenSpaceTex(input.uv), offset)));
 
 				float depthDiff = abs(centerDepth - sampleDepth);
                 float dFactor = depthDiff * BLUR_DEPTH_FACTOR;

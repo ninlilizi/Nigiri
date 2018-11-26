@@ -74,6 +74,7 @@ Shader "Hidden/Nigiri_AO_Blit"
             #pragma fragment frag
 
             sampler2D _AOTexture;
+			half4 _AOTexture_ST;
 
             struct Output
             {
@@ -83,7 +84,7 @@ Shader "Hidden/Nigiri_AO_Blit"
 
             Output frag(v2f_img i)
             {
-                float ao = 1 - tex2D(_AOTexture, i.uv).r;
+				float ao = 1 - tex2D(_AOTexture, i.uv).r;
                 Output o;
                 o.gbuffer0 = float4(0, 0, 0, ao);
                 o.gbuffer3 = float4(ao, ao, ao, 0);
@@ -104,6 +105,7 @@ Shader "Hidden/Nigiri_AO_Blit"
             #pragma fragment frag
 
             sampler2D _AOTexture;
+			half4 _AOTexture_ST;
 
             float4 frag(v2f_img i) : SV_Target
             {
@@ -124,6 +126,7 @@ Shader "Hidden/Nigiri_AO_Blit"
             #pragma fragment frag
 
             sampler2D _AOTexture;
+			half4 _AOTexture_ST;
 
             float4 frag(v2f_img i) : SV_Target
             {

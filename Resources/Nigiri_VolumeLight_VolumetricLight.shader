@@ -369,10 +369,10 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			
 			fixed4 fragPointInside(v2f i) : SV_Target
 			{	
-				float2 uv = i.uv.xy / i.uv.w;
+				float2 uv = UnityStereoTransformScreenSpaceTex(i.uv.xy) / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);			
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(uv));
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -417,10 +417,10 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 			fixed4 fragPointInside(v2f i) : SV_Target
 			{
-				float2 uv = i.uv.xy / i.uv.w;
+				float2 uv = UnityStereoTransformScreenSpaceTex(i.uv.xy) / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(uv));
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -464,10 +464,10 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 			fixed4 fragPointOutside(v2f i) : SV_Target
 			{
-				float2 uv = i.uv.xy / i.uv.w;
+				float2 uv = UnityStereoTransformScreenSpaceTex(i.uv.xy) / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(uv));
 			
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -530,10 +530,10 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 			fixed4 fragSpotOutside(v2f i) : SV_Target
 			{
-				float2 uv = i.uv.xy / i.uv.w;
+				float2 uv = UnityStereoTransformScreenSpaceTex(i.uv.xy) / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(uv));
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -620,7 +620,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 			fixed4 fragDir(PSInput i) : SV_Target
 			{
-				float2 uv = i.uv.xy;
+				float2 uv = UnityStereoTransformScreenSpaceTex(i.uv.xy);
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
 				float linearDepth = Linear01Depth(depth);
 

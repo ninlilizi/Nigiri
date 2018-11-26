@@ -20,7 +20,7 @@
 	{
 		Varyings o;
 		o.vertex = UnityObjectToClipPos(v.vertex);
-		o.uv = UnityStereoScreenSpaceUVAdjust(v.texcoord, _CameraGBufferTexture0_ST);
+		o.uv = TransformStereoScreenSpaceTex(v.texcoord, _CameraGBufferTexture0_ST);
 		return o;
 	}
 

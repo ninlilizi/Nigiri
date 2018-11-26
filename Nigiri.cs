@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.XR;
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(Camera))]
@@ -144,6 +145,7 @@ public class Nigiri : MonoBehaviour {
     private Shader blitGBufferShader;
     private Shader fxaaShader;
     private Shader depthShader;
+    public Shader stereo2MonoShader;
     private ComputeShader nigiri_VoxelEntry;
     //private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
@@ -157,6 +159,7 @@ public class Nigiri : MonoBehaviour {
     private Material blitGBuffer0Material;
     private Material fxaaMaterial;
     private Material depthMaterial;
+    public Material stereo2MonoMaterial;
 
 
     //[Header("Render Textures")]
@@ -171,17 +174,19 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGrid4;
     public static RenderTexture voxelGrid5;
 
-    private RenderTexture lightingTexture;
-    private RenderTexture lightingTexture2;
-    private RenderTexture positionTexture;
-    private RenderTexture depthTexture;
+    public RenderTexture lightingTexture;
+    public RenderTexture lightingTexture2;
+    public RenderTexture lightingTextureMono;
+    public RenderTexture lightingTexture2Mono;
+    public RenderTexture positionTexture;
+    public RenderTexture depthTexture;
     //public RenderTexture occlusionTexture;
-    private RenderTexture orthographicPositionTexture;
+    public RenderTexture orthographicPositionTexture;
 
     //public RenderTexture lightingCurveLUT;
 
-    private RenderTexture blur;
-    private RenderTexture gi;
+    public RenderTexture blur;
+    public RenderTexture gi;
 
 
     private PathCacheBuffer pathCacheBuffer;
@@ -322,6 +327,7 @@ public class Nigiri : MonoBehaviour {
         depthShader = Shader.Find("Hidden/Nigiri_Blit_CameraDepthTexture");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
+        stereo2MonoShader = Shader.Find("Hidden/Nigiri_Blit_Stereo2Mono");
         //positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
         fxaaMaterial = new Material(fxaaShader);
 
@@ -334,13 +340,15 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry = Resources.Load("Nigiri_VoxelEntry") as ComputeShader;
         //nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
-		GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals;
+		GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
 
 		if (tracingShader == null)  tracingShader = Shader.Find("Hidden/Nigiri_Tracing");
         pvgiMaterial = new Material(tracingShader);
 
         if (blitGBuffer0Material == null) blitGBuffer0Material = new Material(blitGBufferShader);
         if (depthMaterial == null) depthMaterial = new Material(depthShader);
+        if (stereo2MonoMaterial == null) stereo2MonoMaterial = new Material(stereo2MonoShader);
+
 
         //if (positionMaterial == null) positionMaterial = new Material(positionShader);
 
@@ -380,6 +388,7 @@ public class Nigiri : MonoBehaviour {
             emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.5f);
             emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.5f);
             emissiveCamera.enabled = false;
+            emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
             Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
             
         }
@@ -404,8 +413,10 @@ public class Nigiri : MonoBehaviour {
 
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+        if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+        else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
@@ -414,6 +425,24 @@ public class Nigiri : MonoBehaviour {
         depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
+
+        if (localCam.stereoEnabled)
+        {
+            //We cut the injection images in half to avoid duplicate work in stereo
+            lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+
+            lightingTextureMono.vrUsage = VRTextureUsage.None;
+            lightingTexture2Mono.vrUsage = VRTextureUsage.None;
+            positionTexture.vrUsage = VRTextureUsage.None; // We disable this because it needs to not be stereo so the voxer does'nt do double the work
+            lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
+            lightingTexture2.vrUsage = VRTextureUsage.TwoEyes;
+            blur.vrUsage = VRTextureUsage.TwoEyes;
+            gi.vrUsage = VRTextureUsage.TwoEyes;
+
+            lightingTextureMono.Create();
+            lightingTexture2Mono.Create();
+        }
 
         //lightingCurveLUT.filterMode = FilterMode.Point;
 
@@ -597,8 +626,16 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
         nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "maskClearBuffer", maskClearBuffer);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+        if (localCam.stereoEnabled)
+        {
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTextureMono);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2Mono);
+        }
+        else
+        {
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+        }
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", depthTexture);
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
@@ -608,13 +645,16 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
         nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "volumeLightTexture", _volumeLightTexture);
+        nigiri_VoxelEntry.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
+
 
 
         // Voxelize main cam
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        if (localCam.stereoEnabled) nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+        else nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
 
         // Prepare to voxelize secondary cam
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", emissiveCamera.cameraToWorldMatrix);
@@ -627,7 +667,8 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagationGrid);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1);
+        if (localCam.stereoEnabled) nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+        else nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1); ;
 
         // Do light propagation
         if (propagateLight)
@@ -745,6 +786,30 @@ public class Nigiri : MonoBehaviour {
             pathCacheBuffer.Init(highestVoxelResolution);
         }
 
+        //Fix stereo rendering matrix
+        if (localCam.stereoEnabled)
+        {
+            // Left and Right Eye inverse View Matrices
+            Matrix4x4 leftToWorld = localCam.GetStereoViewMatrix(Camera.StereoscopicEye.Left).inverse;
+            Matrix4x4 rightToWorld = localCam.GetStereoViewMatrix(Camera.StereoscopicEye.Right).inverse;
+            Shader.SetGlobalMatrix("_LeftEyeToWorld", leftToWorld);
+            Shader.SetGlobalMatrix("_RightEyeToWorld", rightToWorld);
+
+            Matrix4x4 leftEye = localCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Left);
+            Matrix4x4 rightEye = localCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Right);
+
+            // Compensate for RenderTexture...
+            leftEye = GL.GetGPUProjectionMatrix(leftEye, true).inverse;
+            rightEye = GL.GetGPUProjectionMatrix(rightEye, true).inverse;
+            // Negate [1,1] to reflect Unity's CBuffer state
+            leftEye[1, 1] *= -1;
+            rightEye[1, 1] *= -1;
+
+            Shader.SetGlobalMatrix("_LeftEyeProjection", leftEye);
+            Shader.SetGlobalMatrix("_RightEyeProjection", rightEye);
+        }
+        //Fix stereo rendering matrix/
+
         // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
         if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) ResetCounters();
         else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) ResetCounters();
@@ -802,11 +867,25 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
         pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
         pvgiMaterial.SetColor("occlusionColor", occlusionColor);
+        pvgiMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
+
+        if (localCam.stereoEnabled)
+        {
+            Graphics.Blit(lightingTexture, lightingTextureMono, stereo2MonoMaterial);
+            Graphics.Blit(lightingTexture2, lightingTexture2Mono, stereo2MonoMaterial);
+        }
+
+        //We send half the stereo eyeDistance to the depth blit. To offset correct coordinates in stereo clamping
+        depthMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         Graphics.Blit(null, depthTexture, depthMaterial);
+
+        //We only want to retrieve a single eye for the positional texture if we're in stereo
+        pvgiMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
         Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
+        pvgiMaterial.SetInt("Stereo2Mono", 0);
 
         if (visualizeDepth)
         {
@@ -907,7 +986,9 @@ public class Nigiri : MonoBehaviour {
             if (Resolution == VolumtericResolution.Quarter)
             {
                 if (_quarterDepthBuffer == null) ChangeResolution();
-                RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf);
+                RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf, 
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+
                 temp.filterMode = FilterMode.Bilinear;
 
                 // horizontal bilateral blur at quarter res
@@ -924,7 +1005,9 @@ public class Nigiri : MonoBehaviour {
             {
                 if (_halfVolumeLightTexture == null) ChangeResolution();
 
-                RenderTexture temp = RenderTexture.GetTemporary(_halfVolumeLightTexture.width, _halfVolumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf);
+                RenderTexture temp = RenderTexture.GetTemporary(_halfVolumeLightTexture.width, _halfVolumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+
                 temp.filterMode = FilterMode.Bilinear;
 
                 // horizontal bilateral blur at half res
@@ -941,7 +1024,9 @@ public class Nigiri : MonoBehaviour {
             {
                 if (_volumeLightTexture == null) ChangeResolution();
 
-                RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf);
+                RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+
                 temp.filterMode = FilterMode.Bilinear;
 
                 // horizontal bilateral blur at full res
@@ -970,6 +1055,8 @@ public class Nigiri : MonoBehaviour {
         if (pathCacheBuffer != null) pathCacheBuffer.Cleanup();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
+        if (lightingTextureMono != null) lightingTextureMono.Release();
+        if (lightingTexture2Mono != null) lightingTexture2Mono.Release();
         if (positionTexture != null) positionTexture.Release();
         if (depthTexture != null) depthTexture.Release();
         //if (occlusionTexture != null) occlusionTexture.Release();
@@ -1121,9 +1208,9 @@ public class Nigiri : MonoBehaviour {
         // Camera reference
         if (localCam == null)
         {
-            localCam = GetComponent<Camera>();
+            //localCam = GetComponent<Camera>();
             // We requires the camera depth texture.
-            localCam.depthTextureMode = DepthTextureMode.Depth;
+            //localCam.depthTextureMode = DepthTextureMode.Depth;
         }
 
         // Render texture handles
@@ -1184,7 +1271,7 @@ public class Nigiri : MonoBehaviour {
             localCam.pixelHeight
         );
 
-        _result.AllocateNow();
+        _result.AllocateNow(localCam.stereoEnabled);
 
         // Rebuild the render commands.
         _renderCommand.Clear();
@@ -1673,7 +1760,7 @@ public class Nigiri : MonoBehaviour {
         }
 
         // Allocate the buffer in advance of use.
-        public void AllocateNow()
+        public void AllocateNow(bool vrUsage)
         {
             CalculateDimensions();
 
@@ -2017,6 +2104,7 @@ public class Nigiri : MonoBehaviour {
             DestroyImmediate(_volumeLightTexture);
 
         _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf);
+        //if (localCam.stereoEnabled) _volumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
         _volumeLightTexture.name = "VolumeLightBuffer";
         _volumeLightTexture.filterMode = FilterMode.Bilinear;
 
@@ -2028,10 +2116,12 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Half || Resolution == VolumtericResolution.Quarter)
         {
             _halfVolumeLightTexture = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.ARGBHalf);
+            if (localCam.stereoEnabled) _halfVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
             _halfVolumeLightTexture.name = "VolumeLightBufferHalf";
             _halfVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _halfDepthBuffer = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.RFloat);
+            if (localCam.stereoEnabled) _halfDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
             _halfDepthBuffer.name = "VolumeLightHalfDepth";
             _halfDepthBuffer.Create();
             _halfDepthBuffer.filterMode = FilterMode.Point;
@@ -2045,10 +2135,12 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Quarter)
         {
             _quarterVolumeLightTexture = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.ARGBHalf);
+            if (localCam.stereoEnabled) _quarterVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
             _quarterVolumeLightTexture.name = "VolumeLightBufferQuarter";
             _quarterVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _quarterDepthBuffer = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.RFloat);
+            if (localCam.stereoEnabled) _quarterDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
             _quarterDepthBuffer.name = "VolumeLightQuarterDepth";
             _quarterDepthBuffer.Create();
             _quarterDepthBuffer.filterMode = FilterMode.Point;

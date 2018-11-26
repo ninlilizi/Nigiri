@@ -1,5 +1,9 @@
-﻿Shader "Hidden/Nigiri_Blit_CameraDepthTexture"
+﻿Shader "Hidden/Nigiri_Blit_Stereo2Mono"
 {
+	Properties
+	{
+		_MainTex ("Texture", 2D) = "white" {}
+	}
 	SubShader
 	{
 		// No culling or depth
@@ -26,11 +30,8 @@
 				float4 vertex : SV_POSITION;
 			};
 
-			sampler2D _CameraDepthTexture;
-			half4 _CameraDepthTexture_ST;
-
-			int stereoEnabled;
-			//float eyeDistance;
+			sampler2D _MainTex;
+			half4 _MainTex_ST;
 
 			v2f vert (appdata v)
 			{
@@ -38,20 +39,16 @@
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = v.uv;
 
-				if (stereoEnabled) o.uv.x *= 0.5;
+				o.uv.x *= 0.5;
 				
 				return o;
 			}
 
 			fixed4 frag (v2f i) : SV_Target
 			{
-				if (stereoEnabled)
-				{
-				if (i.uv.x < 0.5) return Linear01Depth(tex2D(_CameraDepthTexture, i.uv));
-				else return float4(0,0,0,0);
-				}
-				else return Linear01Depth(tex2D(_CameraDepthTexture, i.uv));
 
+				if (i.uv.x < 0.5) return tex2D(_MainTex, i.uv);
+				else return float4(0,0,0,0);
 			}
 			ENDCG
 		}
