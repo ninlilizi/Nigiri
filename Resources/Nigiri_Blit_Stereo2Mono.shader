@@ -33,11 +33,16 @@
 			sampler2D _MainTex;
 			half4 _MainTex_ST;
 
+			//int stereoEnabled;
+
 			v2f vert (appdata v)
 			{
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
 				o.uv = v.uv;
+
+				//if (stereoEnabled) o.uv = TransformStereoScreenSpaceTex(v.uv, 1);
+				//else o.uv = v.uv;
 
 				o.uv.x *= 0.5;
 				

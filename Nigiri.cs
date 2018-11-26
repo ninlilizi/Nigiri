@@ -310,6 +310,8 @@ public class Nigiri : MonoBehaviour {
             ChangeResolution();
         //#endif
 
+        UpdateVoxelGrid();
+
         // Configure emissive camera
         emissiveCamera.cullingMask = emissiveLayer;
         //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
@@ -882,6 +884,7 @@ public class Nigiri : MonoBehaviour {
 
         if (localCam.stereoEnabled)
         {
+            //stereo2MonoMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
             Graphics.Blit(lightingTexture, lightingTextureMono, stereo2MonoMaterial);
             Graphics.Blit(lightingTexture2, lightingTexture2Mono, stereo2MonoMaterial);
         }
@@ -891,7 +894,7 @@ public class Nigiri : MonoBehaviour {
         Graphics.Blit(null, depthTexture, depthMaterial);
 
         //Set the modfied depth texture to the tracer
-        pvgiMaterial.SetTexture("depthTexture", depthTexture);
+        //pvgiMaterial.SetTexture("depthTexture", depthTexture);
 
         //We only want to retrieve a single eye for the positional texture if we're in stereo
         pvgiMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
@@ -1788,6 +1791,7 @@ public class Nigiri : MonoBehaviour {
                 _rt.format = renderTextureFormat;
             }
 
+            if (vrUsage) _rt.vrUsage = VRTextureUsage.TwoEyes;
             _rt.filterMode = FilterMode.Point;
             _rt.enableRandomWrite = hasUAV;
 
@@ -1991,9 +1995,6 @@ public class Nigiri : MonoBehaviour {
                 PreRenderEvent(this, _viewProj);
         }
         ///
-
-        UpdateVoxelGrid();
-
     }
 
     void OnDestroy()

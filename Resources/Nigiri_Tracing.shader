@@ -33,7 +33,7 @@
 		uniform sampler2D				_CameraGBufferTexture0;
 		uniform sampler2D				_CameraGBufferTexture1;
 
-		uniform sampler2D				depthTexture;
+		//uniform sampler2D				depthTexture;
 
 		half4							_CameraDepthTexture_ST;
 		half4							_CameraGBufferTexture0_ST;
@@ -150,9 +150,8 @@
 			else if (stereoEnabled) o.uv = TransformStereoScreenSpaceTex(v.uv, 1);
 			else o.uv = v.uv;
 
-
-			//transform clip pos to view space
-			float4 clipPos = float4(v.uv * 2.0f - 1.0f, 1.0f, 1.0f);
+			float4 clipPos = float4(o.uv * 2.0f - 1.0f, 1.0f, 1.0f);
+		
 			float4 cameraRay = mul(InverseProjectionMatrix, clipPos);
 			o.cameraRay = cameraRay / cameraRay.w;
 
@@ -367,42 +366,73 @@ float4 frag_debug(v2f i) : SV_Target
 	float depth = 0;
 	if (stereoEnabled) depth = 1 - GetDepthTexture(i.uv.xy);
 	else depth = 1 - GetDepthTexture(i.uv.xy);
-//linearise depth		
-float lindepth = Linear01Depth(depth);
+	//linearise depth		
+	float lindepth = Linear01Depth(depth);
 
-//get view and then world positions		
-float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+	//get view and then world positions		
 
-float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float3 worldPos = float3(0, 0, 0);
+	if (stereoEnabled)
+	{
+		//Fix Stereo View Matrix
+		float depth = GetDepthTexture(i.uv);
+		float4x4 proj, eyeToWorld;
 
-#if defined(GRID_1)
-voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
-#endif
+		if (i.uv.x < .5) // Left Eye
+		{
+			i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
+			proj = _LeftEyeProjection;
+			eyeToWorld = _LeftEyeToWorld;
+		}
+		else // Right Eye
+		{
+			i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
+			proj = _RightEyeProjection;
+			eyeToWorld = _RightEyeToWorld;
+		}
 
-#if defined(GRID_2)
-voxelInfo = GetVoxelInfo2(GetVoxelPosition(worldPos));
-#endif
+		float2 uvClip = i.uv * 2.0 - 1.0;
+		float4 clipPos = float4(uvClip, 1 - depth, 1.0);
+		float4 viewPos = mul(proj, clipPos); // inverse projection by clip position
+		viewPos /= viewPos.w; // perspective division
+		worldPos = mul(eyeToWorld, viewPos).xyz;
+		//Fix Stereo View Matrix/
+	}
+	else
+	{
+		float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+		worldPos = mul(InverseViewMatrix, viewPos).xyz;
+	}
 
-#if defined(GRID_3)
-voxelInfo = GetVoxelInfo3(GetVoxelPosition(worldPos));
-#endif
+	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-#if defined(GRID_4)
-voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
-#endif
+	#if defined(GRID_1)
+	voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
+	#endif
 
-#if defined(GRID_5)
-voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
-#endif
+	#if defined(GRID_2)
+	voxelInfo = GetVoxelInfo2(GetVoxelPosition(worldPos));
+	#endif
 
-float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
-return float4(resultingColor, 1.0f);
+	#if defined(GRID_3)
+	voxelInfo = GetVoxelInfo3(GetVoxelPosition(worldPos));
+	#endif
+
+	#if defined(GRID_4)
+	voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
+	#endif
+
+	#if defined(GRID_5)
+	voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
+	#endif
+
+	float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
+	return float4(resultingColor, 1.0f);
 }
 
 float3 GetWorldNormal(float2 uv)
 {
-	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, uv);
+	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, UnityStereoTransformScreenSpaceTex(uv));
 	worldSpaceNormal = normalize(worldSpaceNormal);
 
 	return worldSpaceNormal;
@@ -750,7 +780,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	return computedColor;
 }
 
-inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNormal, float2 uv, float depth)
+inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, float3 worldNormal, float2 uv, float depth)
 {
 	float3 gi = float3(0.0f, 0.0f, 0.0f);
 
@@ -778,11 +808,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
 
 	///Reflection cone setup
-	float depthValue;
-	float3 viewSpaceNormal;
-	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, uv), depthValue, viewSpaceNormal);
-	viewSpaceNormal = normalize(viewSpaceNormal);
-	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+	float3 pixelNormal = mul((float3x3)InverseViewMatrix, worldNormal);
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
 	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
 	reflectedRayDirection *= -1.0;
@@ -805,18 +831,17 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float3 worldNorm
 	}
 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
-	if (DoReflections && !visualizeOcclusion && !VisualiseGI || visualizeReflections)
+	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
 	{
-		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
-		float3 viewVector = normalize(viewSpacePosition.xyz);
+		float3 viewVector = normalize(viewPos.xyz);
 		float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
 
-		float4 spec = tex2D(_CameraGBufferTexture1, uv);
+		float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
 		
 		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
 		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
 
-		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal);
+		reflection = RayTrace(worldViewVector, reflectedRayDirection, pixelNormal);
 		reflection.rgb *= maximumIterationsReflection * BalanceGain;
 
 		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
@@ -865,16 +890,47 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	//get view and then world positions		
 
-	float4 viewPos = GetViewSpacePosition(i.uv.xy);
-	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+	float4 viewPos = float4(0, 0, 0, 0);
+	float3 worldPos = float3(0, 0, 0);
+	if (stereoEnabled)
+	{
+		//Fix Stereo View Matrix
+		float depth = GetDepthTexture(i.uv);
+		float4x4 proj, eyeToWorld;
+
+		if (i.uv.x < .5) // Left Eye
+		{
+			i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
+			proj = _LeftEyeProjection;
+			eyeToWorld = _LeftEyeToWorld;
+		}
+		else // Right Eye
+		{
+			i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
+			proj = _RightEyeProjection;
+			eyeToWorld = _RightEyeToWorld;
+		}
+
+		float2 uvClip = i.uv * 2.0 - 1.0;
+		float4 clipPos = float4(uvClip, 1 - depth, 1.0);
+		viewPos = mul(proj, clipPos); // inverse projection by clip position
+		viewPos /= viewPos.w; // perspective division
+		worldPos = mul(eyeToWorld, viewPos).xyz;
+		//Fix Stereo View Matrix/
+	}
+	else
+	{
+		viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+		worldPos = mul(InverseViewMatrix, viewPos).xyz;
+	}
 
 	float3 worldSpaceNormal = GetWorldNormal(i.uv);
 
-	float3 indirectContribution = ComputeIndirectContribution(worldPos, worldSpaceNormal, i.uv, depth);
+	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth);
 	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
 	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
 
-	return float4(indirectLighting, 1.0f);
+		return float4(indirectLighting, 1.0f);
 }
 
 float4 frag_normal_texture(v2f i) : SV_Target
