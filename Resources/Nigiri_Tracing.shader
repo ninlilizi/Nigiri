@@ -33,6 +33,8 @@
 		uniform sampler2D				_CameraGBufferTexture0;
 		uniform sampler2D				_CameraGBufferTexture1;
 
+		uniform sampler2D				depthTexture;
+
 		half4							_CameraDepthTexture_ST;
 		half4							_CameraGBufferTexture0_ST;
 		half4							_CameraGBufferTexture1_ST;
@@ -145,8 +147,8 @@
 				o.uv = v.uv;
 				o.uv.x *= 0.5;
 			}
-			else o.uv = TransformStereoScreenSpaceTex(v.uv, _MainTex_ST);
-			//o.uv = v.uv;
+			else if (stereoEnabled) o.uv = TransformStereoScreenSpaceTex(v.uv, 1);
+			else o.uv = v.uv;
 
 
 			//transform clip pos to view space
@@ -363,8 +365,8 @@ float4 frag_debug(v2f i) : SV_Target
 	// read low res depth and reconstruct world position
 	//float depth = tex2D(_CameraDepthTexture, UnityStereoScreenSpaceUVAdjust(i.uv, _CameraDepthTexture_ST));
 	float depth = 0;
-	if (stereoEnabled) depth = tex2D(_CameraDepthTexture, float2(i.uv.x * 0.5, i.uv.y));
-	else depth = tex2D(_CameraDepthTexture, i.uv.xy);
+	if (stereoEnabled) depth = 1 - GetDepthTexture(i.uv.xy);
+	else depth = 1 - GetDepthTexture(i.uv.xy);
 //linearise depth		
 float lindepth = Linear01Depth(depth);
 

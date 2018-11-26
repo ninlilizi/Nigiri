@@ -309,6 +309,14 @@ public class Nigiri : MonoBehaviour {
         if ((_volumeLightTexture.width != localCam.pixelWidth || _volumeLightTexture.height != localCam.pixelHeight))
             ChangeResolution();
         //#endif
+
+        // Configure emissive camera
+        emissiveCamera.cullingMask = emissiveLayer;
+        //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
+
+        //Secondary Voxelizor
+        Nigiri_EmissiveCameraHelper.DoRender();
+        ///
     }
 
     // Use this for initialization
@@ -882,6 +890,9 @@ public class Nigiri : MonoBehaviour {
         depthMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         Graphics.Blit(null, depthTexture, depthMaterial);
 
+        //Set the modfied depth texture to the tracer
+        pvgiMaterial.SetTexture("depthTexture", depthTexture);
+
         //We only want to retrieve a single eye for the positional texture if we're in stereo
         pvgiMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
         Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
@@ -893,12 +904,6 @@ public class Nigiri : MonoBehaviour {
             return;
         }
 
-
-        // Configure emissive camera
-        emissiveCamera.cullingMask = emissiveLayer;
-        //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
-
-        UpdateVoxelGrid();
 
         if (propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
         else pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
@@ -1930,10 +1935,6 @@ public class Nigiri : MonoBehaviour {
 
     void OnPreRender()
     {
-        //Secondary Voxelizor
-        Nigiri_EmissiveCameraHelper.DoRender();
-        ///
-
         //Occlusion
         _drawCountPerFrame++;
         ///
@@ -1990,6 +1991,8 @@ public class Nigiri : MonoBehaviour {
                 PreRenderEvent(this, _viewProj);
         }
         ///
+
+        UpdateVoxelGrid();
 
     }
 
