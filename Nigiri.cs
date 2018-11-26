@@ -602,6 +602,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", depthTexture);
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
+        nigiri_VoxelEntry.SetFloat("occlusionGain", 8 - (occlusionGain * 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "orthographicPositionTexture", orthographicPositionTexture);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
@@ -800,7 +801,6 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
         pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
         pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
-        pvgiMaterial.SetFloat("occlusionGain", 2 - occlusionGain);
         pvgiMaterial.SetColor("occlusionColor", occlusionColor);
 
         Graphics.Blit(source, lightingTexture);

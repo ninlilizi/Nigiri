@@ -467,9 +467,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			//if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
 		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
-		currentVoxelInfo.a *= occlusionGain;
+		//currentVoxelInfo.a *= occlusionGain;
 		//occlusion = skyVisibility * skyVisibility;
-		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb) * skyVisibility * skyVisibility;
+		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
 
 		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
 
@@ -509,7 +509,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
 		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
-		currentVoxelInfo.a *= occlusionGain;
+		//currentVoxelInfo.a *= occlusionGain;
 		//occlusion = skyVisibility * skyVisibility;
 		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb) * skyVisibility * skyVisibility;
 
@@ -549,7 +549,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 		}
 		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
-		currentVoxelInfo.a *= occlusionGain;
+		//currentVoxelInfo.a *= occlusionGain;
 		//occlusion = skyVisibility * skyVisibility;
 		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb) * skyVisibility * skyVisibility;
 
@@ -589,7 +589,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 		}
 		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
-		currentVoxelInfo.a *= occlusionGain;
+		//currentVoxelInfo.a *= occlusionGain;
 		//occlusion = skyVisibility * skyVisibility;
 		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb) * skyVisibility * skyVisibility;
 
@@ -629,7 +629,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			}
 		}
 		//currentVoxelInfo.rgb = min((1).xxx, currentVoxelInfo.rgb);
-		currentVoxelInfo.a *= occlusionGain;
+		//currentVoxelInfo.a *= occlusionGain;
 		//occlusion = skyVisibility * skyVisibility;
 		float3 localOcclusionColor = max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb) * skyVisibility * skyVisibility;
 
@@ -674,7 +674,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	else
 	{
 		// gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
-		computedColor *= GIGain * occlusionGain;
+		computedColor *= GIGain;
 	}
 
 	//computedColor.rgb = gi.rgb;
