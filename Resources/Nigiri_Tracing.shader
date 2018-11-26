@@ -150,7 +150,7 @@
 			else if (stereoEnabled) o.uv = TransformStereoScreenSpaceTex(v.uv, 1);
 			else o.uv = v.uv;
 
-			float4 clipPos = float4(o.uv * 2.0f - 1.0f, 1.0f, 1.0f);
+			float4 clipPos = float4(v.uv * 2.0f - 1.0f, 1.0f, 1.0f);
 		
 			float4 cameraRay = mul(InverseProjectionMatrix, clipPos);
 			o.cameraRay = cameraRay / cameraRay.w;
@@ -808,7 +808,11 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
 
 	///Reflection cone setup
-	float3 pixelNormal = mul((float3x3)InverseViewMatrix, worldNormal);
+	float depthValue;
+	float3 viewSpaceNormal;
+	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+	viewSpaceNormal = normalize(viewSpaceNormal);
+	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
 	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
 	reflectedRayDirection *= -1.0;
@@ -833,7 +837,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
 	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
 	{
-		float3 viewVector = normalize(viewPos.xyz);
+		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
+		float3 viewVector = normalize(viewSpacePosition.xyz);
 		float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
 
 		float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
@@ -841,7 +846,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
 		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
 
-		reflection = RayTrace(worldViewVector, reflectedRayDirection, pixelNormal);
+		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal);
 		reflection.rgb *= maximumIterationsReflection * BalanceGain;
 
 		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
@@ -930,7 +935,7 @@ float4 frag_lighting(v2f i) : SV_Target
 	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
 	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
 
-		return float4(indirectLighting, 1.0f);
+	return float4(indirectLighting, 1.0f);
 }
 
 float4 frag_normal_texture(v2f i) : SV_Target
