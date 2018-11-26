@@ -73,7 +73,7 @@
 
 		uniform int						tracedTexture1UpdateCount;
 
-		uniform float					coneLength;
+		//uniform float					coneLength;
 		uniform float					coneWidth;
 		uniform	float					GIGain;
 		uniform float					NearLightGain;
@@ -97,6 +97,7 @@
 		uniform int						depthStopOptimization;
 		uniform int						Stereo2Mono;
 		uniform int						stereoEnabled;
+		uniform uint					rng_state;
 
 		uniform sampler2D _CameraGBufferTexture2;
 		half4 _CameraGBufferTexture2_ST;
@@ -156,6 +157,15 @@
 			o.cameraRay = cameraRay / cameraRay.w;
 
 			return o;
+		}
+
+		uint rand_xorshift()
+		{
+			// Xorshift algorithm from George Marsaglia's paper
+			rng_state ^= (rng_state << 13);
+			rng_state ^= (rng_state >> 17);
+			rng_state ^= (rng_state << 5);
+			return rng_state * 0.00000001;
 		}
 
 		float GetDepthTexture(float2 uv)
@@ -304,6 +314,8 @@ float4 frag_position(v2f i) : SV_Target
 	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
 	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
 
+	//worldPos.z *= 100;
+
 	if (Stereo2Mono)
 	{
 		if (i.uv.x < 0.5) return float4(worldPos, lindepth);
@@ -321,7 +333,7 @@ inline float3 GetVoxelPosition(float3 worldPosition)
 	float3 voxelPosition = worldPosition / worldVolumeBoundary;
 	voxelPosition += float3(1.0f, 1.0f, 1.0f);
 	voxelPosition /= 2.0f;
-	return voxelPosition;
+	return voxelPosition;// +(rand_xorshift() + (250.0 / 4294967296.0));
 }
 
 // Returns the voxel information from grid 1
@@ -541,7 +553,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 1
 	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection) * coneLength;
+		currentPosition += (coneStep * coneDirection) * 0.01;
 
 		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
 		fi = lerp(fi, 1.0, 0.0);
@@ -588,7 +600,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection) * coneLength;
+		currentPosition += (coneStep * coneDirection) * 0.01;
 
 		float fi = ((float)i2 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
@@ -629,7 +641,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * coneLength;
+		currentPosition += coneStep * coneDirection * 0.01;
 
 		float fi = ((float)i3 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
@@ -669,7 +681,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * coneLength;
+		currentPosition += coneStep * coneDirection * 0.01;
 
 		float fi = ((float)i4 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
@@ -709,7 +721,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * coneLength;
+		currentPosition += coneStep * coneDirection * 0.01;
 
 		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / maximumIterations;
 		fi = lerp(fi, 1.0, 0.0);
@@ -878,6 +890,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 
 float4 frag_lighting(v2f i) : SV_Target
 {
+	rng_state = i.uv.x * i.uv.y;
 	float3 directLighting = tex2D(_MainTex, i.uv).rgb;
 
 	float4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);

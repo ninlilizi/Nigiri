@@ -35,6 +35,7 @@ public class Nigiri : MonoBehaviour {
     public float shadowStrength = 1.0f;
     [Range(0.5f, 0.999f)]
     public float temporalStablityVsRefreshRate = 0.999f;
+    public bool nearestNeighbourPropagation = false;
 
     [Header("Light Propagation Settings")]
     public bool propagateLight = false;
@@ -52,8 +53,8 @@ public class Nigiri : MonoBehaviour {
     public int subsamplingRatio = 1;
     [Range(1, 32)]
     public int maximumIterations = 8;
-    [Range(0.01f, 2)]
-    public float coneLength = 0.5f;
+    //[Range(0.01f, 2)]
+    //public float coneLength = 0.5f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
     [Range(0.1f, 4)]
@@ -206,6 +207,7 @@ public class Nigiri : MonoBehaviour {
     int mipSwitch = 0;
     int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
+    int voxelStaggerSwitch = 0;
     bool fastResolveSwitch = true;
 
     bool prevPropagateLight = false;
@@ -430,8 +432,15 @@ public class Nigiri : MonoBehaviour {
         gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
-        lightingTexture.filterMode = FilterMode.Bilinear;
-        lightingTexture2.filterMode = FilterMode.Bilinear;
+        lightingTexture.filterMode = FilterMode.Trilinear;
+        lightingTexture2.filterMode = FilterMode.Trilinear;
+
+        lightingTexture.useMipMap = true;
+        lightingTexture2.useMipMap = true;
+
+        lightingTexture.autoGenerateMips = true;
+        lightingTexture2.autoGenerateMips = true;
+
         depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
@@ -632,7 +641,7 @@ public class Nigiri : MonoBehaviour {
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids
-        nigiri_VoxelEntry.SetTexture(0, "NoiseTexture", blueNoise[frameSwitch % 64]);
+        //nigiri_VoxelEntry.SetTexture(0, "blueNoise", blueNoise[frameSwitch % 64]);
         nigiri_VoxelEntry.SetMatrix("InverseViewMatrix", localCam.cameraToWorldMatrix);
         nigiri_VoxelEntry.SetMatrix("InverseProjectionMatrix", localCam.projectionMatrix.inverse);
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "maskClearBuffer", maskClearBuffer);
@@ -656,10 +665,17 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "volumeLightTexture", _volumeLightTexture);
         nigiri_VoxelEntry.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
+        nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", nearestNeighbourPropagation ? 1 : 0);
 
 
 
         // Voxelize main cam
+        //voxelStaggerSwitch = (voxelStaggerSwitch + 1) % (4);
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0X", UnityEngine.Random.Range(0, 2));
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Y", UnityEngine.Random.Range(0, 2));
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Z", UnityEngine.Random.Range(0, 2));
+        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch1", UnityEngine.Random.Range(0, 4));
+        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch2", UnityEngine.Random.Range(0, 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
@@ -673,6 +689,12 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
 
         // Voxelize secondary cam
+        voxelStaggerSwitch = (voxelStaggerSwitch + 1) % (4);
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0X", UnityEngine.Random.Range(0, 2));
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Y", UnityEngine.Random.Range(0, 2));
+        nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Z", UnityEngine.Random.Range(0, 2));
+        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch1", UnityEngine.Random.Range(0, 4));
+        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch2", UnityEngine.Random.Range(0, 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagationGrid);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
@@ -844,7 +866,7 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
         Shader.SetGlobalFloat("EmissiveAttribution", EmissiveAttribution); 
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        pvgiMaterial.SetFloat("coneLength", (coneLength - 0.99f));
+        //pvgiMaterial.SetFloat("coneLength", (coneLength - 0.99f));
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
         pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
@@ -879,8 +901,17 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetColor("occlusionColor", occlusionColor);
         pvgiMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
+        //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);
+        //Graphics.Blit(blur, lightingTexture, _bilateralBlurMaterial, 2);
+
+        
+        
+
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
+
+        //Graphics.Blit(lightingTexture2, blur, _bilateralBlurMaterial, 1);
+        //Graphics.Blit(blur, lightingTexture2, _bilateralBlurMaterial, 2);
 
         if (localCam.stereoEnabled)
         {
