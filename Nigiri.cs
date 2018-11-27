@@ -315,27 +315,6 @@ public class Nigiri : MonoBehaviour {
             ChangeResolution();
         //#endif
 
-        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-        emissiveCameraGO.transform.LookAt(localCam.transform);
-
-        FilterMode filterMode = FilterMode.Point;
-        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
-
-        voxelPropagationGrid.filterMode = filterMode;
-        voxelPropagatedGrid.filterMode = filterMode;
-        voxelGrid1.filterMode = filterMode;
-        voxelGrid2.filterMode = filterMode;
-        voxelGrid3.filterMode = filterMode;
-        voxelGrid4.filterMode = filterMode;
-        voxelGrid5.filterMode = filterMode;
-
-        UpdateVoxelGrid();
-
         // Configure emissive camera
         emissiveCamera.cullingMask = emissiveLayer;
         //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
@@ -1951,6 +1930,26 @@ public class Nigiri : MonoBehaviour {
 
     void LateUpdate()
     {
+        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
+        emissiveCameraGO.transform.LookAt(localCam.transform);
+
+        FilterMode filterMode = FilterMode.Point;
+        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
+
+        voxelPropagationGrid.filterMode = filterMode;
+        voxelPropagatedGrid.filterMode = filterMode;
+        voxelGrid1.filterMode = filterMode;
+        voxelGrid2.filterMode = filterMode;
+        voxelGrid3.filterMode = filterMode;
+        voxelGrid4.filterMode = filterMode;
+        voxelGrid5.filterMode = filterMode;
+
+        UpdateVoxelGrid();
         //Occlusion
         DoLazyInitialization();
 
