@@ -121,7 +121,7 @@ public class Nigiri : MonoBehaviour {
        
     public Color occlusionColor;
     [Range(0.1f, 2)]
-    public float occlusionGain = 1;
+    public float occlusionGain = 0.9f;
     public bool _ambientOnly = false;
 
     [Header("Volumetric Lighting")]
@@ -149,7 +149,7 @@ public class Nigiri : MonoBehaviour {
     private Shader blitGBufferShader;
     private Shader fxaaShader;
     private Shader depthShader;
-    public Shader stereo2MonoShader;
+    private Shader stereo2MonoShader;
     private ComputeShader nigiri_VoxelEntry;
     //private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
@@ -163,7 +163,7 @@ public class Nigiri : MonoBehaviour {
     private Material blitGBuffer0Material;
     private Material fxaaMaterial;
     private Material depthMaterial;
-    public Material stereo2MonoMaterial;
+    private Material stereo2MonoMaterial;
 
 
     //[Header("Render Textures")]
@@ -178,19 +178,19 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGrid4;
     public static RenderTexture voxelGrid5;
 
-    public RenderTexture lightingTexture;
-    public RenderTexture lightingTexture2;
-    public RenderTexture lightingTextureMono;
-    public RenderTexture lightingTexture2Mono;
-    public RenderTexture positionTexture;
-    public RenderTexture depthTexture;
+    private RenderTexture lightingTexture;
+    private RenderTexture lightingTexture2;
+    private RenderTexture lightingTextureMono;
+    private RenderTexture lightingTexture2Mono;
+    private RenderTexture positionTexture;
+    private RenderTexture depthTexture;
     //public RenderTexture occlusionTexture;
-    public RenderTexture orthographicPositionTexture;
+    private RenderTexture orthographicPositionTexture;
 
     //public RenderTexture lightingCurveLUT;
 
-    public RenderTexture blur;
-    public RenderTexture gi;
+    private RenderTexture blur;
+    private RenderTexture gi;
 
 
     private PathCacheBuffer pathCacheBuffer;
@@ -652,7 +652,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
-        nigiri_VoxelEntry.SetFloat("occlusionGain", 8 - (occlusionGain * 4));
+        nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "orthographicPositionTexture", orthographicPositionTexture);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
