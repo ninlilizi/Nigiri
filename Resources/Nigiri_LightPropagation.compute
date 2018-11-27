@@ -11,6 +11,8 @@ uniform float						LPVInverseFalloff;
 
 uniform float4						_Time;
 
+uniform RWStructuredBuffer<uint>	maskClearBuffer;
+
 uniform uint Resolution;
 uniform uint zStagger;
 
@@ -101,24 +103,28 @@ inline uint EncodeRGBAuint(float4 color)
 	return result;
 }
 
-inline uint3 coordinateFromLinearIndex(uint index, uint res)
+inline uint3 coordinateFromLinearIndex(uint index)
 {
 	return uint3(
-		floor(index / (res * res)),
-		floor((index / res) % res),
-		index % res);
+		floor(index / (highestVoxelResolution * highestVoxelResolution)),
+		floor((index / highestVoxelResolution) % highestVoxelResolution),
+		index % highestVoxelResolution);
 }
 
-inline uint3 index1dTo3d(int index1d, uint res)
+inline uint3 index1dTo3d(int index1d)
 {
 	//int res = 256; // resolution of the voxel grid
 	int logRes = 8; // the log of the resolution (just a performance optimisation this way)
 	// LogRes: 16 = 4, 32 = 5, 64 = 6, 128 = 7, 256 = 8, 512 = 9, etc...
 
 	return uint3(index1d >> (logRes << 1),
-		(index1d >> logRes) & (res - 1),
+		(index1d >> logRes) & (highestVoxelResolution - 1),
+		index1d & (highestVoxelResolution - 1));
+}
 
-		index1d & (res - 1));
+uint threeD2oneD(float3 coord)
+{
+	return coord.z * (Resolution * Resolution) + (coord.y * Resolution) + coord.x;
 }
 
 // 0
@@ -126,18 +132,24 @@ inline uint3 index1dTo3d(int index1d, uint res)
 [numthreads(256, 1, 1)]
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
-		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
+	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart);
+	if (maskClearBuffer[id3.x + offsetStart].x > 0 )
+	{
+		uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart);
 		//uint3 coordinate2 = coordinate * 0.5;
 		RG1[coordinate.xyz] = RG0[coordinate.xyz];
+	}
 }
 
 // 1
 [numthreads(256, 1, 1)]
 void CSMain1(uint3 id3 : SV_DispatchThreadID)
 {
-		uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-		//uint3 coordinate2 = coordinate * 0.5;
+	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart);
+	//uint3 coordinate2 = coordinate * 0.5;
 
+	if (maskClearBuffer[id3.x + offsetStart].x > 0)
+	{
 		float4 mixedColor =
 			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
 				RG0[uint3(coordinate.x + 1, coordinate.y, coordinate.z)] +
@@ -147,15 +159,23 @@ void CSMain1(uint3 id3 : SV_DispatchThreadID)
 				RG0[uint3(coordinate.x, coordinate.y, coordinate.z + 1)]) / 6;
 
 		RG0[coordinate.xyz].rgba = float4(lerp(mixedColor.rgb, RG0[coordinate.xyz].rgb, 0.3), RG0[coordinate.xyz].a);
+	}
 }
 
 // 2
 [numthreads(16, 16, 1)]
 void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
-	uint3 coordinate = index1dTo3d(id3.x + offsetStart, highestVoxelResolution);
-	//uint3 coordinate2 = coordinate * 0.5;
-	RG1[coordinate.xyz] = float4(RG0[coordinate.xyz].rgb, RG1[coordinate.xyz].a);
+	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart);
+
+	if (maskClearBuffer[id3.x + offsetStart] > 0)
+	{
+		
+		//uint3 coordinate2 = coordinate * 0.5;
+		RG1[coordinate.xyz] = float4(RG0[coordinate.xyz].rgb, RG1[coordinate.xyz].a);
+
+		//maskClearBuffer[id3.x + offsetStart].x = 0;
+	}
 }
 
 

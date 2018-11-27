@@ -73,7 +73,7 @@
 
 		uniform int						tracedTexture1UpdateCount;
 
-		//uniform float					coneLength;
+		uniform float					coneLength;
 		uniform float					coneWidth;
 		uniform	float					GIGain;
 		uniform float					NearLightGain;
@@ -553,7 +553,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 1
 	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection) * 0.01;
+		currentPosition += (coneStep * coneDirection) * coneLength;
 
 		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
 		fi = lerp(fi, 1.0, 0.0);
@@ -600,9 +600,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
-		currentPosition += (coneStep * coneDirection) * 0.01;
+		currentPosition += (coneStep * coneDirection) * 10.01;
 
-		float fi = ((float)i2 + blueNoise.y * StochasticSampling) / maximumIterations;
+		float fi = ((float)i2 + blueNoise.y * StochasticSampling) / iteration2;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
@@ -641,9 +641,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * 0.01;
+		currentPosition += coneStep * coneDirection * coneLength;
 
-		float fi = ((float)i3 + blueNoise.y * StochasticSampling) / maximumIterations;
+		float fi = ((float)i3 + blueNoise.y * StochasticSampling) / iteration3;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
@@ -681,9 +681,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * 0.01;
+		currentPosition += coneStep * coneDirection * coneLength;
 
-		float fi = ((float)i4 + blueNoise.y * StochasticSampling) / maximumIterations;
+		float fi = ((float)i4 + blueNoise.y * StochasticSampling) / iteration4;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
@@ -721,9 +721,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	currentPosition = coneOrigin;
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
-		currentPosition += coneStep * coneDirection * 0.01;
+		currentPosition += coneStep * coneDirection * coneLength;
 
-		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / maximumIterations;
+		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / iteration5;
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;

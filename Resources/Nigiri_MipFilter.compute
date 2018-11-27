@@ -27,25 +27,37 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 {
 
-    float3 offsets[8] = 
+    float3 offsets0[8] = 
     {
-        float3(1.0, 1.0, 1.0),
-        float3(1.0, 1.0, -1.0),
-        float3(1.0, -1.0, 1.0),
-        float3(1.0, -1.0, -1.0),
-        float3(-1.0, 1.0, 1.0),
-        float3(-1.0, 1.0, -1.0),
-        float3(-1.0, -1.0, 1.0),
-        float3(-1.0, -1.0, -1.0)
+        float3(2.0, 2.0, 2.0),
+        float3(2.0, 2.0, -2.0),
+        float3(2.0, -2.0, 2.0),
+        float3(2.0, -2.0, -2.0),
+        float3(-2.0, 2.0, 2.0),
+        float3(-2.0, 2.0, -2.0),
+        float3(-2.0, -2.0, 2.0),
+        float3(-2.0, -2.0, -2.0)
     };
+
+	float3 offsets1[8] =
+	{
+		float3(4.0, 4.0, 4.0),
+		float3(4.0, 4.0, -4.0),
+		float3(4.0, -4.0, 4.0),
+		float3(4.0, -4.0, -4.0),
+		float3(-4.0, 4.0, 4.0),
+		float3(-4.0, 4.0, -4.0),
+		float3(-4.0, -4.0, 4.0),
+		float3(-4.0, -4.0, -4.0)
+	};
 
     for (int i = 0; i < destinationRes; i++)
     {
         float3 fcoord = float3((float)id.x / destinationRes, (float)id.y / destinationRes, (float)i / destinationRes);
         float texel = 1.0 / destinationRes;
 
-        float4 tex = float4(0,0,0,0);
-
+        float4 tex0 = float4(0,0,0,0);
+		float4 tex1 = float4(0, 0, 0, 0);
 
         int c = 0;
 
@@ -53,15 +65,19 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
         {
             float3 offset = float3(0, 0, 0);
 
-            offset = offsets[j];
+            offset = offsets0[j];
+            tex0 += Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5 + offset * texel * 0.5, 0.0);
 
-            tex += Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5 + offset * texel * 0.5, 0.0);
+			offset = offsets1[j];
+			tex1 += Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5 + offset * texel * 0.5, 0.0);
+
+
             c++;
         }
 
-        tex /= c;
-        
+        tex0 /= c;
+		tex1 /= c;     
 
-        Destination[uint3(id.xy, i)] = tex;
+		Destination[uint3(id.xy, i)] = lerp(tex0, tex1, 0.25);
     }
 }
