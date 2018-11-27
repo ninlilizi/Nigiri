@@ -23,8 +23,6 @@ public class Nigiri : MonoBehaviour {
     public float indirectLightingStrength = 1.0f;
     [Range(0.0f, 8)]
     public float EmissiveIntensity = 1.0f;
-    [Range(0.01f, 16)]
-    private float EmissiveAttribution = 1.0f;
 
     [Header("Voxelization Settings")]
     public LayerMask emissiveLayer;
@@ -35,6 +33,7 @@ public class Nigiri : MonoBehaviour {
     public float shadowStrength = 1.0f;
     [Range(0.5f, 0.999f)]
     public float temporalStablityVsRefreshRate = 0.98f;
+    [Tooltip("A higher speed, but lower quality light propagation")]
     public bool neighbourPropagation = false;
     public bool gaussianMipFiltering = true;
     public bool bilinearFiltering = true;
@@ -43,8 +42,6 @@ public class Nigiri : MonoBehaviour {
     public bool propagateLight = false;
     [Range(1, 8)]
     public int LPVIterations = 1;
-    //[Range(0, 128)]
-    //private float LPVInverseFalloff = 1;
     [Range(1, 4)]
     public int updateSpeedFactor = 1;
     [Range(1, 5)]
@@ -56,7 +53,7 @@ public class Nigiri : MonoBehaviour {
     [Range(1, 32)]
     public int maximumIterations = 8;
     [Range(0.01f, 4)]
-    public float coneLength = 0.01f;
+    public float coneLength = 0.5f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
     [Range(0.1f, 4)]
@@ -75,6 +72,10 @@ public class Nigiri : MonoBehaviour {
     public float coneTraceBias = 1;
     private bool usePathCache = false;
     public bool depthStopOptimization = true;
+    [Tooltip("Searches nearest neighbours of ray hit for highest value")]
+    public bool neighbourSearch = false;
+    [Tooltip("Chooses the miplevel with the highest value")]
+    public bool mipLevelSearch = false;
     public bool stochasticSampling = true;
     [Range(0.1f, 2)]
     public float stochasticFactor = 1;
@@ -93,7 +94,7 @@ public class Nigiri : MonoBehaviour {
     [Range(0.1f, 0.25f)]
     public float rayOffset = 0.1f;
     [Range(0.01f, 0.25f)]
-    public float rayStep = 0.01f;
+    public float rayStep = 0.25f;
     [Range(0.01f, 4)]
     public float BalanceGain = 1;
     [Range(1, 32)]
@@ -132,7 +133,7 @@ public class Nigiri : MonoBehaviour {
 
     [Header("Debug Settings")]
     public bool VisualiseGI = false;
-    public bool VisualiseCache = false;
+    private bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
     public bool visualizeDepth = false;
     public bool visualizeOcclusion = false;
@@ -313,6 +314,25 @@ public class Nigiri : MonoBehaviour {
         if ((_volumeLightTexture.width != localCam.pixelWidth || _volumeLightTexture.height != localCam.pixelHeight))
             ChangeResolution();
         //#endif
+
+        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
+        emissiveCameraGO.transform.LookAt(localCam.transform);
+
+        FilterMode filterMode = FilterMode.Point;
+        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
+
+        voxelPropagationGrid.filterMode = filterMode;
+        voxelPropagatedGrid.filterMode = filterMode;
+        voxelGrid1.filterMode = filterMode;
+        voxelGrid2.filterMode = filterMode;
+        voxelGrid3.filterMode = filterMode;
+        voxelGrid4.filterMode = filterMode;
+        voxelGrid5.filterMode = filterMode;
 
         UpdateVoxelGrid();
 
@@ -651,6 +671,7 @@ public class Nigiri : MonoBehaviour {
         }
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", depthTexture);
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         nigiri_VoxelEntry.SetFloat("occlusionGain", 8 - (occlusionGain * 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
@@ -668,8 +689,6 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0X", UnityEngine.Random.Range(0, 2));
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Y", UnityEngine.Random.Range(0, 2));
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Z", UnityEngine.Random.Range(0, 2));
-        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch1", UnityEngine.Random.Range(0, 4));
-        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch2", UnityEngine.Random.Range(0, 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
@@ -687,8 +706,6 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0X", UnityEngine.Random.Range(0, 2));
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Y", UnityEngine.Random.Range(0, 2));
         nigiri_VoxelEntry.SetInt("voxelStaggerSwitch0Z", UnityEngine.Random.Range(0, 2));
-        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch1", UnityEngine.Random.Range(0, 4));
-        //nigiri_VoxelEntry.SetInt("voxelStaggerSwitch2", UnityEngine.Random.Range(0, 4));
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelPropagatedGrid", voxelPropagationGrid);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
@@ -705,11 +722,9 @@ public class Nigiri : MonoBehaviour {
             lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
             lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
             lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
-            //lightPropagateCompute.Dispatch(0, 16777216, 1, 1);
 
             for (int i = 0; i < LPVIterations; i++)
             {
-                //lightPropagateCompute.SetFloat("LPVInverseFalloff", (LPVInverseFalloff * 0.001f));
                 lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
                 lightPropagateCompute.SetBuffer(1, "maskClearBuffer", maskClearBuffer);
                 lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
@@ -727,25 +742,26 @@ public class Nigiri : MonoBehaviour {
 
 
 
-        if (mipSwitch == 0 && propagateLight)
+        /*if (mipSwitch == 0 && propagateLight)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             //if (fastResolveSwitch && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
             //else if (fastResolveSwitch && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
-            if (propagateLight && fastResolveSwitch) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
-            else if (propagateLight && !fastResolveSwitch) mipFilterCompute.SetTexture(0, "Source", voxelPropagatedGrid);
+            if (propagateLight && fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagationGrid);
+            else if (propagateLight && !fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
             else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }
-        else if (mipSwitch == 0 && !propagateLight)
+        }*/
+        if (mipSwitch == 0)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+            if (propagateLight) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
+            else mipFilterCompute.SetTexture( 0, "Source", voxelGrid1);
+            mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
+            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 1)
         {
@@ -862,9 +878,8 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
         pvgiMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
-        Shader.SetGlobalFloat("EmissiveAttribution", EmissiveAttribution); 
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        pvgiMaterial.SetFloat("coneLength", coneLength);
+        pvgiMaterial.SetFloat("coneLength", coneLength - 0.99f);
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
         pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
@@ -874,6 +889,8 @@ public class Nigiri : MonoBehaviour {
         else pvgiMaterial.SetVector("sunLight", new Vector3(80, 0, 0));
         pvgiMaterial.SetFloat("sunLightInjection", sunLightInjection);
         pvgiMaterial.SetInt("sphericalSunlight", sphericalSunlight ? 1 : 0);
+        pvgiMaterial.SetInt("neighbourSearch", neighbourSearch ? 1 : 0);
+        pvgiMaterial.SetInt("highestValueSearch", mipLevelSearch ? 1 : 0);
 
         pvgiMaterial.SetFloat("rayStep", rayStep);
         pvgiMaterial.SetFloat("rayOffset", rayOffset);
@@ -1126,34 +1143,33 @@ public class Nigiri : MonoBehaviour {
 
     public void UpdateForceGI()
     {
-        /*clearComputeCache.SetTexture(0, "RG0", voxelPropagationGrid);
+        clearComputeCache.SetTexture(0, "RG0", voxelPropagationGrid);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelPropagatedGrid);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);*/
+        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-
-        /*clearComputeCache.SetTexture(3, "RG0", voxelGrid2);
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid2);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-        clearComputeCache.SetTexture(3, "RG0", voxelGrid3);
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid3);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-        clearComputeCache.SetTexture(3, "RG0", voxelGrid4);
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid4);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-        clearComputeCache.SetTexture(3, "RG0", voxelGrid5);
+        clearComputeCache.SetTexture(0, "RG0", voxelGrid5);
         clearComputeCache.SetInt("Resolution", 256);
-        clearComputeCache.Dispatch(3, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);*/
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         lpvSwitch = 0;
         mipSwitch = 0;
@@ -1820,7 +1836,7 @@ public class Nigiri : MonoBehaviour {
                 _rt.format = renderTextureFormat;
             }
 
-            if (vrUsage) _rt.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            //if (vrUsage) _rt.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _rt.filterMode = FilterMode.Point;
             _rt.enableRandomWrite = hasUAV;
 
@@ -1935,25 +1951,6 @@ public class Nigiri : MonoBehaviour {
 
     void LateUpdate()
     {
-        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-        emissiveCameraGO.transform.LookAt(localCam.transform);
-
-        FilterMode filterMode = FilterMode.Point;
-        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
-
-        voxelPropagationGrid.filterMode = filterMode;
-        voxelPropagatedGrid.filterMode = filterMode;
-        voxelGrid1.filterMode = filterMode;
-        voxelGrid2.filterMode = filterMode;
-        voxelGrid3.filterMode = filterMode;
-        voxelGrid4.filterMode = filterMode;
-        voxelGrid5.filterMode = filterMode;
-
         //Occlusion
         DoLazyInitialization();
 
