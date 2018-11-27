@@ -32,7 +32,7 @@
 Shader "Nigiri_VolumeLight_BlitAdd" 
 {
 	Properties{ _MainTex("Texture", any) = "" {} }
-		SubShader
+	SubShader
 	{
 		Pass
 		{
@@ -48,7 +48,6 @@ Shader "Nigiri_VolumeLight_BlitAdd"
 			sampler2D _MainTex;
 			sampler2D _Source;
 			uniform float4 _MainTex_ST;
-			uniform float4 _Source_ST;
 			float4 _Source_TexelSize;
 
 			struct appdata_t 
@@ -67,7 +66,8 @@ Shader "Nigiri_VolumeLight_BlitAdd"
 			{
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
-				o.texcoord = TransformStereoScreenSpaceTex(v.texcoord.xy, _MainTex_ST);
+				o.texcoord = TRANSFORM_TEX(v.texcoord.xy, _MainTex);
+
 				return o;
 			}
 

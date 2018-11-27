@@ -1026,7 +1026,7 @@ public class Nigiri : MonoBehaviour {
             {
                 if (_quarterDepthBuffer == null) ChangeResolution();
                 RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf, 
-                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
 
                 temp.filterMode = FilterMode.Bilinear;
 
@@ -1045,7 +1045,7 @@ public class Nigiri : MonoBehaviour {
                 if (_halfVolumeLightTexture == null) ChangeResolution();
 
                 RenderTexture temp = RenderTexture.GetTemporary(_halfVolumeLightTexture.width, _halfVolumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
-                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
 
                 temp.filterMode = FilterMode.Bilinear;
 
@@ -1064,7 +1064,7 @@ public class Nigiri : MonoBehaviour {
                 if (_volumeLightTexture == null) ChangeResolution();
 
                 RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
-                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, VRTextureUsage.TwoEyes);
+                    RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
 
                 temp.filterMode = FilterMode.Bilinear;
 
@@ -1822,7 +1822,7 @@ public class Nigiri : MonoBehaviour {
                 _rt.format = renderTextureFormat;
             }
 
-            if (vrUsage) _rt.vrUsage = VRTextureUsage.TwoEyes;
+            if (vrUsage) _rt.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _rt.filterMode = FilterMode.Point;
             _rt.enableRandomWrite = hasUAV;
 
@@ -2138,8 +2138,8 @@ public class Nigiri : MonoBehaviour {
         if (_volumeLightTexture != null)
             DestroyImmediate(_volumeLightTexture);
 
-        _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf);
-        //if (localCam.stereoEnabled) _volumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+        _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Default);
+        _volumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
         _volumeLightTexture.name = "VolumeLightBuffer";
         _volumeLightTexture.filterMode = FilterMode.Bilinear;
 
@@ -2151,12 +2151,12 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Half || Resolution == VolumtericResolution.Quarter)
         {
             _halfVolumeLightTexture = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.ARGBHalf);
-            if (localCam.stereoEnabled) _halfVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+            _halfVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _halfVolumeLightTexture.name = "VolumeLightBufferHalf";
             _halfVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _halfDepthBuffer = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.RFloat);
-            if (localCam.stereoEnabled) _halfDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
+            _halfDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _halfDepthBuffer.name = "VolumeLightHalfDepth";
             _halfDepthBuffer.Create();
             _halfDepthBuffer.filterMode = FilterMode.Point;
@@ -2170,12 +2170,12 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Quarter)
         {
             _quarterVolumeLightTexture = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.ARGBHalf);
-            if (localCam.stereoEnabled) _quarterVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+             _quarterVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _quarterVolumeLightTexture.name = "VolumeLightBufferQuarter";
             _quarterVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _quarterDepthBuffer = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.RFloat);
-            if (localCam.stereoEnabled) _quarterDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
+            _quarterDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
             _quarterDepthBuffer.name = "VolumeLightQuarterDepth";
             _quarterDepthBuffer.Create();
             _quarterDepthBuffer.filterMode = FilterMode.Point;

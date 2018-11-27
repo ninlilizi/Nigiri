@@ -372,7 +372,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 				float2 uv = i.uv.xy / i.uv.w;
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);			
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
