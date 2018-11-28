@@ -81,8 +81,8 @@ public class Nigiri : MonoBehaviour {
     public float stochasticFactor = 1;
 
     [Header("Environment Settings")]
-    public bool matchSunColor;
-    public bool matchSkyColor;
+    public bool matchSunColor = true;
+    public bool matchSkyColor = true;
     public Color sunColor;
     public Color skyColor;    
     public Light sunLight;
@@ -120,8 +120,7 @@ public class Nigiri : MonoBehaviour {
         get { return _intensity; }
         set { _intensity = value; }
     }
-       
-    public Color occlusionColor;
+
     [Range(0.1f, 2)]
     public float occlusionGain = 0.9f;
     public bool _ambientOnly = false;
@@ -904,7 +903,6 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
         pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
         pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
-        pvgiMaterial.SetColor("occlusionColor", occlusionColor);
         pvgiMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
         //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);
