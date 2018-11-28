@@ -18,7 +18,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public static RenderTexture positionTexture;
 
     public static ComputeBuffer lightMapBuffer;
-    public static ComputeBuffer positionBuffer;
+    //public static ComputeBuffer positionBuffer;
 
     public ComputeShader clearComputeCache;
 
@@ -63,7 +63,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         _rb[1] = positionTexture.colorBuffer;
 
         lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
-        positionBuffer = new ComputeBuffer(1024 * 1024, sizeof(float) * 4, ComputeBufferType.Default);
+        //positionBuffer = new ComputeBuffer(1024 * 1024, sizeof(float) * 4, ComputeBufferType.Default);
 
         cam.depthTextureMode = DepthTextureMode.Depth;
         cam.clearFlags = CameraClearFlags.Color;
@@ -81,7 +81,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingDepthTexture != null) lightingDepthTexture.Release();
         if (lightMapBuffer != null) lightMapBuffer.Release();
-        if (positionBuffer != null) positionBuffer.Release();
+        //if (positionBuffer != null) positionBuffer.Release();
     }
 
     public static void DoRender()
@@ -89,7 +89,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (lightingTexture != null && lightMapBuffer != null)
         {
             Graphics.SetRandomWriteTarget(5, lightMapBuffer);
-            Graphics.SetRandomWriteTarget(6, positionBuffer);
+            //Graphics.SetRandomWriteTarget(6, positionBuffer);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
             cam.RenderWithShader(emissiveShader, "");
             Graphics.ClearRandomWriteTargets();

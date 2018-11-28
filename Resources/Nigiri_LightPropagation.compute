@@ -11,7 +11,7 @@ uniform float						LPVInverseFalloff;
 
 uniform float4						_Time;
 
-uniform RWStructuredBuffer<uint>	maskClearBuffer;
+uniform RWStructuredBuffer<uint2>	maskClearBuffer;
 
 uniform uint Resolution;
 uniform uint zStagger;
@@ -170,7 +170,7 @@ void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
 	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart, highestVoxelResolution);
 
-	if (maskClearBuffer[threeD2oneD(coordinate)] > 0)
+	if (maskClearBuffer[threeD2oneD(coordinate)].x > 0)
 	{
 		
 		//uint3 coordinate2 = coordinate * 0.5;

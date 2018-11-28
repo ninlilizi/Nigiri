@@ -6,7 +6,7 @@ RWTexture3D<float4> RG0;
 
 //uniform RWStructuredBuffer<float3> RG1;
 uniform RWStructuredBuffer<uint>	lightMapBuffer;
-uniform RWStructuredBuffer<uint>	maskClearBuffer;
+uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
 
 
 
@@ -59,7 +59,7 @@ uint EncodeRGBAuint(float4 color)
 {
 	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
 	float3 hsv = rgb2hsv(color.rgb);
-	hsv.z = pow(hsv.z, 1.0 / 3.0);
+	hsv.z = pow(abs(hsv.z), 1.0 / 3.0);
 
 	uint result = 0;
 
@@ -98,18 +98,15 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 [numthreads(16, 16, 1)]
 void CSMain1(uint3 id : SV_DispatchThreadID)
 {
-	uint origin;
 	for (uint i = 0; i < Resolution; i++)
 	{
 		uint index = threeD2oneD(id);
-		lightMapBuffer[index] = 0;
-
-		if (maskClearBuffer[index] == 0)
+		
+		if (voxelUpdateBuffer[index] == 0 && lightMapBuffer[index] == 0)
 		{
-			//RG0[uint3(id.xy, i)] += DecodeRGBAuint(lightMapBuffer[index]);
 			RG0[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
-			lightMapBuffer[index] = 0;
 		}
-		maskClearBuffer[index] = 0;
+		voxelUpdateBuffer[index] = 0;
+		lightMapBuffer[index] = 0;
 	}
 }

@@ -391,7 +391,7 @@ FragmentOutput frag(vertOutput i)
 			#endif
 
 			uint index1d = threeD2oneD(index3d);
-			lightMapBuffer[index1d] = EncodeRGBAuint(newColor + DecodeRGBAuint(lightMapBuffer[index1d]));
+			if (newColor.r > 0.1 || newColor.g > 0.1 || newColor.b > 0.1) lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
 
 			//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
 			//position /= (2.0 * worldVolumeBoundary);

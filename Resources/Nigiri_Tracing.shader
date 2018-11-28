@@ -304,6 +304,11 @@
 			return result;
 		}
 
+		uint threeD2oneD(float3 coord)
+		{
+			return coord.z * (highestVoxelResolution * highestVoxelResolution) + (coord.y * highestVoxelResolution) + coord.x;
+		}
+
 float4 frag_position(v2f i) : SV_Target
 {
 	// read low res depth and reconstruct world position
@@ -381,6 +386,7 @@ inline float4 GetVoxelInfo2(float3 voxelPosition)
 			tex = max(tex3D(voxelGrid2, voxelPosition + offset), tex);
 		}
 	}
+
 	return tex;
 }
 
