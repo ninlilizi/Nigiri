@@ -52,8 +52,8 @@ public class Nigiri : MonoBehaviour {
     public int subsamplingRatio = 1;
     [Range(1, 32)]
     public int maximumIterations = 8;
-    [Range(0.01f, 4)]
-    public float coneLength = 0.5f;
+    //[Range(0.01f, 4)]
+    //public float coneLength = 0.5f;
     [Range(0.01f, 12)]
     public float coneWidth = 6;
     [Range(0.1f, 4)]
@@ -738,9 +738,9 @@ public class Nigiri : MonoBehaviour {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             if (propagateLight) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
-            else mipFilterCompute.SetTexture( 0, "Source", voxelGrid1);
-            mipFilterCompute.SetTexture(0, "Destination", voxelGrid2);
-            mipFilterCompute.Dispatch(0, destinationRes / 8, destinationRes / 8, 1);
+            else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
+            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
+            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 1)
         {
@@ -848,7 +848,8 @@ public class Nigiri : MonoBehaviour {
         else if (prevPosition.z < localCam.transform.position.z - 2.5) ResetCounters();
         ///
 
-        lengthOfCone = (32.0f * GIAreaSize) / (highestVoxelResolution * Mathf.Tan (Mathf.PI / 6.0f));
+        //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+        lengthOfCone = GIAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
@@ -858,7 +859,7 @@ public class Nigiri : MonoBehaviour {
         pvgiMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
         pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        pvgiMaterial.SetFloat("coneLength", coneLength - 0.99f);
+        //pvgiMaterial.SetFloat("coneLength", coneLength - 2);
         pvgiMaterial.SetFloat("coneWidth", coneWidth);
         pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);

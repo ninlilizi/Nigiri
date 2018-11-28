@@ -17,7 +17,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         float3 fcoord = float3((float)id.x / destinationRes, (float)id.y / destinationRes, (float)i / destinationRes);
         float texel = 1.0 / destinationRes;
 
-        float4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 0.0f);
+        float4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 0.0f) * 1.25;
 
 		Destination[uint3(id.xy, i)] = tex;
     }
@@ -55,7 +55,7 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 
             offset = offsets[j];
 
-            tex += Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5 + offset * texel * 0.5, 0.0);
+            tex += Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5 + offset * texel * 0.125, 0.0) * 1.25;
             c++;
         }
 
