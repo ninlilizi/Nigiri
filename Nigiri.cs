@@ -25,7 +25,7 @@ public class Nigiri : MonoBehaviour {
     public float EmissiveIntensity = 1.0f;
 
     [Header("Voxelization Settings")]
-    public LayerMask emissiveLayer;
+    public LayerMask dynamicPlusEmissiveLayer;
 
     public float GIAreaSize = 50;
     public int highestVoxelResolution = 256;
@@ -327,7 +327,7 @@ public class Nigiri : MonoBehaviour {
             //#endif
 
             // Configure emissive camera
-            emissiveCamera.cullingMask = emissiveLayer;
+            emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
         //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
 
         //Secondary Voxelizor
