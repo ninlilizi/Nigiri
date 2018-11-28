@@ -81,6 +81,8 @@ public class Nigiri : MonoBehaviour {
     public float stochasticFactor = 1;
 
     [Header("Environment Settings")]
+    public bool matchSunColor;
+    public bool matchSkyColor;
     public Color sunColor;
     public Color skyColor;    
     public Light sunLight;
@@ -313,10 +315,19 @@ public class Nigiri : MonoBehaviour {
 
         if ((_volumeLightTexture.width != localCam.pixelWidth || _volumeLightTexture.height != localCam.pixelHeight))
             ChangeResolution();
-        //#endif
 
-        // Configure emissive camera
-        emissiveCamera.cullingMask = emissiveLayer;
+        if (matchSunColor) if (sunLight != null) skyColor = sunLight.color;
+        if (matchSkyColor)
+        {
+            if (RenderSettings.ambientSkyColor != null) skyColor = RenderSettings.ambientSkyColor;
+            else skyColor = RenderSettings.skybox.color;
+        }
+
+
+            //#endif
+
+            // Configure emissive camera
+            emissiveCamera.cullingMask = emissiveLayer;
         //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
 
         //Secondary Voxelizor
