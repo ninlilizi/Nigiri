@@ -316,7 +316,7 @@ public class Nigiri : MonoBehaviour {
         if ((_volumeLightTexture.width != localCam.pixelWidth || _volumeLightTexture.height != localCam.pixelHeight))
             ChangeResolution();
 
-        if (matchSunColor) if (sunLight != null) skyColor = sunLight.color;
+        if (matchSunColor) if (sunLight != null) sunColor = sunLight.color;
         if (matchSkyColor)
         {
             if (RenderSettings.ambientSkyColor != null) skyColor = RenderSettings.ambientSkyColor;
