@@ -640,6 +640,14 @@ public class Nigiri : MonoBehaviour {
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
+        // Clear voxels that were not updated last frame
+        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
+        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
+        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
@@ -703,15 +711,6 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
         if (localCam.stereoEnabled) nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
         else nigiri_VoxelEntry.Dispatch(kernelHandle, injectionTextureResolution.x / 16, injectionTextureResolution.y / 16, 1); ;
-
-        // Clear voxels that were not just updated
-        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
-        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
-        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
 
         // Do light propagation
         if (propagateLight)

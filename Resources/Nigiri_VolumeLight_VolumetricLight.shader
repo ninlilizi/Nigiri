@@ -55,7 +55,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 		sampler3D _NoiseTexture;
 		sampler2D _DitherTexture;
-		
+		half4 _MainTex_ST;
 		float4 _FrustumCorners[4];
 
 		struct appdata
@@ -96,9 +96,13 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 		v2f vert(appdata v)
 		{
 			v2f o;
-			o.pos = mul(_WorldViewProj, v.vertex);
-			o.uv = ComputeScreenPos(o.pos);
-			o.wpos = mul(unity_ObjectToWorld, v.vertex);
+			UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+
+			o.pos = mul(_WorldViewProj, UnityStereoTransformScreenSpaceTex(v.vertex));
+			
+			o.uv = ComputeScreenPos((o.pos));
+
+			o.wpos = mul(unity_ObjectToWorld, UnityStereoTransformScreenSpaceTex(v.vertex));
 			return o;
 		}
 
@@ -369,10 +373,11 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			
 			fixed4 fragPointInside(v2f i) : SV_Target
 			{	
-				float2 uv = i.uv.xy / i.uv.w;
+			float2 uv = i.uv.xy / i.uv.w;
+
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);			
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -418,6 +423,8 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			fixed4 fragPointInside(v2f i) : SV_Target
 			{
 				float2 uv = i.uv.xy / i.uv.w;
+
+
 
 				// read depth and reconstruct world position
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
@@ -465,6 +472,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			fixed4 fragPointOutside(v2f i) : SV_Target
 			{
 				float2 uv = i.uv.xy / i.uv.w;
+				
 
 				// read depth and reconstruct world position
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
@@ -531,6 +539,8 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			fixed4 fragSpotOutside(v2f i) : SV_Target
 			{
 				float2 uv = i.uv.xy / i.uv.w;
+
+
 
 				// read depth and reconstruct world position
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
@@ -607,9 +617,10 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			PSInput vertDir(VSInput i)
 			{
 				PSInput o;
-
-				o.pos = UnityObjectToClipPos(i.vertex);
-				o.uv = i.uv;
+				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
+				o.pos = UnityObjectToClipPos((i.vertex));
+				//o.uv = i.uv.xy / i.uv.w;
+				o.uv = UnityStereoTransformScreenSpaceTex(i.uv);
 
 				// SV_VertexId doesn't work on OpenGL for some reason -> reconstruct id from uv
 				//o.wpos = _FrustumCorners[i.vertexId];
@@ -621,10 +632,15 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			fixed4 fragDir(PSInput i) : SV_Target
 			{
 				float2 uv = i.uv.xy;
+				//uv = UnityStereoTransformScreenSpaceTex(uv);
+				//uv =
+
+
 				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
 				float linearDepth = Linear01Depth(depth);
 
 				float3 wpos = i.wpos;
+
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayDir = wpos - _WorldSpaceCameraPos;				
 				rayDir *= linearDepth;
