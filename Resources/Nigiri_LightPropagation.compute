@@ -11,7 +11,7 @@ uniform float						LPVInverseFalloff;
 
 uniform float4						_Time;
 
-uniform RWStructuredBuffer<uint2>	maskClearBuffer;
+uniform RWStructuredBuffer<uint>	maskClearBuffer;
 
 uniform uint Resolution;
 uniform uint zStagger;
@@ -135,7 +135,7 @@ uint threeD2oneD(float3 coord)
 void CSMain(uint3 id3 : SV_DispatchThreadID)
 {
 	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart, highestVoxelResolution);
-	if (maskClearBuffer[threeD2oneD(coordinate)].x > 0 )
+	if (maskClearBuffer[threeD2oneD(coordinate)] > 0 )
 	{
 		//uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart, highestVoxelResolution);
 		//uint3 coordinate2 = coordinate * 0.5;
@@ -150,7 +150,7 @@ void CSMain1(uint3 id3 : SV_DispatchThreadID)
 	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart, highestVoxelResolution);
 	//uint3 coordinate2 = coordinate * 0.5;
 
-	if (maskClearBuffer[threeD2oneD(coordinate)].x > 0)
+	if (maskClearBuffer[threeD2oneD(coordinate)] > 0)
 	{
 		float4 mixedColor =
 			(RG0[uint3(coordinate.x - 1, coordinate.y, coordinate.z)] +
@@ -170,15 +170,15 @@ void CSMain2(uint3 id3 : SV_DispatchThreadID)
 {
 	uint3 coordinate = coordinateFromLinearIndex(id3.x + offsetStart, highestVoxelResolution);
 
-	if (maskClearBuffer[threeD2oneD(coordinate)].x > 0)
+	if (maskClearBuffer[threeD2oneD(coordinate)] > 0)
 	{
 		
 		//uint3 coordinate2 = coordinate * 0.5;
 		RG1[coordinate.xyz] = float4(RG0[coordinate.xyz].rgb, RG1[coordinate.xyz].a);
 
-		maskClearBuffer[id3.x + offsetStart].x++;
-		if (maskClearBuffer[id3.x + offsetStart].x > 7) maskClearBuffer[id3.x + offsetStart].x = 0;
-		else maskClearBuffer[id3.x + offsetStart].x++;
+		maskClearBuffer[id3.x + offsetStart]++;
+		if (maskClearBuffer[id3.x + offsetStart] > 7) maskClearBuffer[id3.x + offsetStart] = 0;
+		else maskClearBuffer[id3.x + offsetStart]++;
 	}
 }
 

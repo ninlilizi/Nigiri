@@ -168,12 +168,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 1)] +
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 1)]) / 12;
 
-		/*voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 1, voxelPosition.y, voxelPosition.z))] = 1;
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 1, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y + 1, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y - 1, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 1, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 1))] = 1;
-		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 1))] = 1;*/
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 1))] = 1;
 
 
 		float4 mixedColor1 =
@@ -184,12 +184,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 2)] +
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 2)]) / 12;
 
-		/*voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 2, voxelPosition.y, voxelPosition.z))] = 1;
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 2, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y + 2, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y - 2, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 2, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 2))] = 1;
-		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 2))] = 1;*/
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 2))] = 1;
 
 		float4 mixedColor2 =
 			(voxelGrid[float3(voxelPosition.x + 3, voxelPosition.y, voxelPosition.z)] +
@@ -199,12 +199,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 3)] +
 				voxelGrid[float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 3)]) / 12;
 
-		/*voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 3, voxelPosition.y, voxelPosition.z))] = 1;
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 3, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y + 3, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y - 3, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x + 3, voxelPosition.y, voxelPosition.z))] = 1;
 		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z + 3))] = 1;
-		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 3))] = 1;*/
+		voxelUpdateBuffer[threeD2oneD(float3(voxelPosition.x, voxelPosition.y, voxelPosition.z - 3))] = 1;
 
 		float4 mixedColor = lerp(lerp(mixedColor0, lerp(mixedColor1, mixedColor2, 0.25), 0.25), mixedColor1, 0.25);
 
