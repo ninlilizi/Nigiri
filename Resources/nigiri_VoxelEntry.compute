@@ -15,10 +15,9 @@ uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
 
 cbuffer cbSettings : register(b0)
 {
+	uniform int						useDepth;
+	uniform int						_ZBufferParams;
 	uniform int						injectionTextureResolutionX;
-	//uniform int						voxelStaggerSwitch0X;
-	//uniform int						voxelStaggerSwitch0Y;
-	//uniform int						voxelStaggerSwitch0Z;
 	uniform int						nearestNeighbourPropagation;
 	uniform uint					voxelResolution;
 	uniform float 					worldVolumeBoundary;
@@ -28,14 +27,15 @@ cbuffer cbSettings : register(b0)
 	uniform float					emissiveIntensity;
 	uniform float					temporalStablityVsRefreshRate;
 
+	uniform Texture2D<float>			depthTexture;
 	uniform Texture2D<float4>			lightingTexture;
 	uniform Texture2D<float4>			lightingTexture2;
 
 	//uniform Texture2D<float4>			volumeLightTexture;
 
 	uniform Texture2D<float4>			positionTexture;
-	uniform Texture2D<float4>			orthographicPositionTexture;
-	uniform Texture2D<float4>			depthTexture;
+	//uniform Texture2D<float4>			orthographicPositionTexture;
+	//uniform Texture2D<float4>			depthTexture;
 };
 
 
@@ -155,7 +155,16 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	uint3 voxelPosition = GetVoxelPosition(positionTexture[id.xy].rgb);
 	uint index = threeD2oneD(voxelPosition);
 
-	float depth = positionTexture[id.xy].a;
+	float depth = 0;
+	if (useDepth)
+	{
+		float f = 50.0;
+		float n = 0.3;
+
+		depth = (2 * n) / (f + n - depthTexture[id.xy] * (f - n));
+		//depth = depthTexture[id.xy];
+	}
+	else depth = positionTexture[id.xy].a;
 
 	float4 newMixedColor = (0).xxxx;
 	if (nearestNeighbourPropagation == 1)

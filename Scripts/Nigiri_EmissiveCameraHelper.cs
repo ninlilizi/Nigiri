@@ -14,13 +14,14 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public static RenderTexture lightingTexture;
     public static RenderTexture lightingDepthTexture;
     public RenderTexture lightingTextureDebug;
+    public RenderTexture lightingDepthTextureDebug;
 
     public static RenderTexture positionTexture;
 
     public static ComputeBuffer lightMapBuffer;
     //public static ComputeBuffer positionBuffer;
 
-    public ComputeShader clearComputeCache;
+    //public ComputeShader clearComputeCache;
 
     public static Vector2Int injectionResolution;
 
@@ -43,7 +44,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
         emissiveShaderDebug = emissiveShader;
 
-        clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
+        //clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
 
         cam = GetComponent<Camera>();
 
@@ -57,6 +58,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         positionTexture.Create();
 
         lightingTextureDebug = lightingTexture;
+        lightingDepthTextureDebug = lightingDepthTexture;
 
         _rb = new RenderBuffer[2];
         _rb[0] = lightingTexture.colorBuffer;

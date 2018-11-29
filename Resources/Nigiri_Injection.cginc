@@ -39,9 +39,14 @@ struct vertOutput
 
 	float4 cameraRay : TEXCOORD5;
 
-	float4 vertPos : TEXCOORD6;
+	float3 tangent : TEXCOORD6;
+	float3 binormal : TEXCOORD7;
 };
 
+float3 CreateBinormal(float3 normal, float3 tangent, float binormalSign) {
+	return cross(normal, tangent.xyz) *
+		(binormalSign * unity_WorldTransformParams.w);
+}
 
 vertOutput vert(appdata_full v)
 {
@@ -64,6 +69,9 @@ vertOutput vert(appdata_full v)
 	float4 clipSpace = UnityObjectToClipPos(v.vertex);
 	clipSpace.xy /= clipSpace.w;
 	clipSpace.xy = 0.5*(clipSpace.xy + 1.0);
+
+	o.tangent = UnityObjectToWorldDir(v.tangent.xyz);
+	o.binormal = CreateBinormal(v.normal, v.tangent, v.tangent.w);
 
 	return o;
 }
@@ -329,6 +337,33 @@ float GetSmoothness(vertOutput i) {
 	return smoothness * _Smoothness;
 }
 
+float3 GetTangentSpaceNormal(vertOutput i) {
+	float3 normal = float3(0, 0, 1);
+#if defined(_NORMAL_MAP)
+	normal = UnpackScaleNormal(tex2D(_BumpMap, i.uv.xy), _BumpScale);
+#endif
+#if defined(_DETAIL_NORMAL_MAP)
+	float3 detailNormal =
+		UnpackScaleNormal(
+			tex2D(_DetailNormalMap, i.uv.zw), _DetailBumpScale
+		);
+	detailNormal = lerp(float3(0, 0, 1), detailNormal, GetDetailMask(i));
+	normal = BlendNormals(normal, detailNormal);
+#endif
+	return normal;
+}
+
+void InitializeFragmentNormal(vertOutput i) {
+	float3 tangentSpaceNormal = GetTangentSpaceNormal(i);
+	float3 binormal = i.binormal;
+
+	i.normal = normalize(
+		tangentSpaceNormal.x * i.tangent +
+		tangentSpaceNormal.y * binormal +
+		tangentSpaceNormal.z * i.normal
+	);
+}
+
 uint twoD2oneD(float2 coord)
 {
 	return coord.x + 1024 * coord.y;
@@ -348,7 +383,8 @@ struct FragmentOutput {
 
 FragmentOutput frag(vertOutput i)
 {
-	float3 albedo = (0).xxx;
+	float3 color = (0).xxx;
+	float4 newColor = (0).xxxx;
 	//if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
 	//{
 		float3 index3d = GetVoxelPosition(i.wPos);
@@ -367,27 +403,39 @@ FragmentOutput frag(vertOutput i)
 			float3 index3d4 = float3(index3d.x, index3d.y, index3d.z + 1);
 			float3 index3d5 = float3(index3d.x, index3d.y, index3d.z - 1);*/
 
+			InitializeFragmentNormal(i);
+
 			float3 specularTint;
 			float oneMinusReflectivity;
 			float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
-			albedo = DiffuseAndSpecularFromMetallic(
+			float3 albedo = DiffuseAndSpecularFromMetallic(
 				GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
 			);
 
-			float4 color = UNITY_BRDF_PBS(
+			color = UNITY_BRDF_PBS(
 				albedo, specularTint,
 				oneMinusReflectivity, GetSmoothness(i),
 				i.normal, viewDir,
 				CreateLight(i), CreateIndirectLight(i, viewDir));
+
+			//Nin - NKGI - Sample shadowmap to pass to GI
+			float3 lightColor1 = _LightColor0.rgb;
+			float3 lightDir = _WorldSpaceLightPos0.xyz;
+			float4 colorTex = tex2D(_MainTex, i.texcoord.xy);
+			UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
+			float3 N = float3(0.0f, 1.0f, 0.0f);
+			float  NL = saturate(dot(N, lightDir));
+			float3 shadowColor = color.rgb * lightColor1 * NL * atten;
+			///
 			
 			#if defined(_EMISSION_MAP)
-				float4 newColor = tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * EmissiveStrength,
+				newColor = shadowColor + (tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * EmissiveStrength,
+					_Emission.g * EmissiveStrength,
+					_Emission.b * EmissiveStrength, 2)));
+			#else
+				newColor = float4(shadowColor, 0) + (float4(_Emission.r * EmissiveStrength,
 					_Emission.g * EmissiveStrength,
 					_Emission.b * EmissiveStrength, 2));
-			#else
-				float4 newColor = float4(_Emission.r * EmissiveStrength,
-					_Emission.g * EmissiveStrength,
-					_Emission.b * EmissiveStrength, 2);
 			#endif
 
 			uint index1d = threeD2oneD(index3d);
@@ -413,8 +461,8 @@ FragmentOutput frag(vertOutput i)
 	//position /= (2.0 * worldVolumeBoundary);
 
 	FragmentOutput output;
-	output.mrt0 = float4(albedo, 1);
-	output.mrt1 = float4(i.wPos, Linear01Depth(i.wPos.z));
+	output.mrt0 = newColor;
+	output.mrt1 = float4(i.wPos, 1);
 	return output;
 
 }
