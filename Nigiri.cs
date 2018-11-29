@@ -139,6 +139,8 @@ public class Nigiri : MonoBehaviour {
     public bool visualizeDepth = false;
     public bool visualizeOcclusion = false;
     public bool visualizeReflections = false;
+    public bool visualizeVolumetricLight = false;
+    public bool visualizeVolumetricDepth = false;
     public DebugVoxelGrid debugVoxelGrid = DebugVoxelGrid.GRID_1;
     public bool forceImmediateRefresh = false;
 
@@ -473,7 +475,7 @@ public class Nigiri : MonoBehaviour {
             lightingTexture2.vrUsage = VRTextureUsage.TwoEyes;
             blur.vrUsage = VRTextureUsage.TwoEyes;
             gi.vrUsage = VRTextureUsage.TwoEyes;
-
+            depthTexture.vrUsage = VRTextureUsage.TwoEyes; // Might cause regression with voxelization
             lightingTextureMono.Create();
             lightingTexture2Mono.Create();
         }
@@ -937,6 +939,7 @@ public class Nigiri : MonoBehaviour {
 
         //We send half the stereo eyeDistance to the depth blit. To offset correct coordinates in stereo clamping
         depthMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
+        depthMaterial.SetInt("debug", visualizeDepth ? 1 : 0);
         Graphics.Blit(null, depthTexture, depthMaterial);
 
         //Set the modfied depth texture to the tracer
@@ -1054,6 +1057,10 @@ public class Nigiri : MonoBehaviour {
                 Graphics.Blit(_quarterVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 7);
 
                 RenderTexture.ReleaseTemporary(temp);
+                if (visualizeVolumetricDepth)
+                {
+                    Graphics.Blit(_quarterDepthBuffer, destination);
+                }
             }
             else if (Resolution == VolumtericResolution.Half)
             {
@@ -1072,7 +1079,7 @@ public class Nigiri : MonoBehaviour {
 
                 // upscale to full res
                 Graphics.Blit(_halfVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 5);
-                RenderTexture.ReleaseTemporary(temp);
+                RenderTexture.ReleaseTemporary(temp);           
             }
             else
             {
@@ -1091,8 +1098,14 @@ public class Nigiri : MonoBehaviour {
             }
 
             // add volume light buffer to rendered scene
-            _blitAddMaterial.SetTexture("_Source", gi);
-            Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
+            if (visualizeVolumetricLight) Graphics.Blit(_volumeLightTexture, destination);
+            else if (visualizeVolumetricDepth ) Graphics.Blit(GetVolumeLightDepthBuffer(), destination);
+            else
+            {
+                _blitAddMaterial.SetTexture("_Source", gi);
+                Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
+            }
+           
         }
         else
         {
@@ -2175,7 +2188,14 @@ public class Nigiri : MonoBehaviour {
             DestroyImmediate(_volumeLightTexture);
 
         _volumeLightTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGBHalf, RenderTextureReadWrite.Default);
-        _volumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+        //_volumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+
+        if (localCam.stereoEnabled)
+        {
+            _volumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+
+        }
+
         _volumeLightTexture.name = "VolumeLightBuffer";
         _volumeLightTexture.filterMode = FilterMode.Bilinear;
 
@@ -2187,12 +2207,20 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Half || Resolution == VolumtericResolution.Quarter)
         {
             _halfVolumeLightTexture = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.ARGBHalf);
-            _halfVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            //_halfVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+
             _halfVolumeLightTexture.name = "VolumeLightBufferHalf";
             _halfVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _halfDepthBuffer = new RenderTexture(width / 2, height / 2, 0, RenderTextureFormat.RFloat);
-            _halfDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            //_halfDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+
+            if (localCam.stereoEnabled)
+            {
+                _halfVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+                _halfDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
+
+            }
             _halfDepthBuffer.name = "VolumeLightHalfDepth";
             _halfDepthBuffer.Create();
             _halfDepthBuffer.filterMode = FilterMode.Point;
@@ -2206,12 +2234,20 @@ public class Nigiri : MonoBehaviour {
         if (Resolution == VolumtericResolution.Quarter)
         {
             _quarterVolumeLightTexture = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.ARGBHalf);
-             _quarterVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            //_quarterVolumeLightTexture.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+
             _quarterVolumeLightTexture.name = "VolumeLightBufferQuarter";
             _quarterVolumeLightTexture.filterMode = FilterMode.Bilinear;
 
             _quarterDepthBuffer = new RenderTexture(width / 4, height / 4, 0, RenderTextureFormat.RFloat);
-            _quarterDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            //_quarterDepthBuffer.vrUsage = XRSettings.eyeTextureDesc.vrUsage;
+            if (localCam.stereoEnabled)
+            {
+                _quarterVolumeLightTexture.vrUsage = VRTextureUsage.TwoEyes;
+                _quarterDepthBuffer.vrUsage = VRTextureUsage.TwoEyes;
+
+
+            }
             _quarterDepthBuffer.name = "VolumeLightQuarterDepth";
             _quarterDepthBuffer.Create();
             _quarterDepthBuffer.filterMode = FilterMode.Point;
