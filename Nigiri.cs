@@ -130,6 +130,62 @@ public class Nigiri : MonoBehaviour {
     public VolumtericResolution Resolution = VolumtericResolution.Half;
     public Texture DefaultSpotCookie;
 
+    [SerializeField] Nigiri_VolumetricLight.rayMarchQualityMain _globalQuality = Nigiri_VolumetricLight.rayMarchQualityMain.high;
+
+    public Nigiri_VolumetricLight.rayMarchQualityMain globalQuality
+    {
+        get
+        {
+            switch (_globalQuality)
+            {
+                case Nigiri_VolumetricLight.rayMarchQualityMain.low:
+                    globalRaymarchSamples = 4;
+                    break;
+                case Nigiri_VolumetricLight.rayMarchQualityMain.medium:
+                    globalRaymarchSamples = 8;
+
+                    break;
+                case Nigiri_VolumetricLight.rayMarchQualityMain.high:
+                    globalRaymarchSamples = 16;
+
+                    break;
+                case Nigiri_VolumetricLight.rayMarchQualityMain.ultra:
+                    globalRaymarchSamples = 32;
+
+                    break;
+                case Nigiri_VolumetricLight.rayMarchQualityMain.overkill:
+                    globalRaymarchSamples = 64;
+
+                    break;
+                default:
+                    break;
+            }
+            return _globalQuality;
+
+        }
+        set { _globalQuality = value; }
+    }
+    [HideInInspector]
+    public int globalRaymarchSamples;
+    [Range(0.0f, 1.0f)]
+    public float ScatteringCoef = 0.1f;
+    [Range(0.0f, 0.1f)]
+    public float ExtinctionCoef = 0.01f;
+    [Range(0.0f, 1.0f)]
+    public float SkyboxExtinctionCoef = 0.33f;
+    [Range(0.0f, 0.999f)]
+    public float MieG = 0.1f;
+    public bool HeightFog = false;
+    [Range(0, 0.5f)]
+    public float HeightScale = 0.10f;
+    public float GroundLevel = 0;
+
+    public bool Noise = false;
+    public float NoiseScale = 0.015f;
+    public float NoiseIntensity = 1.0f;
+    public float NoiseIntensityOffset = 0.3f;
+    public Vector2 NoiseVelocity = new Vector2(3.0f, 3.0f);
+
 
 
     [Header("Debug Settings")]
@@ -140,7 +196,6 @@ public class Nigiri : MonoBehaviour {
     public bool visualizeOcclusion = false;
     public bool visualizeReflections = false;
     public bool visualizeVolumetricLight = false;
-    public bool visualizeVolumetricDepth = false;
     public DebugVoxelGrid debugVoxelGrid = DebugVoxelGrid.GRID_1;
     public bool forceImmediateRefresh = false;
 
@@ -1039,10 +1094,6 @@ public class Nigiri : MonoBehaviour {
                 Graphics.Blit(_quarterVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 7);
 
                 RenderTexture.ReleaseTemporary(temp);
-                if (visualizeVolumetricDepth)
-                {
-                    Graphics.Blit(_quarterDepthBuffer, destination);
-                }
             }
             else if (Resolution == VolumtericResolution.Half)
             {
@@ -1081,7 +1132,6 @@ public class Nigiri : MonoBehaviour {
 
             // add volume light buffer to rendered scene
             if (visualizeVolumetricLight) Graphics.Blit(_volumeLightTexture, destination);
-            else if (visualizeVolumetricDepth ) Graphics.Blit(GetVolumeLightDepthBuffer(), destination);
             else
             {
                 _blitAddMaterial.SetTexture("_Source", gi);

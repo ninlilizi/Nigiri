@@ -1,4 +1,6 @@
 //  Copyright(c) 2016, Michal Skalsky
+//  Reworked in 2018 by Ninlilizi and ddutchie for SPS VR
+
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
@@ -34,7 +36,7 @@ using System;
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(Light))]
-public class Nigiri_VolumetricLight : MonoBehaviour 
+public class Nigiri_VolumetricLight : MonoBehaviour
 {
     public event Action<Nigiri, Nigiri_VolumetricLight, CommandBuffer, Matrix4x4> CustomRenderEvent;
 
@@ -43,8 +45,25 @@ public class Nigiri_VolumetricLight : MonoBehaviour
     private CommandBuffer _commandBuffer;
     private CommandBuffer _cascadeShadowCommandBuffer;
 
+    public enum rayMarchQuality
+    {
+        globalSetting, low, medium, high, ultra, overkill
+    }
+    [Serializable]
+    public enum rayMarchQualityMain
+    {
+        low, medium, high, ultra, overkill
+    }
+    rayMarchQualityMain nigiriQuality;
+    public rayMarchQuality quality = rayMarchQuality.globalSetting;
+    rayMarchQuality thisQuality;
+
+    [HideInInspector]
     [Range(1, 64)]
     public int SampleCount = 8;
+    [Header("Scattering Settings")]
+    public bool globalScattering = true;
+
     [Range(0.0f, 1.0f)]
     public float ScatteringCoef = 0.1f;
     [Range(0.0f, 0.1f)]
@@ -57,24 +76,94 @@ public class Nigiri_VolumetricLight : MonoBehaviour
     [Range(0, 0.5f)]
     public float HeightScale = 0.10f;
     public float GroundLevel = 0;
+
+    [Header("Noise Settings")]
+    public bool globalNoise = true;
     public bool Noise = false;
     public float NoiseScale = 0.015f;
     public float NoiseIntensity = 1.0f;
     public float NoiseIntensityOffset = 0.3f;
     public Vector2 NoiseVelocity = new Vector2(3.0f, 3.0f);
 
-    [Tooltip("")]    
-    public float MaxRayLength = 400.0f;    
+    [Tooltip("")]
+    public float MaxRayLength = 400.0f;
 
     public Light Light { get { return _light; } }
     public Material VolumetricMaterial { get { return _material; } }
-    
+
     private Vector4[] _frustumCorners = new Vector4[4];
 
     private bool _reversedZ = false;
 
-    void Start() 
+    Nigiri nigiriRef;
+    private void SwitchQuality()
     {
+        switch (quality)
+        {
+            case rayMarchQuality.globalSetting:
+                nigiriQuality = nigiriRef.globalQuality;
+                SampleCount = nigiriRef.globalRaymarchSamples;
+                Debug.Log(SampleCount);
+                break;
+            case rayMarchQuality.low:
+                SampleCount = 4;
+                break;
+            case rayMarchQuality.medium:
+                SampleCount = 8;
+
+                break;
+            case rayMarchQuality.high:
+                SampleCount = 16;
+
+                break;
+            case rayMarchQuality.ultra:
+                SampleCount = 32;
+
+                break;
+            case rayMarchQuality.overkill:
+                SampleCount = 64;
+
+                break;
+            default:
+                break;
+        }
+        thisQuality = quality;
+    }
+    void SetParamaters()
+    {
+        if (globalNoise)
+        {
+            Noise = nigiriRef.Noise;
+            NoiseScale = nigiriRef.NoiseScale;
+            NoiseIntensity = nigiriRef.NoiseIntensity;
+            NoiseIntensityOffset = nigiriRef.NoiseIntensityOffset;
+            NoiseVelocity = nigiriRef.NoiseVelocity;
+        }
+
+        if (globalScattering)
+        {
+
+            ScatteringCoef = nigiriRef.ScatteringCoef;
+
+            ExtinctionCoef = nigiriRef.ExtinctionCoef;
+
+            SkyboxExtinctionCoef = nigiriRef.SkyboxExtinctionCoef;
+
+            MieG = nigiriRef.MieG;
+            HeightFog = nigiriRef.HeightFog;
+
+            HeightScale = nigiriRef.HeightScale;
+            GroundLevel = nigiriRef.GroundLevel;
+
+        }
+
+
+    }
+
+    void Start()
+    {
+        nigiriRef = FindObjectOfType<Nigiri>();
+        if (!nigiriRef) Debug.Log("No Nigiri in Scene");
 #if UNITY_5_5_OR_NEWER
         if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D12 ||
             SystemInfo.graphicsDeviceType == GraphicsDeviceType.Metal || SystemInfo.graphicsDeviceType == GraphicsDeviceType.PlayStation4 ||
@@ -93,11 +182,11 @@ public class Nigiri_VolumetricLight : MonoBehaviour
 
         _light = GetComponent<Light>();
         _light.RemoveAllCommandBuffers();
-        if(_light.type == LightType.Directional)
+        if (_light.type == LightType.Directional)
         {
             _light.AddCommandBuffer(LightEvent.BeforeScreenspaceMask, _commandBuffer);
             _light.AddCommandBuffer(LightEvent.AfterShadowMap, _cascadeShadowCommandBuffer);
-                
+
         }
         else
             _light.AddCommandBuffer(LightEvent.AfterShadowMap, _commandBuffer);
@@ -107,6 +196,8 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             throw new Exception("Critical Error: \"Sandbox/VolumetricLight\" shader is missing. Make sure it is included in \"Always Included Shaders\" in ProjectSettings/Graphics.");
         _material = new Material(shader);
     }
+
+
 
     void OnEnable()
     {
@@ -120,12 +211,16 @@ public class Nigiri_VolumetricLight : MonoBehaviour
     }
 
     public void OnDestroy()
-    {        
+    {
         DestroyImmediate(_material);
     }
 
     private void Nigiri_PreRenderEvent(Nigiri renderer, Matrix4x4 viewProj)
     {
+        if (!nigiriRef) nigiriRef = renderer;
+        if (thisQuality != quality) SwitchQuality();
+        if (nigiriRef && nigiriQuality != nigiriRef.globalQuality && quality == rayMarchQuality.globalSetting) SwitchQuality();
+        SetParamaters();
         // light was destroyed without deregistring, deregister now
         if (_light == null || _light.gameObject == null)
         {
@@ -133,7 +228,8 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             return;
 
         }
-
+        UpdateCamera(Camera.current, _material);
+        //UpdatePosition();
 
         if (!_light.gameObject.activeInHierarchy || _light.enabled == false)
             return;
@@ -155,7 +251,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         }
         //else
         {
-            _material.SetFloat("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);            
+            _material.SetFloat("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
             // downsampled light buffer can't use native zbuffer for ztest, try to perform ztest in pixel shader to avoid ray marching for occulded geometry 
             //_material.EnableKeyword("MANUAL_ZTEST");
         }
@@ -171,11 +267,11 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             _material.DisableKeyword("HEIGHT_FOG");
         }
 
-        if(_light.type == LightType.Point)
+        if (_light.type == LightType.Point)
         {
             SetupPointLight(renderer, viewProj);
         }
-        else if(_light.type == LightType.Spot)
+        else if (_light.type == LightType.Spot)
         {
             SetupSpotLight(renderer, viewProj);
         }
@@ -184,7 +280,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             SetupDirectionalLight(renderer, viewProj);
         }
     }
-    
+
     private void SetupPointLight(Nigiri renderer, Matrix4x4 viewProj)
     {
         _commandBuffer.Clear();
@@ -196,7 +292,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         _material.SetPass(pass);
 
         Mesh mesh = Nigiri.GetPointLightMesh();
-        
+
         float scale = _light.range * 2.0f;
         Matrix4x4 world = Matrix4x4.TRS(transform.position, _light.transform.rotation, new Vector3(scale, scale, scale));
 
@@ -223,7 +319,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
 
             _material.EnableKeyword("POINT_COOKIE");
             _material.DisableKeyword("POINT");
-            
+
             _material.SetTexture("_LightTexture0", _light.cookie);
         }
 
@@ -240,13 +336,13 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             _commandBuffer.DrawMesh(mesh, world, _material, 0, pass);
 
             if (CustomRenderEvent != null)
-                CustomRenderEvent(renderer, this, _commandBuffer, viewProj);            
+                CustomRenderEvent(renderer, this, _commandBuffer, viewProj);
         }
         else
         {
             _material.DisableKeyword("SHADOWS_CUBE");
             renderer.GlobalCommandBuffer.DrawMesh(mesh, world, _material, 0, pass);
-            
+
             if (CustomRenderEvent != null)
                 CustomRenderEvent(renderer, this, renderer.GlobalCommandBuffer, viewProj);
         }
@@ -259,11 +355,11 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         int pass = 1;
         if (!IsCameraInSpotLightBounds())
         {
-            pass = 3;     
+            pass = 3;
         }
 
         Mesh mesh = Nigiri.GetSpotLightMesh();
-                
+
         float scale = _light.range;
         float angleScale = Mathf.Tan((_light.spotAngle + 1) * 0.5f * Mathf.Deg2Rad) * _light.range;
 
@@ -289,7 +385,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         float d = -Vector3.Dot(center, axis);
 
         // update material
-        _material.SetFloat("_PlaneD", d);        
+        _material.SetFloat("_PlaneD", d);
         _material.SetFloat("_CosAngle", Mathf.Cos((_light.spotAngle + 1) * 0.5f * Mathf.Deg2Rad));
 
         _material.SetVector("_ConeApex", new Vector4(apex.x, apex.y, apex.z));
@@ -319,7 +415,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         {
             clip = Matrix4x4.TRS(new Vector3(0.5f, 0.5f, 0.5f), Quaternion.identity, new Vector3(0.5f, 0.5f, 0.5f));
 
-            if(_reversedZ)
+            if (_reversedZ)
                 proj = Matrix4x4.Perspective(_light.spotAngle, 1, _light.range, _light.shadowNearPlane);
             else
                 proj = Matrix4x4.Perspective(_light.spotAngle, 1, _light.shadowNearPlane, _light.range);
@@ -341,7 +437,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             _commandBuffer.DrawMesh(mesh, world, _material, 0, pass);
 
             if (CustomRenderEvent != null)
-                CustomRenderEvent(renderer, this, _commandBuffer, viewProj);       
+                CustomRenderEvent(renderer, this, _commandBuffer, viewProj);
         }
         else
         {
@@ -353,6 +449,8 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         }
     }
 
+
+
     private void SetupDirectionalLight(Nigiri renderer, Matrix4x4 viewProj)
     {
         if (_commandBuffer == null) Start();
@@ -362,7 +460,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
         int pass = 4;
 
         _material.SetPass(pass);
-        
+
         if (Noise)
             _material.EnableKeyword("NOISE");
         else
@@ -385,29 +483,10 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             _material.SetTexture("_LightTexture0", _light.cookie);
         }
 
-        // setup frustum corners for world position reconstruction
-        // bottom left
-        _frustumCorners[0] = Camera.current.ViewportToWorldPoint(new Vector3(0, 0, Camera.current.farClipPlane));
-        // top left
-        _frustumCorners[2] = Camera.current.ViewportToWorldPoint(new Vector3(0, 1, Camera.current.farClipPlane));
-        // top right
-        _frustumCorners[3] = Camera.current.ViewportToWorldPoint(new Vector3(1, 1, Camera.current.farClipPlane));
-        // bottom right
-        _frustumCorners[1] = Camera.current.ViewportToWorldPoint(new Vector3(1, 0, Camera.current.farClipPlane));
-
-#if UNITY_5_4_OR_NEWER
-        _material.SetVectorArray("_FrustumCorners", _frustumCorners);
-#else
-        _material.SetVector("_FrustumCorners0", _frustumCorners[0]);
-        _material.SetVector("_FrustumCorners1", _frustumCorners[1]);
-        _material.SetVector("_FrustumCorners2", _frustumCorners[2]);
-        _material.SetVector("_FrustumCorners3", _frustumCorners[3]);
-#endif
-
         Texture nullTexture = null;
         if (_light.shadows != LightShadows.None)
         {
-            _material.EnableKeyword("SHADOWS_DEPTH");            
+            _material.EnableKeyword("SHADOWS_DEPTH");
             _commandBuffer.Blit(nullTexture, renderer.GetVolumeLightBuffer(), _material, pass);
 
             if (CustomRenderEvent != null)
@@ -421,6 +500,32 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             if (CustomRenderEvent != null)
                 CustomRenderEvent(renderer, this, renderer.GlobalCommandBuffer, viewProj);
         }
+    }
+
+
+    /// <summary>
+    /// VR Fixes for SPS Stereo Raymarching
+    /// </summary>
+    static Vector3[] frustumCorners = new Vector3[4];
+
+    static Matrix4x4 FrustumCornersMatrix(Camera cam, Camera.MonoOrStereoscopicEye eye)
+    {
+        var camtr = cam.transform;
+        cam.CalculateFrustumCorners(new Rect(0, 0, 1, 1), cam.farClipPlane, eye, frustumCorners);
+
+        Matrix4x4 frustumMatrix = Matrix4x4.identity;
+        frustumMatrix.SetRow(0, camtr.TransformVector(frustumCorners[0]));
+        frustumMatrix.SetRow(1, camtr.TransformVector(frustumCorners[3]));
+        frustumMatrix.SetRow(2, camtr.TransformVector(frustumCorners[1]));
+        frustumMatrix.SetRow(3, camtr.TransformVector(frustumCorners[2]));
+        return frustumMatrix;
+    }
+
+    void UpdateCamera(Camera cam, Material m)
+    {
+        m.SetMatrix("_FrustumCorners", FrustumCornersMatrix(cam, cam.stereoActiveEye));
+        if (cam.stereoTargetEye != StereoTargetEyeMask.None && Application.isPlaying && UnityEngine.XR.XRSettings.enabled && UnityEngine.XR.XRDevice.isPresent)
+            m.SetMatrix("_FrustumCorners2", FrustumCornersMatrix(cam, Camera.MonoOrStereoscopicEye.Right));
     }
 
     private bool IsCameraInPointLightBounds()
@@ -442,7 +547,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
 
         // check angle
         float cosAngle = Vector3.Dot(transform.forward, (Camera.current.transform.position - _light.transform.position).normalized);
-        if((Mathf.Acos(cosAngle) * Mathf.Rad2Deg) > (_light.spotAngle + 3) * 0.5f)
+        if ((Mathf.Acos(cosAngle) * Mathf.Rad2Deg) > (_light.spotAngle + 3) * 0.5f)
             return false;
 
         return true;

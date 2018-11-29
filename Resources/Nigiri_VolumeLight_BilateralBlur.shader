@@ -1,6 +1,8 @@
 // Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
 
 //  Copyright(c) 2016, Michal Skalsky
+//  Reworked in 2018 by Ninlilizi and ddutchie for SPS VR
+
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
@@ -124,16 +126,16 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			o.uv = UnityStereoTransformScreenSpaceTex(v.uv);
 #else
 			o.uv00 = v.uv - 0.5 * texelSize.xy;
-			o.uv00 = UnityStereoTransformScreenSpaceTex(o.uv00);
 
 			o.uv10 = o.uv00 + float2(texelSize.x, 0);
-			o.uv10 = UnityStereoTransformScreenSpaceTex(o.uv10);
 
 			o.uv01 = o.uv00 + float2(0, texelSize.y);
-			o.uv01 = UnityStereoTransformScreenSpaceTex(o.uv01);
 
 			o.uv11 = o.uv00 + texelSize.xy;
 			o.uv11 = UnityStereoTransformScreenSpaceTex(o.uv11);
+			o.uv00 = UnityStereoTransformScreenSpaceTex(o.uv00);
+			o.uv01 = UnityStereoTransformScreenSpaceTex(o.uv01);
+			o.uv10 = UnityStereoTransformScreenSpaceTex(o.uv10);
 
 #endif
 			return o;
@@ -152,6 +154,7 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
             o.uv10 = o.uv00 + float2(texelSize.x, 0);
             o.uv01 = o.uv00 + float2(0, texelSize.y);
             o.uv11 = o.uv00 + texelSize.xy;
+
 			o.uv00 = UnityStereoTransformScreenSpaceTex(o.uv00);
 
 			o.uv10 = UnityStereoTransformScreenSpaceTex(o.uv10);
@@ -264,7 +267,7 @@ Shader "Nigiri_VolumeLight_BilateralBlur"
 			const float deviation = kernelRadius / GAUSS_BLUR_DEVIATION; // make it really strong
 
 			float2 uv = input.uv;
-			//uv = UnityStereoTransformScreenSpaceTex(o.uv);
+			//uv = UnityStereoTransformScreenSpaceTex(uv);
 
 			float4 centerColor = _MainTex.Sample(sampler_MainTex, uv);
 			float3 color = centerColor.xyz;

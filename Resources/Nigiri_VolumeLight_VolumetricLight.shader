@@ -1,8 +1,11 @@
+// Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
+
 // Upgrade NOTE: replaced '_Object2World' with 'unity_ObjectToWorld'
 // Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
 // Upgrade NOTE: replaced 'unity_World2Shadow' with 'unity_WorldToShadow'
 
 //  Copyright(c) 2016, Michal Skalsky
+//  Reworked in 2018 by Ninlilizi and ddutchie for SPS VR
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
@@ -56,19 +59,35 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 		sampler3D _NoiseTexture;
 		sampler2D _DitherTexture;
 		half4 _MainTex_ST;
-		float4 _FrustumCorners[4];
+
+		float3 _LeftEyeWorldPos, _RightEyeWorldPos;
+
+		//Fix Stereo View Matrix
+		float4x4 _LeftEyeProjection;
+		float4x4 _RightEyeProjection;
+		float4x4 _LeftEyeToWorld;
+		float4x4 _RightEyeToWorld;
+		//Fix Stereo View Matrix/
 
 		struct appdata
 		{
 			float4 vertex : POSITION;
+			float4 uv : TEXCOORD0;
+
 		};
 		
+		//sampler2D _CameraDepthTexture;
+		half4 _CameraDepthTexture_ST;
+
 		float4x4 _WorldViewProj;
 		float4x4 _MyLightMatrix0;
 		float4x4 _MyWorld2Shadow;
 
-		float3 _CameraForward;
+		int stereoEnabled;
 
+		uniform float3 _StereoCamPosWorld;
+
+		float3 _CameraForward;
 		// x: scattering coef, y: extinction coef, z: range w: skybox extinction coef
 		float4 _VolumetricLight;
         // x: 1 - g^2, y: 1 + g^2, z: 2*g, w: 1/4pi
@@ -85,24 +104,50 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 		float _MaxRayLength;
 
 		int _SampleCount;
+		//Frestrum Raymarch VR https://gist.github.com/kevinw/80593a34b7211d99d251d266e957fe87
+		uniform float4x4 _FrustumCorners;
+#if UNITY_SINGLE_PASS_STEREO
+		uniform float4x4 _FrustumCorners2;
+#endif
 
 		struct v2f
 		{
 			float4 pos : SV_POSITION;
 			float4 uv : TEXCOORD0;
 			float3 wpos : TEXCOORD1;
+			float3 WorldCameraPos : TEXCOORD3;
+			float3 wposray : TEXCOORD2;
+			float2 uv2 : TEXCOORD4;
+
+			UNITY_VERTEX_INPUT_INSTANCE_ID
+			UNITY_VERTEX_OUTPUT_STEREO
+				
+
 		};
 
 		v2f vert(appdata v)
 		{
+			//Single Pass Spots and Point and Area Lights
 			v2f o;
-			UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
 
-			o.pos = mul(_WorldViewProj, UnityStereoTransformScreenSpaceTex(v.vertex));
+			o.pos = UnityObjectToClipPos(v.vertex);
 			
 			o.uv = ComputeScreenPos((o.pos));
+			o.uv2 = TRANSFORM_TEX(v.uv, _MainTex);
 
-			o.wpos = mul(unity_ObjectToWorld, UnityStereoTransformScreenSpaceTex(v.vertex));
+
+			int frustumIndex = v.vertex.x + 2 * (v.vertex.y);
+#if UNITY_SINGLE_PASS_STEREO
+			if (unity_StereoEyeIndex == 0)
+				o.wposray = _FrustumCorners[frustumIndex];
+			else
+				o.wposray = _FrustumCorners2[frustumIndex];
+#else
+			o.wposray = _FrustumCorners[frustumIndex];
+#endif
+
+			o.WorldCameraPos = _WorldSpaceCameraPos;
+			o.wpos = mul(unity_ObjectToWorld, (v.vertex));
 			return o;
 		}
 
@@ -254,6 +299,8 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 #if defined (DIRECTIONAL) || defined (DIRECTIONAL_COOKIE)
             float extinction = 0;
 			cosAngle = dot(_LightDir.xyz, -rayDir);
+			//float extinction = length(_WorldSpaceCameraPos - currentPosition) * _VolumetricLight.y * 0.5;
+
 #else
 			// we don't know about density between camera and light's volume, assume 0.5
 			float extinction = length(_WorldSpaceCameraPos - currentPosition) * _VolumetricLight.y * 0.5;
@@ -275,11 +322,13 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
                 float3 tolight = normalize(currentPosition - _LightPos.xyz);
                 cosAngle = dot(tolight, -rayDir);
 				light *= MieScattering(cosAngle, _MieG);
+				
 #endif          
 //#endif
 				vlight += light;
+				currentPosition += step;
 
-				currentPosition += step;				
+								
 			}
 
 #if defined (DIRECTIONAL) || defined (DIRECTIONAL_COOKIE)
@@ -377,7 +426,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 
 				// read depth and reconstruct world position
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);			
+				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(uv));
 
 				float3 rayStart = _WorldSpaceCameraPos;
 				float3 rayEnd = i.wpos;
@@ -584,11 +633,12 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 
 			CGPROGRAM
 
-			#pragma vertex vertDir
+			#pragma vertex vert
 			#pragma fragment fragDir
 			#pragma target 4.0
 
 			#define UNITY_HDR_ON
+			
 
 			#pragma shader_feature HEIGHT_FOG
 			#pragma shader_feature NOISE
@@ -600,56 +650,21 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 			#define SHADOWS_NATIVE
 			#endif
 
-			struct VSInput
+			fixed4 fragDir(v2f i) : SV_Target
 			{
-				float4 vertex : POSITION;
-				float2 uv : TEXCOORD0;
-				uint vertexId : SV_VertexID;
-			};
 
-			struct PSInput
-			{
-				float4 pos : SV_POSITION;
-				float2 uv : TEXCOORD0;
-				float3 wpos : TEXCOORD1;
-			};
-						
-			PSInput vertDir(VSInput i)
-			{
-				PSInput o;
-				UNITY_INITIALIZE_VERTEX_OUTPUT_STEREO(o);
-				o.pos = UnityObjectToClipPos((i.vertex));
-				//o.uv = i.uv.xy / i.uv.w;
-				o.uv = UnityStereoTransformScreenSpaceTex(i.uv);
+				float2 uv = i.uv2.xy;
 
-				// SV_VertexId doesn't work on OpenGL for some reason -> reconstruct id from uv
-				//o.wpos = _FrustumCorners[i.vertexId];
-				o.wpos = _FrustumCorners[i.uv.x + i.uv.y*2];
-				
-				return o;
-			}
-
-			fixed4 fragDir(PSInput i) : SV_Target
-			{
-				float2 uv = i.uv.xy;
-				//uv = UnityStereoTransformScreenSpaceTex(uv);
-				//uv =
-
-
-				float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, uv);
+				float	depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoScreenSpaceUVAdjust(uv, _CameraDepthTexture_ST));				
 				float linearDepth = Linear01Depth(depth);
-
-				float3 wpos = i.wpos;
-
-				float3 rayStart = _WorldSpaceCameraPos;
-				float3 rayDir = wpos - _WorldSpaceCameraPos;				
+				
+				float3 rayStart = i.WorldCameraPos;
+				float3 rayDir = i.wposray + i.WorldCameraPos;
 				rayDir *= linearDepth;
 
 				float rayLength = length(rayDir);
-				rayDir /= rayLength;
-
+				rayDir /= rayLength;				
 				rayLength = min(rayLength, _MaxRayLength);
-
 				float4 color = RayMarch(i.pos.xy, rayStart, rayDir, rayLength);
 
 				if (linearDepth > 0.999999)
@@ -657,6 +672,7 @@ Shader "Nigiri_VolumeLight_VolumetricLight"
 					color.w = lerp(color.w, 1, _VolumetricLight.w);
 				}
 				return color;
+
 			}
 			ENDCG
 		}

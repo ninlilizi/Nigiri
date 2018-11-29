@@ -1,6 +1,8 @@
 // Upgrade NOTE: replaced 'mul(UNITY_MATRIX_MVP,*)' with 'UnityObjectToClipPos(*)'
 
 //  Copyright(c) 2016, Michal Skalsky
+//  Reworked in 2018 by Ninlilizi and ddutchie for SPS VR
+
 //  All rights reserved.
 //
 //  Redistribution and use in source and binary forms, with or without modification,
@@ -66,25 +68,18 @@ Shader "Nigiri_VolumeLight_BlitAdd"
 			{
 				v2f o;
 				o.vertex = UnityObjectToClipPos(v.vertex);
-				//o.texcoord = TRANSFORM_TEX(v.texcoord.xy, _MainTex);
-				o.texcoord = UnityStereoTransformScreenSpaceTex(v.texcoord);
-
-
+				o.texcoord = TRANSFORM_TEX(v.texcoord.xy, _MainTex);
 				return o;
 			}
 
 			fixed4 frag(v2f i) : SV_Target
 			{
-				//float2 uv = UnityStereoTransformScreenSpaceTex(i.texcoord);
-
-				float4 main = tex2D(_MainTex, i.texcoord);
-				//i.texcoord = UnityStereoTransformScreenSpaceTex(i.texcoord);
-
+				float4 main = tex2D(_MainTex, (i.texcoord));
 #if UNITY_UV_STARTS_AT_TOP
 				if (_Source_TexelSize.y < 0)
 					i.texcoord.y = 1 - i.texcoord.y;
 #endif
-				float4 source = tex2D(_Source, i.texcoord);
+				float4 source = tex2D(_Source, ( i.texcoord));
 
 				source *= main.w;
 				source.xyz += main.xyz;
