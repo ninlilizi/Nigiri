@@ -269,12 +269,14 @@ public class Nigiri : MonoBehaviour {
     int mipSwitch = 0;
     int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
-    int voxelStaggerSwitch = 0;
+    //int voxelStaggerSwitch = 0;
     bool fastResolveSwitch = true;
 
     bool prevPropagateLight = false;
     private Vector3 prevRoatation;
     private Vector3 prevPosition;
+
+    public Vector3 gridOffset;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
@@ -380,17 +382,8 @@ public class Nigiri : MonoBehaviour {
             else skyColor = RenderSettings.skybox.color;
         }
 
+        gridOffset = localCam.transform.position;
 
-            //#endif
-
-            // Configure emissive camera
-            emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
-        //emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(emissiveCamera.farClipPlane * 0.5));
-
-        //Secondary Voxelizor
-        //if (voxelUpdateBuffer != null) voxelUpdateBuffer.Release();
-        //voxelUpdateBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(uint) * 2);
-        ///
     }
 
     // Use this for initialization
@@ -468,8 +461,8 @@ public class Nigiri : MonoBehaviour {
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.5f);
-            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.5f);
+            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.25f);
+            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.25f);
             emissiveCamera.enabled = false;
             emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
             Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
@@ -625,7 +618,7 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid ()
     {
-        //orthographicPositionTexture = Nigiri_EmissiveCameraHelper.positionTexture;
+        emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
         Nigiri_EmissiveCameraHelper.DoRender();
 
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
@@ -909,6 +902,12 @@ public class Nigiri : MonoBehaviour {
 
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
         lengthOfCone = GIAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+
+
+        //Experimental grid offsetting
+        pvgiMaterial.SetVector("gridOffset", gridOffset);
+        ///
+
 
         pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);

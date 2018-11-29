@@ -100,6 +100,8 @@
 		uniform int						neighbourSearch;
 		uniform int						highestValueSearch;
 		uniform uint					rng_state;
+		
+		uniform uint3					gridOffset;
 
 		uniform sampler2D _CameraGBufferTexture2;
 		half4 _CameraGBufferTexture2_ST;
@@ -325,12 +327,12 @@ float4 frag_position(v2f i) : SV_Target
 
 	if (Stereo2Mono)
 	{
-		if (i.uv.x < 0.5) return float4(worldPos, lindepth);
+		if (i.uv.x < 0.5) return float4(worldPos.x - (int)gridOffset.x, worldPos.y - (int)gridOffset.y, worldPos.z - (int)gridOffset.z, lindepth);
 		else return float4(0, 0, 0, 0);
 	}
 	else
 	{
-		return float4(worldPos, lindepth);
+		return float4(worldPos.x - (int)gridOffset.x, worldPos.y - (int)gridOffset.y, worldPos.z - (int)gridOffset.z, lindepth);
 	}
 }
 
@@ -347,6 +349,7 @@ float3 offsets[6] =
 // Returns the voxel position in the grids
 inline float3 GetVoxelPosition(float3 worldPosition)
 {
+	worldPosition = float3(worldPosition.x - (int)gridOffset.x, worldPosition.y - (int)gridOffset.y, worldPosition.z - (int)gridOffset.z);
 	float3 voxelPosition = worldPosition / worldVolumeBoundary;
 	voxelPosition += float3(1.0f, 1.0f, 1.0f);
 	voxelPosition /= 2.0f;
@@ -602,7 +605,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 
 	//float3 cacheOrigin = worldPosition + worldNormal * 0.003 * ConeTraceBias * 1.25;
+
+	//return float4(worldPos.x - (int)gridOffset.x, worldPos.y - (int)gridOffset.y, worldPos.z - (int)gridOffset.z, lindepth);
+
 	float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0) * ConeTraceBias;
+	//coneOrigin =  float3(coneOrigin.x - (int)gridOffset.x, coneOrigin.y - (int)gridOffset.y, coneOrigin.z - (int)gridOffset.z);
 
 	float3 currentPosition = coneOrigin;
 	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
