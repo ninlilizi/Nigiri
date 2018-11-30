@@ -588,17 +588,17 @@ public class Nigiri : MonoBehaviour {
 
 		voxelGrid3 = new RenderTexture (voxelGridDescriptorFloat4);
 
-		voxelGridDescriptorFloat4.width = highestVoxelResolution / 8;
-		voxelGridDescriptorFloat4.height = highestVoxelResolution / 8;
-		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 8;
+		voxelGridDescriptorFloat4.width = highestVoxelResolution / 2;
+		voxelGridDescriptorFloat4.height = highestVoxelResolution / 2;
+		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 2;
 
 		voxelGrid4 = new RenderTexture (voxelGridDescriptorFloat4);
 
-		voxelGridDescriptorFloat4.width = highestVoxelResolution / 16;
-		voxelGridDescriptorFloat4.height = highestVoxelResolution / 16;
-		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 16;
+        voxelGridDescriptorFloat4.width = highestVoxelResolution / 4;
+        voxelGridDescriptorFloat4.height = highestVoxelResolution / 4;
+        voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 4;
 
-		voxelGrid5 = new RenderTexture (voxelGridDescriptorFloat4);
+        voxelGrid5 = new RenderTexture (voxelGridDescriptorFloat4);
 
         //voxelInjectionGrid.filterMode = FilterMode.Bilinear;
 
@@ -692,6 +692,8 @@ public class Nigiri : MonoBehaviour {
 
         // Clear voxels that were not updated last frame
         clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+        clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGrid4);
+        clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGrid5);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
         clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
@@ -726,9 +728,12 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
         nigiri_VoxelEntry.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
+        nigiri_VoxelEntry.SetVector("gridOffset", gridOffset);
 
         // Voxelize main cam
         nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGrid4);
+        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGrid5);
         nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
         nigiri_VoxelEntry.SetInt("useDepth", 0);
@@ -802,7 +807,7 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid3);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
-        else if (mipSwitch == 2)
+        /*else if (mipSwitch == 2)
         {
             int destinationRes = (int)highestVoxelResolution / 8;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
@@ -817,8 +822,8 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid4);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid5);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }
-        mipSwitch = (mipSwitch + 1) % (4);
+        }*/
+        mipSwitch = (mipSwitch + 1) % (2);
 
         //stopwatch.Stop();
         //double after = stopwatch.Elapsed.TotalMilliseconds;
