@@ -217,7 +217,7 @@ public class Nigiri : MonoBehaviour {
     //public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
-    private Material pvgiMaterial;
+    private Material tracerMaterial;
     private Material blitGBuffer0Material;
     private Material fxaaMaterial;
     private Material depthMaterial;
@@ -270,14 +270,17 @@ public class Nigiri : MonoBehaviour {
     int mipSwitch = 0;
     int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
+    int mobilizeGridCounter = 0;
     //int voxelStaggerSwitch = 0;
     bool fastResolveSwitch = true;
+    bool isGridMobile = false;
 
     bool prevPropagateLight = false;
     private Vector3 prevRoatation;
     private Vector3 prevPosition;
+    private Vector3 prevGridPosition;
 
-    public Vector3 gridOffset;
+    private Vector3 gridOffset;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
@@ -344,14 +347,19 @@ public class Nigiri : MonoBehaviour {
         GenerateDitherTexture();
     }
 
-    private void ResetCounters()
+    private void MobilizeGrid()
     {
         lpvSwitch = 0;
         //mipSwitch = 0;
         voxelizationSlice = 0;
+        mobilizeGridCounter = 0;
         fastResolveSwitch = true;
-        prevRoatation = GetComponent<Camera>().transform.eulerAngles;
-        prevPosition = GetComponent<Camera>().transform.position;
+        prevRoatation = localCam.transform.eulerAngles;
+        prevPosition = localCam.transform.position;
+
+        prevGridPosition = gridOffset;
+        gridOffset = localCam.transform.position;
+        isGridMobile = true;
 
         /*clearComputeCache.SetTexture(3, "RG0", voxelPropagatedGrid);
         clearComputeCache.SetInt("Res", 256);
@@ -383,8 +391,20 @@ public class Nigiri : MonoBehaviour {
             else skyColor = RenderSettings.skybox.color;
         }
 
-        gridOffset = localCam.transform.position;
-
+        // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
+        if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) MobilizeGrid();
+        else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) MobilizeGrid();
+        else if (prevRoatation.y > localCam.transform.eulerAngles.y + 45) MobilizeGrid();
+        else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) MobilizeGrid();
+        else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) MobilizeGrid();
+        else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) MobilizeGrid();
+        if (prevPosition.x > localCam.transform.position.x + 1) MobilizeGrid();
+        else if (prevPosition.x < localCam.transform.position.x - 1) MobilizeGrid();
+        else if (prevPosition.y > localCam.transform.position.y + 1) MobilizeGrid();
+        else if (prevPosition.y < localCam.transform.position.y - 1) MobilizeGrid();
+        else if (prevPosition.z > localCam.transform.position.z + 1) MobilizeGrid();
+        else if (prevPosition.z < localCam.transform.position.z - 1) MobilizeGrid();
+        ///
     }
 
     // Use this for initialization
@@ -419,7 +439,7 @@ public class Nigiri : MonoBehaviour {
 		GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
 
 		if (tracingShader == null)  tracingShader = Shader.Find("Hidden/Nigiri_Tracing");
-        pvgiMaterial = new Material(tracingShader);
+        tracerMaterial = new Material(tracingShader);
 
         if (blitGBuffer0Material == null) blitGBuffer0Material = new Material(blitGBufferShader);
         if (depthMaterial == null) depthMaterial = new Material(depthShader);
@@ -432,6 +452,7 @@ public class Nigiri : MonoBehaviour {
         InitializeVoxelGrid();
         createRenderTextures();
         CreateComputeBuffers();
+        MobilizeGrid();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
@@ -649,18 +670,21 @@ public class Nigiri : MonoBehaviour {
                 voxelizationSlice = (voxelizationSlice + 1) % (16);
                 voxelizationSliceOffset = 1048576;
                 voxelizationSliceDispatch = 4096;
+                if (voxelizationSlice == 15 && lpvSwitch == 2) fastResolveSwitch = false;
             }
             else if (fastResolveFactor == 2)
             {
                 voxelizationSlice = (voxelizationSlice + 1) % (32);
                 voxelizationSliceOffset = 524288;
                 voxelizationSliceDispatch = 2048;
+                if (voxelizationSlice == 31 && lpvSwitch == 2) fastResolveSwitch = false;
             }
             else if (fastResolveFactor == 1)
             {
                 voxelizationSlice = (voxelizationSlice + 1) % (64);
                 voxelizationSliceOffset = 262144;
                 voxelizationSliceDispatch = 1024;
+                if (voxelizationSlice == 63 && lpvSwitch == 2) fastResolveSwitch = false;
             }
 
         }
@@ -694,14 +718,17 @@ public class Nigiri : MonoBehaviour {
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
         // Clear voxels that were not updated last frame
-        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-        clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
-        clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
-        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
-        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        if (!isGridMobile)
+        {
+            clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+            clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
+            clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
+            clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+            clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
+            clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+            clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
+            clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        }
 
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
@@ -743,12 +770,9 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
 
         // Voxelize secondary cam
-        //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
-        //nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
         nigiri_VoxelEntry.SetInt("useDepth", 1);
-        //nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
         nigiri_VoxelEntry.Dispatch(kernelHandle, Nigiri_EmissiveCameraHelper.lightingTexture.width / 16, Nigiri_EmissiveCameraHelper.lightingTexture.height / 16, 1); ;
 
         // Do light propagation
@@ -894,78 +918,73 @@ public class Nigiri : MonoBehaviour {
         }
         //Fix stereo rendering matrix/
 
-        // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
-        if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) ResetCounters();
-        else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) ResetCounters();
-        else if (prevRoatation.y > localCam.transform.eulerAngles.y + 45) ResetCounters();
-        else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) ResetCounters();
-        else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) ResetCounters();
-        else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) ResetCounters();
-        if (prevPosition.x > localCam.transform.position.x + 2.5) ResetCounters();
-        else if (prevPosition.x < localCam.transform.position.x - 2.5) ResetCounters();
-        else if (prevPosition.z > localCam.transform.position.z + 2.5) ResetCounters();
-        else if (prevPosition.z < localCam.transform.position.z - 2.5) ResetCounters();
-        ///
-
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
         lengthOfCone = GIAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
 
         //Experimental grid offsetting
-        pvgiMaterial.SetVector("gridOffset", gridOffset);
+        if (isGridMobile)
+        {
+            if (mobilizeGridCounter > 1)
+            {
+                isGridMobile = false;
+                mobilizeGridCounter = 0;
+            }
+            else
+            {
+                mobilizeGridCounter++;
+                tracerMaterial.SetVector("gridOffset", prevGridPosition);
+            }
+        }
+        else tracerMaterial.SetVector("gridOffset", gridOffset);
         ///
 
 
-        pvgiMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
-        pvgiMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        tracerMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
+        tracerMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
         Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
-		pvgiMaterial.SetFloat ("maximumIterations", maximumIterations);
-        pvgiMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
-        pvgiMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
+		tracerMaterial.SetFloat ("maximumIterations", maximumIterations);
+        tracerMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
+        tracerMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
-        pvgiMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        //pvgiMaterial.SetFloat("coneLength", coneLength - 2);
-        pvgiMaterial.SetFloat("coneWidth", coneWidth);
-        pvgiMaterial.SetFloat("ConeTraceBias", coneTraceBias);
-        pvgiMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
-        pvgiMaterial.SetColor("sunColor", sunColor);
-        pvgiMaterial.SetColor("skyColor", skyColor);
-        if (sunLight != null) pvgiMaterial.SetVector("sunLight", sunLight.transform.rotation.eulerAngles);
-        else pvgiMaterial.SetVector("sunLight", new Vector3(80, 0, 0));
-        pvgiMaterial.SetFloat("sunLightInjection", sunLightInjection);
-        pvgiMaterial.SetInt("sphericalSunlight", sphericalSunlight ? 1 : 0);
-        pvgiMaterial.SetInt("neighbourSearch", neighbourSearch ? 1 : 0);
-        pvgiMaterial.SetInt("highestValueSearch", mipLevelSearch ? 1 : 0);
+        tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
+        tracerMaterial.SetFloat("coneWidth", coneWidth);
+        tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);
+        tracerMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
+        tracerMaterial.SetColor("sunColor", sunColor);
+        tracerMaterial.SetColor("skyColor", skyColor);
+        if (sunLight != null) tracerMaterial.SetVector("sunLight", sunLight.transform.rotation.eulerAngles);
+        else tracerMaterial.SetVector("sunLight", new Vector3(80, 0, 0));
+        tracerMaterial.SetFloat("sunLightInjection", sunLightInjection);
+        tracerMaterial.SetInt("sphericalSunlight", sphericalSunlight ? 1 : 0);
+        tracerMaterial.SetInt("neighbourSearch", neighbourSearch ? 1 : 0);
+        tracerMaterial.SetInt("highestValueSearch", mipLevelSearch ? 1 : 0);
 
-        pvgiMaterial.SetFloat("rayStep", rayStep);
-        pvgiMaterial.SetFloat("rayOffset", rayOffset);
-        pvgiMaterial.SetFloat("BalanceGain", BalanceGain * 10);
-        pvgiMaterial.SetFloat("maximumIterationsReflection", (float)reflectionSteps);
-        pvgiMaterial.SetVector("mainCameraPosition", localCam.transform.position);
-        pvgiMaterial.SetInt("DoReflections", traceReflections ? 1 : 0);
-        pvgiMaterial.SetFloat("skyReflectionIntensity", skyReflectionIntensity);
+        tracerMaterial.SetFloat("rayStep", rayStep);
+        tracerMaterial.SetFloat("rayOffset", rayOffset);
+        tracerMaterial.SetFloat("BalanceGain", BalanceGain * 10);
+        tracerMaterial.SetFloat("maximumIterationsReflection", (float)reflectionSteps);
+        tracerMaterial.SetVector("mainCameraPosition", localCam.transform.position);
+        tracerMaterial.SetInt("DoReflections", traceReflections ? 1 : 0);
+        tracerMaterial.SetFloat("skyReflectionIntensity", skyReflectionIntensity);
 
         Shader.SetGlobalInt("highestVoxelResolution", highestVoxelResolution);
-        pvgiMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
-        pvgiMaterial.SetFloat("stochasticSamplingScale", stochasticFactor);
-        pvgiMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
-        pvgiMaterial.SetInt("visualiseCache", VisualiseCache ? 1 : 0);
-        pvgiMaterial.SetInt("visualizeOcclusion", visualizeOcclusion ? 1 : 0);
-        pvgiMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
-        pvgiMaterial.SetFloat("GIGain", GIGain);
-        pvgiMaterial.SetFloat("NearLightGain", NearLightGain);
-        pvgiMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
-        pvgiMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
-        pvgiMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
-        pvgiMaterial.SetFloat("OcclusionPower", OcclusionPower);
-        pvgiMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
-        //pvgiMaterial.SetBuffer("lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        tracerMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
+        tracerMaterial.SetFloat("stochasticSamplingScale", stochasticFactor);
+        tracerMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
+        tracerMaterial.SetInt("visualiseCache", VisualiseCache ? 1 : 0);
+        tracerMaterial.SetInt("visualizeOcclusion", visualizeOcclusion ? 1 : 0);
+        tracerMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
+        tracerMaterial.SetFloat("GIGain", GIGain);
+        tracerMaterial.SetFloat("NearLightGain", NearLightGain);
+        tracerMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
+        tracerMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
+        tracerMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
+        tracerMaterial.SetFloat("OcclusionPower", OcclusionPower);
+        tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
         //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);
         //Graphics.Blit(blur, lightingTexture, _bilateralBlurMaterial, 2);
-
-        
-        
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
@@ -985,13 +1004,10 @@ public class Nigiri : MonoBehaviour {
         depthMaterial.SetInt("debug", visualizeDepth ? 1 : 0);
         Graphics.Blit(null, depthTexture, depthMaterial);
 
-        //Set the modfied depth texture to the tracer
-        //pvgiMaterial.SetTexture("depthTexture", depthTexture);
-
         //We only want to retrieve a single eye for the positional texture if we're in stereo
-        pvgiMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
-        Graphics.Blit(source, positionTexture, pvgiMaterial, 0);
-        pvgiMaterial.SetInt("Stereo2Mono", 0);
+        tracerMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
+        Graphics.Blit(source, positionTexture, tracerMaterial, 0);
+        tracerMaterial.SetInt("Stereo2Mono", 0);
 
         if (visualizeDepth)
         {
@@ -1000,50 +1016,50 @@ public class Nigiri : MonoBehaviour {
         }
 
 
-        if (propagateLight) pvgiMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
-        else pvgiMaterial.SetTexture("voxelGrid1", voxelGrid1);
-        pvgiMaterial.SetTexture("voxelGrid2", voxelGrid2);
-        pvgiMaterial.SetTexture("voxelGrid3", voxelGrid3);
-        pvgiMaterial.SetTexture("voxelGrid4", voxelGrid4);
-        pvgiMaterial.SetTexture("voxelGrid5", voxelGrid5);
-        pvgiMaterial.SetTexture("voxelGridCascade1", voxelGridCascade1);
-        pvgiMaterial.SetTexture("voxelGridCascade2", voxelGridCascade2);
+        if (propagateLight) tracerMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
+        else tracerMaterial.SetTexture("voxelGrid1", voxelGrid1);
+        tracerMaterial.SetTexture("voxelGrid2", voxelGrid2);
+        tracerMaterial.SetTexture("voxelGrid3", voxelGrid3);
+        tracerMaterial.SetTexture("voxelGrid4", voxelGrid4);
+        tracerMaterial.SetTexture("voxelGrid5", voxelGrid5);
+        tracerMaterial.SetTexture("voxelGridCascade1", voxelGridCascade1);
+        tracerMaterial.SetTexture("voxelGridCascade2", voxelGridCascade2);
 
 
         if (VisualizeVoxels) {
 			if (debugVoxelGrid == DebugVoxelGrid.GRID_1) {
-				pvgiMaterial.EnableKeyword ("GRID_1");
-				pvgiMaterial.DisableKeyword ("GRID_2");
-				pvgiMaterial.DisableKeyword ("GRID_3");
-				pvgiMaterial.DisableKeyword ("GRID_4");
-				pvgiMaterial.DisableKeyword ("GRID_5");
+				tracerMaterial.EnableKeyword ("GRID_1");
+				tracerMaterial.DisableKeyword ("GRID_2");
+				tracerMaterial.DisableKeyword ("GRID_3");
+				tracerMaterial.DisableKeyword ("GRID_4");
+				tracerMaterial.DisableKeyword ("GRID_5");
 			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_2) {
-				pvgiMaterial.DisableKeyword ("GRID_1");
-				pvgiMaterial.EnableKeyword ("GRID_2");
-				pvgiMaterial.DisableKeyword ("GRID_3");
-				pvgiMaterial.DisableKeyword ("GRID_4");
-				pvgiMaterial.DisableKeyword ("GRID_5");
+				tracerMaterial.DisableKeyword ("GRID_1");
+				tracerMaterial.EnableKeyword ("GRID_2");
+				tracerMaterial.DisableKeyword ("GRID_3");
+				tracerMaterial.DisableKeyword ("GRID_4");
+				tracerMaterial.DisableKeyword ("GRID_5");
 			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_3) {
-				pvgiMaterial.DisableKeyword ("GRID_1");
-				pvgiMaterial.DisableKeyword ("GRID_2");
-				pvgiMaterial.EnableKeyword ("GRID_3");
-				pvgiMaterial.DisableKeyword ("GRID_4");
-				pvgiMaterial.DisableKeyword ("GRID_5");
+				tracerMaterial.DisableKeyword ("GRID_1");
+				tracerMaterial.DisableKeyword ("GRID_2");
+				tracerMaterial.EnableKeyword ("GRID_3");
+				tracerMaterial.DisableKeyword ("GRID_4");
+				tracerMaterial.DisableKeyword ("GRID_5");
 			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_4) {
-				pvgiMaterial.DisableKeyword ("GRID_1");
-				pvgiMaterial.DisableKeyword ("GRID_2");
-				pvgiMaterial.DisableKeyword ("GRID_3");
-				pvgiMaterial.EnableKeyword ("GRID_4");
-				pvgiMaterial.DisableKeyword ("GRID_5");
+				tracerMaterial.DisableKeyword ("GRID_1");
+				tracerMaterial.DisableKeyword ("GRID_2");
+				tracerMaterial.DisableKeyword ("GRID_3");
+				tracerMaterial.EnableKeyword ("GRID_4");
+				tracerMaterial.DisableKeyword ("GRID_5");
 			} else {
-				pvgiMaterial.DisableKeyword ("GRID_1");
-				pvgiMaterial.DisableKeyword ("GRID_2");
-				pvgiMaterial.DisableKeyword ("GRID_3");
-				pvgiMaterial.DisableKeyword ("GRID_4");
-				pvgiMaterial.EnableKeyword ("GRID_5");
+				tracerMaterial.DisableKeyword ("GRID_1");
+				tracerMaterial.DisableKeyword ("GRID_2");
+				tracerMaterial.DisableKeyword ("GRID_3");
+				tracerMaterial.DisableKeyword ("GRID_4");
+				tracerMaterial.EnableKeyword ("GRID_5");
 			}
 
-			Graphics.Blit (source, destination, pvgiMaterial, 1);
+			Graphics.Blit (source, destination, tracerMaterial, 1);
             return;
 		} else {
             if (usePathCache)
@@ -1069,7 +1085,7 @@ public class Nigiri : MonoBehaviour {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
             Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
             Graphics.SetRandomWriteTarget(1, pathCacheBuffer.back);
-            Graphics.Blit (source, gi, pvgiMaterial, 2);
+            Graphics.Blit (source, gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
 
 
