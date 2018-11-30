@@ -497,7 +497,6 @@ inline float4 GetCascadeVoxelInfo2(float3 voxelPosition)
 // Returns the voxel information from cascade 2
 inline float4 GetCascadeVoxelInfo3(float3 voxelPosition)
 {
-
 	float4 tex = tex3D(voxelGridCascade2, voxelPosition);
 
 	if (neighbourSearch)
@@ -603,17 +602,45 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 	// Default value
 	float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-	// Check if the given position is inside the voxelized volume
-	if ((abs(worldPosition.x) < worldVolumeBoundary) && (abs(worldPosition.y) < worldVolumeBoundary) && (abs(worldPosition.z) < worldVolumeBoundary))
-	{
-		worldPosition += worldVolumeBoundary;
-		worldPosition /= (2.0f * worldVolumeBoundary);
+	uint cascade = 1;
+	float cascade1 = 0.33;
+	float cascade2 = 0.66;
+	float cascade3 = 1.00;
+	int cascadeBoundary = worldVolumeBoundary;
+	int cascadeBoundary1 = worldVolumeBoundary * cascade1;
+	int cascadeBoundary2 = worldVolumeBoundary * cascade2;
+	int cascadeBoundary3 = worldVolumeBoundary * cascade3;
 
-		info = tex3D(voxelGrid1, worldPosition);
-		info += tex3D(voxelGrid2, worldPosition);
-		info += tex3D(voxelGrid3, worldPosition);
-		info += tex3D(voxelGrid4, worldPosition);
-		info += tex3D(voxelGrid5, worldPosition);
+	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
+	{
+		cascade = 1;
+		cascadeBoundary = cascadeBoundary1;
+	}
+	else if ((abs(worldPosition.x) < cascadeBoundary2) && (abs(worldPosition.y) < cascadeBoundary2) && (abs(worldPosition.z) < cascadeBoundary2))
+	{
+		cascade = 2;
+		cascadeBoundary = cascadeBoundary2;
+	}
+	else if ((abs(worldPosition.x) < cascadeBoundary3) && (abs(worldPosition.y) < cascadeBoundary3) && (abs(worldPosition.z) < cascadeBoundary3))
+	{
+		cascade = 3;
+		cascadeBoundary = cascadeBoundary3;
+	}
+
+	// Check if the given position is inside the voxelized volume
+	if ((abs(worldPosition.x) < cascadeBoundary) && (abs(worldPosition.y) < cascadeBoundary) && (abs(worldPosition.z) < cascadeBoundary))
+	{
+		worldPosition += cascadeBoundary;
+		worldPosition /= (2.0f * cascadeBoundary);
+
+		if (cascade == 1)
+		{
+			info = tex3D(voxelGrid1, worldPosition);
+			info += tex3D(voxelGrid2, worldPosition);
+			info += tex3D(voxelGrid3, worldPosition);
+			info += tex3D(voxelGrid4, worldPosition);
+			info += tex3D(voxelGrid5, worldPosition);
+		}
 	}
 
 	return info;
@@ -622,6 +649,8 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 // Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
 inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
 {
+	worldPosition = worldPosition.xyz - (int3)gridOffset.xyz;
+
 	// Color for storing all the samples
 	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
