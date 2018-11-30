@@ -457,7 +457,7 @@ public class Nigiri : MonoBehaviour {
         InitializeVoxelGrid();
         createRenderTextures();
         CreateComputeBuffers();
-        MobilizeGrid();
+        //MobilizeGrid();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
