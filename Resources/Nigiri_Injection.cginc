@@ -14,6 +14,7 @@ float EmissiveStrength;
 sampler2D _CameraDepthTexture;
 float worldVolumeBoundary;
 int highestVoxelResolution;
+uniform uint3					gridOffset;
 
 uniform RWStructuredBuffer<uint> lightMapBuffer : register(u5);
 uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
@@ -137,7 +138,10 @@ uint EncodeRGBAuint(float4 color)
 
 inline uint3 GetVoxelPosition(float3 worldPosition)
 {
-	float3 encodedPosition = worldPosition / worldVolumeBoundary;
+	worldPosition = worldPosition.xyz - (int3)gridOffset.xyz;
+	float3 cascadeBoundary = worldVolumeBoundary * 0.33f;
+
+	float3 encodedPosition = worldPosition / cascadeBoundary;
 	encodedPosition += float3(1.0f, 1.0f, 1.0f);
 	encodedPosition /= 2.0f;
 	uint3 voxelPosition = (uint3)(encodedPosition * highestVoxelResolution);

@@ -25,6 +25,8 @@
 		uniform sampler3D				voxelGrid3;
 		uniform sampler3D				voxelGrid4;
 		uniform sampler3D				voxelGrid5;
+		uniform sampler3D				voxelGridCascade1;
+		uniform sampler3D				voxelGridCascade2;	
 
 		uniform sampler2D 				_MainTex;
 		uniform sampler2D				_IndirectTex;
@@ -347,7 +349,7 @@ float3 offsets[6] =
 };
 
 // Returns the voxel position in the grids
-inline float3 GetVoxelPosition(float3 worldPosition)
+inline float4 GetVoxelPosition(float3 worldPosition)
 {
 	worldPosition = worldPosition.xyz - (int3)gridOffset.xyz;
 	   
@@ -355,10 +357,10 @@ inline float3 GetVoxelPosition(float3 worldPosition)
 	float cascade1 = 0.33;
 	float cascade2 = 0.66;
 	float cascade3 = 1.00;
-	uint cascadeBoundary = worldVolumeBoundary;
-	uint cascadeBoundary1 = worldVolumeBoundary * cascade1;
-	uint cascadeBoundary2 = worldVolumeBoundary * cascade2;
-	uint cascadeBoundary3 = worldVolumeBoundary * cascade3;
+	int cascadeBoundary = worldVolumeBoundary;
+	int cascadeBoundary1 = worldVolumeBoundary * cascade1;
+	int cascadeBoundary2 = worldVolumeBoundary * cascade2;
+	int cascadeBoundary3 = worldVolumeBoundary * cascade3;
 
 	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
 	{
@@ -381,15 +383,14 @@ inline float3 GetVoxelPosition(float3 worldPosition)
 	voxelPosition += float3(1.0f, 1.0f, 1.0f);
 	voxelPosition /= 2.0f;
 
-	return voxelPosition;
+	return float4(voxelPosition, cascade);
 }
 
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfo1(float3 voxelPosition)
 {
-	//float4 tex = float4(0, 0, 0, tex3D(voxelGrid2, voxelPosition).a);
-	//float4 tex = float4(0, 0, 0, 0);
 	float4 tex = tex3D(voxelGrid1, voxelPosition);
+	
 	if (neighbourSearch)
 	{
 		[unroll]
@@ -407,6 +408,7 @@ inline float4 GetVoxelInfo1(float3 voxelPosition)
 inline float4 GetVoxelInfo2(float3 voxelPosition)
 {
 	float4 tex = tex3D(voxelGrid2, voxelPosition);
+
 	if (neighbourSearch)
 	{
 		[unroll]
@@ -425,6 +427,7 @@ inline float4 GetVoxelInfo2(float3 voxelPosition)
 inline float4 GetVoxelInfo3(float3 voxelPosition)
 {
 	float4 tex = tex3D(voxelGrid3, voxelPosition);
+
 	if (neighbourSearch)
 	{
 		[unroll]
@@ -467,6 +470,44 @@ inline float4 GetVoxelInfo5(float3 voxelPosition)
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
 			tex = max(tex3D(voxelGrid5, voxelPosition + offset), tex);
+		}
+	}
+	return tex;
+}
+
+// Returns the voxel information from cascade 1
+inline float4 GetCascadeVoxelInfo2(float3 voxelPosition)
+{
+	float4 tex = tex3D(voxelGridCascade1, voxelPosition);
+
+	if (neighbourSearch)
+	{
+		[unroll]
+		for (int j = 0; j < 6; j++)
+		{
+			float3 offset = float3(0, 0, 0);
+			offset = offsets[j];
+			tex = max(tex3D(voxelGridCascade1, voxelPosition + offset), tex);
+		}
+	}
+
+	return tex;
+}
+
+// Returns the voxel information from cascade 2
+inline float4 GetCascadeVoxelInfo3(float3 voxelPosition)
+{
+
+	float4 tex = tex3D(voxelGridCascade2, voxelPosition);
+
+	if (neighbourSearch)
+	{
+		[unroll]
+		for (int j = 0; j < 6; j++)
+		{
+			float3 offset = float3(0, 0, 0);
+			offset = offsets[j];
+			tex = max(tex3D(voxelGridCascade2, voxelPosition + offset), tex);
 		}
 	}
 	return tex;
@@ -518,17 +559,22 @@ float4 frag_debug(v2f i) : SV_Target
 	}
 
 	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float4 voxelPosition = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	#if defined(GRID_1)
 	voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
 	#endif
 
 	#if defined(GRID_2)
-	voxelInfo = GetVoxelInfo2(GetVoxelPosition(worldPos));
+	voxelPosition = GetVoxelPosition(worldPos);
+	if (voxelPosition.w == 1) voxelInfo = GetVoxelInfo2(voxelPosition);
+	else if (voxelPosition.w == 2) voxelInfo = GetCascadeVoxelInfo2(voxelPosition);
 	#endif
 
 	#if defined(GRID_3)
-	voxelInfo = GetVoxelInfo3(GetVoxelPosition(worldPos));
+	voxelPosition = GetVoxelPosition(worldPos);
+	if (voxelPosition.w == 1) voxelInfo = GetVoxelInfo3(voxelPosition);
+	else if (voxelPosition.w == 3) voxelInfo = GetCascadeVoxelInfo3(voxelPosition);
 	#endif
 
 	#if defined(GRID_4)
@@ -650,7 +696,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
 	float2 interMult = float2(0, 0);
-	float3 voxelPosition = (0).xxx;
+	float4 voxelPosition = (0).xxxx;
 	
 	// Sample voxel grid 2
 	hitFound = 0;
@@ -670,7 +716,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo2(voxelPosition) * GISampleWeight(voxelPosition);
+			if (voxelPosition.w == 1) currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			if (voxelPosition.w == 2) currentVoxelInfo = GetCascadeVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -715,7 +762,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo3(voxelPosition) * GISampleWeight(voxelPosition);
+			if (voxelPosition.w == 1) currentVoxelInfo = GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			if (voxelPosition.w == 3) currentVoxelInfo = GetCascadeVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -740,7 +788,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	hitFound = 0;
 	gi = (0.0f).xxxx;
 	skyVisibility = 1.0f;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration2);
+	currentPosition = worldPosition + (coneDirection * coneStep * iteration4);
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection;
@@ -754,7 +802,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo4(voxelPosition) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
@@ -779,7 +827,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	hitFound = 0;
 	gi = (0.0f).xxxx;
 	skyVisibility = 1.0f;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration3);
+	currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection;
@@ -793,7 +841,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo5(voxelPosition) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (!depthStopOptimization) hitFound = 1.0f;
