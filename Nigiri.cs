@@ -349,11 +349,9 @@ public class Nigiri : MonoBehaviour {
 
     private void MobilizeGrid()
     {
-        lpvSwitch = 0;
-        //mipSwitch = 0;
-        voxelizationSlice = 0;
+        TriggerFastUpdate();
+
         mobilizeGridCounter = 0;
-        fastResolveSwitch = true;
         prevRoatation = localCam.transform.eulerAngles;
         prevPosition = localCam.transform.position;
 
@@ -370,7 +368,14 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);*/
     }
 
-    void Update()
+    private void TriggerFastUpdate()
+    {
+        lpvSwitch = 0;
+        voxelizationSlice = 0;
+        fastResolveSwitch = true;
+    }
+
+        void Update()
     {
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
@@ -392,18 +397,18 @@ public class Nigiri : MonoBehaviour {
         }
 
         // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
-        if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) MobilizeGrid();
-        else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) MobilizeGrid();
-        else if (prevRoatation.y > localCam.transform.eulerAngles.y + 45) MobilizeGrid();
-        else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) MobilizeGrid();
-        else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) MobilizeGrid();
-        else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) MobilizeGrid();
+        if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) TriggerFastUpdate();
+        else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) TriggerFastUpdate();
+        else if (prevRoatation.y > localCam.transform.eulerAngles.y + 45) TriggerFastUpdate();
+        else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) TriggerFastUpdate();
+        else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) TriggerFastUpdate();
+        else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) TriggerFastUpdate();
         if (prevPosition.x > localCam.transform.position.x + 1) MobilizeGrid();
-        else if (prevPosition.x < localCam.transform.position.x - 1) MobilizeGrid();
-        else if (prevPosition.y > localCam.transform.position.y + 1) MobilizeGrid();
-        else if (prevPosition.y < localCam.transform.position.y - 1) MobilizeGrid();
-        else if (prevPosition.z > localCam.transform.position.z + 1) MobilizeGrid();
-        else if (prevPosition.z < localCam.transform.position.z - 1) MobilizeGrid();
+        else if (prevPosition.x < localCam.transform.position.x - (GIAreaSize * 0.165)) MobilizeGrid();
+        else if (prevPosition.y > localCam.transform.position.y + (GIAreaSize * 0.165)) MobilizeGrid();
+        else if (prevPosition.y < localCam.transform.position.y - (GIAreaSize * 0.165)) MobilizeGrid();
+        else if (prevPosition.z > localCam.transform.position.z + (GIAreaSize * 0.165)) MobilizeGrid();
+        else if (prevPosition.z < localCam.transform.position.z - (GIAreaSize * 0.165)) MobilizeGrid();
         ///
     }
 
@@ -718,8 +723,8 @@ public class Nigiri : MonoBehaviour {
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
         // Clear voxels that were not updated last frame
-        if (!isGridMobile)
-        {
+        //if (!isGridMobile)
+        //{
             clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
@@ -728,7 +733,7 @@ public class Nigiri : MonoBehaviour {
             clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
             clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
             clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-        }
+        //}
 
         // Kernel index for the entry point in compute shader
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
@@ -925,7 +930,7 @@ public class Nigiri : MonoBehaviour {
         //Experimental grid offsetting
         if (isGridMobile)
         {
-            if (mobilizeGridCounter > 1)
+            if (mobilizeGridCounter > 3)
             {
                 isGridMobile = false;
                 mobilizeGridCounter = 0;
