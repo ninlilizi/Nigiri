@@ -755,7 +755,7 @@ public class Nigiri : MonoBehaviour {
         
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", Nigiri_EmissiveCameraHelper.lightingDepthTexture);
-        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
+        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
