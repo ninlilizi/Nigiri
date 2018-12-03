@@ -103,7 +103,7 @@ public class Nigiri_VolumetricLight : MonoBehaviour
             case rayMarchQuality.globalSetting:
                 nigiriQuality = nigiriRef.globalQuality;
                 SampleCount = nigiriRef.globalRaymarchSamples;
-                Debug.Log(SampleCount);
+                //Debug.Log(SampleCount);
                 break;
             case rayMarchQuality.low:
                 SampleCount = 4;

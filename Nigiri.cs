@@ -403,7 +403,7 @@ public class Nigiri : MonoBehaviour {
         else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) TriggerFastUpdate();
         else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) TriggerFastUpdate();
         else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) TriggerFastUpdate();
-        if (prevPosition.x > localCam.transform.position.x + 1) MobilizeGrid();
+        if (prevPosition.x > localCam.transform.position.x + (GIAreaSize * 0.165)) MobilizeGrid();
         else if (prevPosition.x < localCam.transform.position.x - (GIAreaSize * 0.165)) MobilizeGrid();
         else if (prevPosition.y > localCam.transform.position.y + (GIAreaSize * 0.165)) MobilizeGrid();
         else if (prevPosition.y < localCam.transform.position.y - (GIAreaSize * 0.165)) MobilizeGrid();
@@ -457,7 +457,7 @@ public class Nigiri : MonoBehaviour {
         InitializeVoxelGrid();
         createRenderTextures();
         CreateComputeBuffers();
-        //MobilizeGrid();
+        MobilizeGrid();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
