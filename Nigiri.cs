@@ -648,8 +648,7 @@ public class Nigiri : MonoBehaviour {
 	private void UpdateVoxelGrid ()
     {
         emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
-        Nigiri_EmissiveCameraHelper.DoRender();
-
+        if (dynamicPlusEmissiveLayer.value != 0) Nigiri_EmissiveCameraHelper.DoRender();
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
 
         if (fastResolveSwitch)
@@ -774,11 +773,14 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("useDepth", 0);
         nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
 
-        // Voxelize secondary cam
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
-        nigiri_VoxelEntry.SetInt("useDepth", 1);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, Nigiri_EmissiveCameraHelper.lightingTexture.width / 16, Nigiri_EmissiveCameraHelper.lightingTexture.height / 16, 1); ;
+        if (dynamicPlusEmissiveLayer.value != 0)
+        {
+            // Voxelize secondary cam
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
+            nigiri_VoxelEntry.SetInt("useDepth", 1);
+            nigiri_VoxelEntry.Dispatch(kernelHandle, Nigiri_EmissiveCameraHelper.lightingTexture.width / 16, Nigiri_EmissiveCameraHelper.lightingTexture.height / 16, 1); ;
+        }
 
         // Do light propagation
         if (propagateLight)
