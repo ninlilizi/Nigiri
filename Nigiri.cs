@@ -54,8 +54,8 @@ public class Nigiri : MonoBehaviour {
     public int maximumIterations = 8;
     //[Range(0.01f, 4)]
     //public float coneLength = 0.5f;
-    [Range(0.01f, 12)]
-    public float coneWidth = 6;
+    //[Range(0.01f, 12)]
+    //public float coneWidth = 6;
     [Range(0.1f, 4)]
     public float GIGain = 1;
     [Range(0.1f, 4)]
@@ -189,7 +189,6 @@ public class Nigiri : MonoBehaviour {
 
 
     [Header("Debug Settings")]
-    public string vramUsed;
     public bool VisualiseGI = false;
     private bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
@@ -412,7 +411,27 @@ public class Nigiri : MonoBehaviour {
         else if (prevPosition.z < localCam.transform.position.z - (GIAreaSize * 0.165)) MobilizeGrid();
         ///
 
-        vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " MB";
+        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
+        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
+        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
+        emissiveCameraGO.transform.LookAt(localCam.transform);
+
+        FilterMode filterMode = FilterMode.Point;
+        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
+
+        voxelPropagationGrid.filterMode = filterMode;
+        voxelPropagatedGrid.filterMode = filterMode;
+        voxelGridCascade1.filterMode = filterMode;
+        voxelGrid1.filterMode = filterMode;
+        voxelGrid2.filterMode = filterMode;
+        voxelGrid3.filterMode = filterMode;
+        voxelGrid4.filterMode = filterMode;
+        voxelGrid5.filterMode = filterMode;
+
+        UpdateVoxelGrid();
     }
 
     // Use this for initialization
@@ -650,8 +669,12 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid ()
     {
-        emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
-        if (dynamicPlusEmissiveLayer.value != 0) Nigiri_EmissiveCameraHelper.DoRender();
+        if (dynamicPlusEmissiveLayer != 0)
+        {
+            emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
+            Nigiri_EmissiveCameraHelper.DoRender();
+        }
+
         if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
 
         if (fastResolveSwitch)
@@ -755,7 +778,7 @@ public class Nigiri : MonoBehaviour {
         
         nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", Nigiri_EmissiveCameraHelper.lightingDepthTexture);
-        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity);
+        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
@@ -776,7 +799,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("useDepth", 0);
         nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
 
-        if (dynamicPlusEmissiveLayer.value != 0)
+        if (dynamicPlusEmissiveLayer != 0)
         {
             // Voxelize secondary cam
             nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
@@ -958,7 +981,7 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
         Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
         tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
-        tracerMaterial.SetFloat("coneWidth", coneWidth);
+        //tracerMaterial.SetFloat("coneWidth", coneWidth);
         tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         tracerMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
         tracerMaterial.SetColor("sunColor", sunColor);
@@ -1274,136 +1297,6 @@ public class Nigiri : MonoBehaviour {
         prevPosition = GetComponent<Camera>().transform.position;
     }
 
-    public int bitValue(RenderTexture x)
-    {
-
-        int bit = 0;
-        switch (x.format)
-        {
-            case RenderTextureFormat.ARGB32:
-                break;
-            case RenderTextureFormat.Depth:
-                break;
-            case RenderTextureFormat.ARGBHalf:
-                bit = 16 * 4;
-                break;
-            case RenderTextureFormat.Shadowmap:
-                break;
-            case RenderTextureFormat.RGB565:
-                break;
-            case RenderTextureFormat.ARGB4444:
-                break;
-            case RenderTextureFormat.ARGB1555:
-                break;
-            case RenderTextureFormat.Default:
-                break;
-            case RenderTextureFormat.ARGB2101010:
-                break;
-            case RenderTextureFormat.DefaultHDR:
-                break;
-            case RenderTextureFormat.ARGB64:
-                break;
-            case RenderTextureFormat.ARGBFloat:
-                break;
-            case RenderTextureFormat.RGFloat:
-                break;
-            case RenderTextureFormat.RGHalf:
-                break;
-            case RenderTextureFormat.RFloat:
-                bit = 32;
-                break;
-            case RenderTextureFormat.RHalf:
-                bit = 16;
-                break;
-            case RenderTextureFormat.R8:
-                bit = 8;
-                break;
-            case RenderTextureFormat.ARGBInt:
-                break;
-            case RenderTextureFormat.RGInt:
-                break;
-            case RenderTextureFormat.RInt:
-                break;
-            case RenderTextureFormat.BGRA32:
-                break;
-            case RenderTextureFormat.RGB111110Float:
-                break;
-            case RenderTextureFormat.RG32:
-                break;
-            case RenderTextureFormat.RGBAUShort:
-                break;
-            case RenderTextureFormat.RG16:
-                break;
-            case RenderTextureFormat.BGRA10101010_XR:
-                break;
-            case RenderTextureFormat.BGR101010_XR:
-                break;
-            default:
-                break;
-        }
-        if (bit == 0)
-            Debug.Log(bit + " " + x.name + " bit Value is 0, resolve");
-        return bit;
-    }
-
-
-    ///// <summary>
-    ///// Estimates the VRAM usage of all the render textures used to render GI.
-    ///// </summary>
-    public float vramUsage  //TODO: Update vram usage calculation
-    {
-        get
-        {
-            if (!enabled)
-            {
-                return 0.0f;
-            }
-            long v = 0;
-
-            if (lightingTexture != null)
-                v += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
-
-            if (lightingTextureMono != null)
-                v += lightingTextureMono.width * lightingTextureMono.height * bitValue(lightingTextureMono); ;
-
-            if (positionTexture != null)
-                v += positionTexture.width * positionTexture.height * bitValue(positionTexture);
-
-            if (depthTexture != null)
-                v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
-
-            if (gi != null)
-                v += gi.width * gi.height * bitValue(depthTexture);
-
-            if (blur != null)
-                v += blur.width * blur.height * bitValue(blur);
-
-            //if (voxelInjectionGrid != null)
-            //    v += voxelInjectionGrid.width * voxelInjectionGrid.height * bitValue(voxelInjectionGrid);
-            if (voxelPropagatedGrid != null)
-                v += voxelPropagatedGrid.width * voxelPropagatedGrid.height * bitValue(voxelPropagatedGrid);
-            if (voxelGrid1 != null)
-                v += voxelGrid1.width * voxelGrid1.height * bitValue(voxelGrid1);
-            if (voxelGrid2 != null)
-                v += voxelGrid2.width * voxelGrid2.height * bitValue(voxelGrid2);
-            if (voxelGrid3 != null)
-                v += voxelGrid3.width * voxelGrid3.height * bitValue(voxelGrid3);
-            if (voxelGrid4 != null)
-                v += voxelGrid4.width * voxelGrid4.height * bitValue(voxelGrid4);
-
-            if (voxelGrid5 != null)
-                v += voxelGrid5.width * voxelGrid5.height * bitValue(voxelGrid5);
-
-            if (voxelGridCascade1 != null)
-                v += voxelGridCascade1.width * voxelGridCascade1.height * bitValue(voxelGridCascade1);
-            if (voxelGridCascade2 != null)
-                v += voxelGridCascade2.width * voxelGridCascade2.height * bitValue(voxelGridCascade2);
-
-            float vram = (v / 8388608.0f);
-
-            return vram;
-        }
-    }
 
     class PathCacheBuffer
     {
@@ -2175,27 +2068,6 @@ public class Nigiri : MonoBehaviour {
 
     void LateUpdate()
     {
-        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
-        emissiveCameraGO.transform.LookAt(localCam.transform);
-
-        FilterMode filterMode = FilterMode.Point;
-        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
-
-        voxelPropagationGrid.filterMode = filterMode;
-        voxelPropagatedGrid.filterMode = filterMode;
-        voxelGridCascade1.filterMode = filterMode;
-        voxelGrid1.filterMode = filterMode;
-        voxelGrid2.filterMode = filterMode;
-        voxelGrid3.filterMode = filterMode;
-        voxelGrid4.filterMode = filterMode;
-        voxelGrid5.filterMode = filterMode;
-
-        UpdateVoxelGrid();
         //Occlusion
         DoLazyInitialization();
 

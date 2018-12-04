@@ -76,7 +76,7 @@
 		uniform int						tracedTexture1UpdateCount;
 
 		uniform float					coneLength;
-		uniform float					coneWidth;
+		//uniform float					coneWidth;
 		uniform	float					GIGain;
 		uniform float					NearLightGain;
 		uniform float					OcclusionStrength;
@@ -721,16 +721,16 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	int coordSet = 0;
 	float skyVisibility = 1.0f;
-	float3 skyVisibility2 = 1.0f;
+	//float3 skyVisibility2 = 1.0f;
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
-	float2 interMult = float2(0, 0);
+	//float2 interMult = float2(0, 0);
 	float4 voxelPosition = (0).xxxx;
 	
 	// Sample voxel grid 2
 	hitFound = 0;
 	gi = (0.0f).xxxx;
-	skyVisibility = 1.0f;
+	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration2);
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
@@ -740,7 +740,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * coneWidth;
+		float coneSize = coneDistance * 63.6;
 
 		if (hitFound < 0.9f)
 		{
@@ -766,7 +766,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -776,7 +776,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 3
 	hitFound = 0;
 	gi = (0.0f).xxxx;
-	skyVisibility = 1.0f;
+	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration3);
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
@@ -786,7 +786,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * coneWidth * 10.3;
+		float coneSize = coneDistance * 63.6;
 
 		if (hitFound < 0.9f)
 		{
@@ -806,7 +806,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -816,7 +816,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 4
 	hitFound = 0;
 	gi = (0.0f).xxxx;
-	skyVisibility = 1.0f;
+	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration4);
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
@@ -826,7 +826,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * coneWidth * 10.3;
+		float coneSize = coneDistance * 63.6;
 
 		if (hitFound < 0.9f)
 		{
@@ -845,7 +845,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -855,7 +855,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 5
 	hitFound = 0;
 	gi = (0.0f).xxxx;
-	skyVisibility = 1.0f;
+	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
 	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
@@ -865,7 +865,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		fi = lerp(fi, 1.0, 0.0);
 
 		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * coneWidth * 10.3;
+		float coneSize = coneDistance * 63.6;
 
 		if (hitFound < 0.9f)
 		{
@@ -884,7 +884,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, NearOcclusionStrength);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 * (1.0 - fi * fi) / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * OcclusionStrength * (1.0 + coneDistance * FarOcclusionStrength)), 1.0 * OcclusionPower);
 	}
@@ -1077,6 +1077,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth);
 	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
+	//float3 indirectLighting = directLighting + (((indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
 	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
 
 	return float4(indirectLighting, 1.0f);

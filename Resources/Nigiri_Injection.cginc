@@ -148,49 +148,6 @@ inline uint3 GetVoxelPosition(float3 worldPosition)
 	return voxelPosition;
 }
 
-float FadeShadows(vertOutput i, float attenuation) {
-#if HANDLE_SHADOWS_BLENDING_IN_GI || ADDITIONAL_MASKED_DIRECTIONAL_SHADOWS
-	// UNITY_LIGHT_ATTENUATION doesn't fade shadows for us.
-#if ADDITIONAL_MASKED_DIRECTIONAL_SHADOWS
-	attenuation = SHADOW_ATTENUATION(i);
-#endif
-	float viewZ =
-		dot(_WorldSpaceCameraPos - i.wPos, UNITY_MATRIX_V[2].xyz);
-	float shadowFadeDistance =
-		UnityComputeShadowFadeDistance(i.wPos, viewZ);
-	float shadowFade = UnityComputeShadowFade(shadowFadeDistance);
-	float bakedAttenuation =
-		UnitySampleBakedOcclusion(i.lightmapUV, i.wPos);
-	attenuation = UnityMixRealtimeAndBakedShadows(
-		attenuation, bakedAttenuation, shadowFade
-	);
-#endif
-
-	return attenuation;
-}
-
-UnityLight CreateLight(vertOutput i) {
-	UnityLight light;
-
-#if defined(DEFERRED_PASS) || SUBTRACTIVE_LIGHTING
-	light.dir = float3(0, 1, 0);
-	light.color = 0;
-#else
-#if defined(POINT) || defined(POINT_COOKIE) || defined(SPOT)
-	light.dir = normalize(_WorldSpaceLightPos0.xyz - i.wPos.xyz);
-#else
-	light.dir = _WorldSpaceLightPos0.xyz;
-#endif
-
-	UNITY_LIGHT_ATTENUATION(attenuation, i, i.wPos.xyz);
-	attenuation = FadeShadows(i, attenuation);
-
-	light.color = _LightColor0.rgb * attenuation;
-#endif
-
-	return light;
-}
-
 UnityIndirect CreateIndirectLight(vertOutput i, float3 viewDir) {
 	UnityIndirect indirectLight;
 	indirectLight.diffuse = 0;
@@ -416,12 +373,6 @@ FragmentOutput frag(vertOutput i)
 				GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
 			);
 
-			color = UNITY_BRDF_PBS(
-				albedo, specularTint,
-				oneMinusReflectivity, GetSmoothness(i),
-				i.normal, viewDir,
-				CreateLight(i), CreateIndirectLight(i, viewDir));
-
 			//Nin - NKGI - Sample shadowmap to pass to GI
 			float3 lightColor1 = _LightColor0.rgb;
 			float3 lightDir = _WorldSpaceLightPos0.xyz;
@@ -429,7 +380,7 @@ FragmentOutput frag(vertOutput i)
 			UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
 			float3 N = float3(0.0f, 1.0f, 0.0f);
 			float  NL = saturate(dot(N, lightDir));
-			float3 shadowColor = color.rgb * lightColor1 * NL * atten;
+			float3 shadowColor = albedo.rgb * lightColor1 * NL * atten;
 			///
 			
 			#if defined(_EMISSION_MAP)
