@@ -242,8 +242,8 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGridCascade1;
     public static RenderTexture voxelGridCascade2;
 
-    public RenderTexture lightingTexture;
-    public RenderTexture lightingTexture2;
+    private RenderTexture lightingTexture;
+    private RenderTexture lightingTexture2;
     private RenderTexture lightingTextureMono;
     private RenderTexture lightingTexture2Mono;
     private RenderTexture positionTexture;
