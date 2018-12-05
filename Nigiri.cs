@@ -79,6 +79,7 @@ public class Nigiri : MonoBehaviour {
     [Tooltip("Chooses the miplevel with the highest value")]
     public bool mipLevelSearch = false;
     public bool skipFirstMipLevel = false;
+    public bool skipLastMipLevel = false;
     public bool stochasticSampling = true;
     [Range(0.1f, 2)]
     public float stochasticFactor = 1;
@@ -1004,6 +1005,7 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetInt("neighbourSearch", neighbourSearch ? 1 : 0);
         tracerMaterial.SetInt("highestValueSearch", mipLevelSearch ? 1 : 0);
         tracerMaterial.SetInt("skipFirstMipLevel", skipFirstMipLevel ? 1 : 0);
+        tracerMaterial.SetInt("skipLastMipLevel", skipLastMipLevel ? 1 : 0);
 
         tracerMaterial.SetFloat("rayStep", rayStep);
         tracerMaterial.SetFloat("rayOffset", rayOffset);
