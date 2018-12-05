@@ -100,6 +100,6 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     private void OnpostRender()
     {
-        lightingTextureDebug = lightingTexture;
+        //lightingTextureDebug = lightingTexture;
     }
 }

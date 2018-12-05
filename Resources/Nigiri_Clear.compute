@@ -15,7 +15,7 @@ uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
 
 cbuffer cbSettings : register(b0)
 {
-	uint Resolution;
+	int Resolution;
 	uint zStagger;
 	uniform float temporalStablityVsRefreshRate;
 };
@@ -90,7 +90,7 @@ uint threeD2oneD(float3 coord)
 [numthreads(16, 16, 1)]
 void CSMain0(uint3 id : SV_DispatchThreadID)
 {
-	for (uint i = 0; i < Resolution; i++)
+	for (int i = 0; i < Resolution; i++)
 	{
 		RG0[uint3(id.xy, i)] = 0;
 	}
@@ -101,17 +101,35 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 [numthreads(16, 16, 1)]
 void CSMain1(uint3 id : SV_DispatchThreadID)
 {
-	for (uint i = 0; i < Resolution; i++)
+	for (int i = 0; i < Resolution; i++)
 	{
 		uint index = threeD2oneD(id);
 		
-		if (voxelUpdateBuffer[index] == 0 && lightMapBuffer[index] == 0)
+		if (RG0[uint3(id.xy, i)].a > 0)
 		{
-			RG0[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
-			voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
-			voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
+			if (lightMapBuffer[index] == 0)
+			{
+				RG0[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
+				voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
+				voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
+			}
+			lightMapBuffer[index] = 0;
 		}
-		voxelUpdateBuffer[index] = 0;
-		lightMapBuffer[index] = 0;
+		int Resolution2 = Resolution * 0.5f;
+		if (i < Resolution2 && id.x < Resolution2 && id.y < Resolution2)
+		{
+			if (voxelCasacadeGrid1[uint3(id.xy, i)].a > 0)
+			{
+				voxelCasacadeGrid1[uint3(id.xy, i)] *= (temporalStablityVsRefreshRate * 0.75);
+			}
+		}
+		int Resolution3 = Resolution * 0.25f;
+		if (i < Resolution3 && id.x < Resolution3 && id.y < Resolution3)
+		{
+			if (voxelCasacadeGrid2[uint3(id.xy, i)].a > 0)
+			{
+				voxelCasacadeGrid2[uint3(id.xy, i)] *= (temporalStablityVsRefreshRate * 0.5);
+			}
+		}
 	}
 }

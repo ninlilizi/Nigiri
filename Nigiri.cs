@@ -31,12 +31,14 @@ public class Nigiri : MonoBehaviour {
     public int highestVoxelResolution = 256;
     [Range(0, 1)]
     public float shadowStrength = 1.0f;
-    [Range(0.0f, 0.75f)]
+    [Range(0.0f, 0.99f)]
     public float temporalStablityVsRefreshRate = 0.975f;
     [Tooltip("A higher speed, but lower quality light propagation")]
     public bool neighbourPropagation = false;
     public bool gaussianMipFiltering = true;
     public bool bilinearFiltering = true;
+    public bool primaryVoxelization = true;
+    public bool secondaryVoxelization = true;
 
     [Header("Light Propagation Settings")]
     public bool propagateLight = false;
@@ -60,14 +62,14 @@ public class Nigiri : MonoBehaviour {
     public float GIGain = 1;
     [Range(0.1f, 4)]
     public float NearLightGain = 1.14f;
-    [Range(0.1f, 1)]
-    public float OcclusionStrength = 0.15f;
-    [Range(0.1f, 1)]
-    public float NearOcclusionStrength = 0.5f;
-    [Range(0.1f, 1)]
-    public float FarOcclusionStrength = 1;
-    [Range(0.1f, 1)]
-    public float OcclusionPower = 0.65f;
+    //[Range(0.1f, 2)]
+    //public float OcclusionStrength = 0.15f;
+    //[Range(0.1f, 1)]
+    //public float NearOcclusionStrength = 0.5f;
+    //[Range(0.1f, 1)]
+    //public float FarOcclusionStrength = 1;
+    //[Range(0.1f, 1)]
+    //public float OcclusionPower = 0.65f;
     [Range(0.01f, 2)]
     public float coneTraceBias = 1;
     private bool usePathCache = false;
@@ -76,6 +78,7 @@ public class Nigiri : MonoBehaviour {
     public bool neighbourSearch = false;
     [Tooltip("Chooses the miplevel with the highest value")]
     public bool mipLevelSearch = false;
+    public bool skipFirstMipLevel = false;
     public bool stochasticSampling = true;
     [Range(0.1f, 2)]
     public float stochasticFactor = 1;
@@ -98,7 +101,7 @@ public class Nigiri : MonoBehaviour {
     [Range(0.01f, 1.0f)]
     public float rayStep = 0.25f;
     [Range(0.01f, 4)]
-    public float BalanceGain = 1;
+    public float reflectionGain = 1;
     [Range(1, 32)]
     public int reflectionSteps = 16;
     [Range(0, 1)]
@@ -113,7 +116,7 @@ public class Nigiri : MonoBehaviour {
         set { _thicknessModifier = value; }
     }
 
-    [SerializeField, Range(0, 4)] float _intensity = 1;
+    [SerializeField, Range(0, 2)] float _intensity = 1;
 
     public float intensity
     {
@@ -238,8 +241,8 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGridCascade1;
     public static RenderTexture voxelGridCascade2;
 
-    private RenderTexture lightingTexture;
-    private RenderTexture lightingTexture2;
+    public RenderTexture lightingTexture;
+    public RenderTexture lightingTexture2;
     private RenderTexture lightingTextureMono;
     private RenderTexture lightingTexture2Mono;
     private RenderTexture positionTexture;
@@ -392,8 +395,8 @@ public class Nigiri : MonoBehaviour {
         if (matchSunColor) if (sunLight != null) sunColor = sunLight.color;
         if (matchSkyColor)
         {
-            if (RenderSettings.ambientSkyColor != null) skyColor = RenderSettings.ambientSkyColor;
-            else skyColor = RenderSettings.skybox.color;
+            skyColor = RenderSettings.ambientSkyColor;
+            //else skyColor = RenderSettings.skybox.color;
         }
 
         // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
@@ -412,11 +415,11 @@ public class Nigiri : MonoBehaviour {
         ///
 
         emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (5);
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.25f));
-        if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.25f), 0, 0);
-        if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.0625f));
+        else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.0625f));
+        else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.0625f), 0, 0);
+        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.0625f), 0, 0);
+        else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
         emissiveCameraGO.transform.LookAt(localCam.transform);
 
         FilterMode filterMode = FilterMode.Point;
@@ -506,12 +509,12 @@ public class Nigiri : MonoBehaviour {
             emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
             //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
             emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            emissiveCameraGO.hideFlags = HideFlags.DontSave;
+            emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.25f);
-            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.25f);
+            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.5f);
+            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.5f);
             emissiveCamera.enabled = false;
             emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
             Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
@@ -596,7 +599,7 @@ public class Nigiri : MonoBehaviour {
         Debug.Log("<Nigiri> Clearing compute buffers");
 
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
-        voxelUpdateCounter = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, 4, ComputeBufferType.Default);
+        voxelUpdateCounter = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, 4, ComputeBufferType.Default);
 
 
         if (voxelUpdateBuffer != null) voxelUpdateBuffer.Release();
@@ -669,7 +672,7 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid ()
     {
-        if (dynamicPlusEmissiveLayer != 0)
+        if (dynamicPlusEmissiveLayer.value != 0)
         {
             emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
             Nigiri_EmissiveCameraHelper.DoRender();
@@ -747,17 +750,19 @@ public class Nigiri : MonoBehaviour {
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
+        voxelGrid1.filterMode = FilterMode.Point;
+
         // Clear voxels that were not updated last frame
         //if (!isGridMobile)
         //{
-            clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-            clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
-            clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
-            clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-            clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
-            clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
-            clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-            clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+        clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
+        clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
+        clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
+        clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
+        clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
         //}
 
         // Kernel index for the entry point in compute shader
@@ -791,15 +796,18 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetVector("gridOffset", gridOffset);
 
         // Voxelize main cam
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGridCascade1);
-        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGridCascade2);
-        nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
-        nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
-        nigiri_VoxelEntry.SetInt("useDepth", 0);
-        nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+        if (primaryVoxelization)
+        {
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGridCascade1);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGridCascade2);
+            nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
+            nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
+            nigiri_VoxelEntry.SetInt("useDepth", 0);
+            nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+        }
 
-        if (dynamicPlusEmissiveLayer != 0)
+        if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
             // Voxelize secondary cam
             nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
@@ -884,6 +892,8 @@ public class Nigiri : MonoBehaviour {
         }
         mipSwitch = (mipSwitch + 1) % (4);
 
+        if (gaussianMipFiltering) voxelGrid1.filterMode = FilterMode.Bilinear;
+
         //stopwatch.Stop();
         //double after = stopwatch.Elapsed.TotalMilliseconds;
         //Debug.Log("<Nigiri> Voxelization completed in " + (after - before) + "ms");
@@ -892,6 +902,7 @@ public class Nigiri : MonoBehaviour {
 
 
 	// This is called once per frame after the scene is rendered
+    //[ImageEffectOpaque]
 	void OnRenderImage (RenderTexture source, RenderTexture destination)
     {
         if (forceImmediateRefresh || prevPropagateLight != propagateLight)
@@ -992,10 +1003,11 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetInt("sphericalSunlight", sphericalSunlight ? 1 : 0);
         tracerMaterial.SetInt("neighbourSearch", neighbourSearch ? 1 : 0);
         tracerMaterial.SetInt("highestValueSearch", mipLevelSearch ? 1 : 0);
+        tracerMaterial.SetInt("skipFirstMipLevel", skipFirstMipLevel ? 1 : 0);
 
         tracerMaterial.SetFloat("rayStep", rayStep);
         tracerMaterial.SetFloat("rayOffset", rayOffset);
-        tracerMaterial.SetFloat("BalanceGain", BalanceGain * 10);
+        tracerMaterial.SetFloat("BalanceGain", reflectionGain * 10);
         tracerMaterial.SetFloat("maximumIterationsReflection", (float)reflectionSteps);
         tracerMaterial.SetVector("mainCameraPosition", localCam.transform.position);
         tracerMaterial.SetInt("DoReflections", traceReflections ? 1 : 0);
@@ -1010,10 +1022,10 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
         tracerMaterial.SetFloat("GIGain", GIGain);
         tracerMaterial.SetFloat("NearLightGain", NearLightGain);
-        tracerMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
-        tracerMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
-        tracerMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
-        tracerMaterial.SetFloat("OcclusionPower", OcclusionPower);
+        //tracerMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
+        //tracerMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
+        //tracerMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
+        //tracerMaterial.SetFloat("OcclusionPower", OcclusionPower);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
         //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);

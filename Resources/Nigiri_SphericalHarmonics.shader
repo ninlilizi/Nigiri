@@ -217,5 +217,5 @@
 		}
 	}
 
-	CustomEditor "NKGI_EmissionShaderGUI"
+	CustomEditor "NKGI_SphericalHarmonicShaderGUI"
 }

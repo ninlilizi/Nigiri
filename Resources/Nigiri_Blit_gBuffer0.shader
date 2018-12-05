@@ -27,7 +27,7 @@
 
 	half4 FragBlit(Varyings i) : SV_Target
 	{
-		return tex2D(_CameraGBufferTexture0, i.uv).aaaa;
+		return tex2D(_CameraGBufferTexture0, i.uv);
 	}
 
 		ENDCG

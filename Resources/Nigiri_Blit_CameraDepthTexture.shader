@@ -36,12 +36,11 @@
 
 	v2f vert(appdata v)
 	{
-		if (debug && stereoEnabled) {
+		if (debug) {
 		
 			v2f o;
 					o.vertex = UnityObjectToClipPos(v.vertex);
-					o.uv = TRANSFORM_TEX(v.uv, _MainTex);
-			
+					o.uv = v.uv;			
 					return o;
 		}
 		else {
@@ -57,16 +56,15 @@
 
 	fixed4 frag(v2f i) : SV_Target
 	{
-		if (debug && stereoEnabled) {
-			return Linear01Depth(SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(i.uv)));
-		}
+		if (debug) return Linear01Depth(tex2D(_CameraDepthTexture,UnityStereoTransformScreenSpaceTex(i.uv)));
 		else {
-			if (stereoEnabled)
-			{
-				if (i.uv.x < 0.5) return Linear01Depth(tex2D(_CameraDepthTexture, i.uv));
-				else return float4(0,0,0,0);
-			}
-			else return Linear01Depth(tex2D(_CameraDepthTexture, i.uv));
+		if (stereoEnabled)
+		{
+			if (i.uv.x < 0.5) return Linear01Depth(tex2D(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(i.uv)));
+			else return float4(0,0,0,0);
+		}
+		else
+			return Linear01Depth(tex2D(_CameraDepthTexture, UnityStereoTransformScreenSpaceTex(i.uv)));
 		}
 	}
 		ENDCG
