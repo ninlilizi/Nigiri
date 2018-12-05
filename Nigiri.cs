@@ -95,7 +95,7 @@ public class Nigiri : MonoBehaviour {
     //public int downsample = 2;
     [Range(0.1f, 0.25f)]
     public float rayOffset = 0.1f;
-    [Range(0.01f, 0.25f)]
+    [Range(0.01f, 1.0f)]
     public float rayStep = 0.25f;
     [Range(0.01f, 4)]
     public float BalanceGain = 1;
@@ -542,17 +542,17 @@ public class Nigiri : MonoBehaviour {
         else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
-        gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        blur = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+        blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
-        lightingTexture.filterMode = FilterMode.Trilinear;
-        lightingTexture2.filterMode = FilterMode.Trilinear;
+        lightingTexture.filterMode = FilterMode.Bilinear;
+        lightingTexture2.filterMode = FilterMode.Bilinear;
 
-        lightingTexture.useMipMap = true;
+        /*lightingTexture.useMipMap = true;
         lightingTexture2.useMipMap = true;
 
         lightingTexture.autoGenerateMips = true;
-        lightingTexture2.autoGenerateMips = true;
+        lightingTexture2.autoGenerateMips = true;*/
 
         depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;

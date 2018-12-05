@@ -671,16 +671,16 @@ inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float
 		// At the currently traced sample
 		if ((currentVoxelInfo.w > 0.0f) && (!hitFound))
 		{
-			accumulatedColor += currentVoxelInfo;
-			//hitFound = true;
+			accumulatedColor += currentVoxelInfo * (rayStep).xxxx;
+			//if (depthStopOptimization) hitFound = true; // We dont do this or fails to reflect!
 		}
 	}
 
-	return accumulatedColor / maximumIterationsReflection;
+	return accumulatedColor;
 }
 
 
-inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord)
+inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord, out float skyVisibility)
 {
 	//Temp consts till integration
 	//float3 SEGISunlightVector = _WorldSpaceLightPos0;
@@ -720,7 +720,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float hitFound = 0.0f;
 
 	int coordSet = 0;
-	float skyVisibility = 1.0f;
+	skyVisibility = 1.0f;
 	//float3 skyVisibility2 = 1.0f;
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
@@ -749,7 +749,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (voxelPosition.w == 2) currentVoxelInfo = GetCascadeVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
-				if (!depthStopOptimization) hitFound = 1.0f;
+				if (depthStopOptimization) hitFound = 1.0f;
 				if (coordSet == 0)
 				{
 					coordSet = 1;
@@ -795,7 +795,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (voxelPosition.w == 3) currentVoxelInfo = GetCascadeVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
-				if (!depthStopOptimization) hitFound = 1.0f;
+				if (depthStopOptimization) hitFound = 1.0f;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
@@ -834,7 +834,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
-				if (!depthStopOptimization) hitFound = 1.0f;
+				if (depthStopOptimization) hitFound = 1.0f;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
@@ -873,7 +873,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
-				if (!depthStopOptimization) hitFound = 1.0f;
+				if (depthStopOptimization) hitFound = 1.0f;
 			}
 		}
 		occlusion = skyVisibility * skyVisibility;
@@ -923,7 +923,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	return computedColor;
 }
 
-inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, float3 worldNormal, float2 uv, float depth)
+inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, float3 worldNormal, float2 uv, float depth, out float skyVisibility)
 {
 	float3 gi = float3(0.0f, 0.0f, 0.0f);
 
@@ -950,6 +950,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	float3 direction1 = normalize(cross(worldNormal, randomVector));
 	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
 
+	/*
 	///Reflection cone setup
 	float depthValue;
 	float3 viewSpaceNormal;
@@ -961,12 +962,12 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	reflectedRayDirection *= -1.0;
 	float4 reflection = (0).xxxx;
 	///
-
+	*/
 	uint index = 0;
 	float3 voxelBufferCoord;
 	if (usePathCache)
 	{
-		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord);
+		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord, skyVisibility);
 
 		//voxelBufferCoord.x += (blueNoise.x * 0.00000001) * StochasticSampling;
 		//voxelBufferCoord.y += (blueNoise.y * 0.00000001) * StochasticSampling;
@@ -977,8 +978,8 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 		tracedBuffer1[index] += float4(gi, 1);
 	}
 
-	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord);
-	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
+	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord, skyVisibility);
+	/*if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
 	{
 		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
 		float3 viewVector = normalize(viewSpacePosition.xyz);
@@ -986,20 +987,18 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 
 		float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
 		
-		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
+		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a), 5.0);
 		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+		fresnel *= saturate(spec.a * 6.0);
 
-		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal);
-		reflection.rgb *= maximumIterationsReflection * BalanceGain;
+		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain;
+		//reflection.rgb *= maximumIterationsReflection * BalanceGain;
 
 		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
 
-		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
-		fresnel *= saturate(spec.a * 4.0);
-
 		if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
 		else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
-	}
+	}*/
 
 	if (usePathCache && !visualizeOcclusion)
 	{
@@ -1014,9 +1013,42 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 
 		if (visualiseCache) gi.rgb = cachedResult.rgb;	
 	}
-	if (visualizeReflections) gi.rgb = reflection.rgb;
+	//if (visualizeReflections) gi.rgb = reflection.rgb;
 
 	return gi;
+}
+
+inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, float skyVisibility)
+{
+	///Reflection cone setup
+	float depthValue;
+	float3 viewSpaceNormal;
+	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+	viewSpaceNormal = normalize(viewSpaceNormal);
+	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
+	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
+	reflectedRayDirection *= -1.0;
+	float4 reflection = (0).xxxx;
+	///
+	float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
+	float3 viewVector = normalize(viewSpacePosition.xyz);
+	float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
+
+	float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+
+	float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
+	fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+	fresnel *= saturate(spec.a * 6.0);
+
+	reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain / maximumIterationsReflection;
+
+	reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.00 * skyColor) * 2.41 * skyReflectionIntensity * skyVisibility;
+
+	if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
+	else reflection.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
+
+	return reflection.rgb;
 }
 
 float4 frag_lighting(v2f i) : SV_Target
@@ -1075,10 +1107,20 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	float3 worldSpaceNormal = GetWorldNormal(i.uv);
 
-	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth);
+	float skyVisibility;
+	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth, skyVisibility);
 	float3 indirectLighting = directLighting + (((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
 	//float3 indirectLighting = directLighting + (((indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution);
-	if (VisualiseGI || visualizeOcclusion || visualiseCache || visualizeReflections) indirectLighting = indirectContribution / maximumIterations;
+
+
+	//Reflection
+	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
+	{
+		indirectLighting = ComputeReflection(worldPos, i.uv, indirectLighting, skyVisibility);
+	}
+	///
+
+	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = indirectContribution / maximumIterations;
 
 	return float4(indirectLighting, 1.0f);
 }
