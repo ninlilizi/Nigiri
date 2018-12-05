@@ -750,11 +750,12 @@ public class Nigiri : MonoBehaviour {
         }
         if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);
 
-        voxelGrid1.filterMode = FilterMode.Point;
+
 
         // Clear voxels that were not updated last frame
         //if (!isGridMobile)
         //{
+        //voxelGrid1.filterMode = FilterMode.Point;
         clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
         clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
         clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
@@ -763,6 +764,7 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
         clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+        //if (gaussianMipFiltering) voxelGrid1.filterMode = FilterMode.Bilinear;
         //}
 
         // Kernel index for the entry point in compute shader
@@ -891,8 +893,6 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
-
-        if (gaussianMipFiltering) voxelGrid1.filterMode = FilterMode.Bilinear;
 
         //stopwatch.Stop();
         //double after = stopwatch.Elapsed.TotalMilliseconds;
