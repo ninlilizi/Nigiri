@@ -370,7 +370,7 @@ public class Nigiri : MonoBehaviour {
     //int mobilizeGridCounter = 0;
     //int voxelStaggerSwitch = 0;
     //bool fastResolveSwitch = true;
-    public bool isGridMobile = false;
+    private bool isGridMobile = false;
 
     //bool prevPropagateLight = false;
     //private Vector3 prevRoatation;
