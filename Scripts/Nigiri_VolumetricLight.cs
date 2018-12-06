@@ -283,6 +283,8 @@ public class Nigiri_VolumetricLight : MonoBehaviour
 
     private void SetupPointLight(Nigiri renderer, Matrix4x4 viewProj)
     {
+        if (_commandBuffer == null) Start();
+
         _commandBuffer.Clear();
 
         int pass = 0;

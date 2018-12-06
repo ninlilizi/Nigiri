@@ -26,6 +26,12 @@ public class Nigiri_PointLight : MonoBehaviour {
             return;
         }
 
+        if (!lightComponent.enabled)
+        {
+            enabled = false;
+            return;
+        }
+
         emissiveShader = Shader.Find("Standard");
         emissiveMaterial = new Material(emissiveShader);
 
@@ -33,8 +39,9 @@ public class Nigiri_PointLight : MonoBehaviour {
         emissiveSphere.hideFlags = HideFlags.HideAndDontSave;
         emissiveSphere.transform.parent = GetComponent<Transform>();
         emissiveSphere.transform.localPosition = new Vector3Int(0, 0, 0);
+        DestroyImmediate(emissiveSphere.GetComponent<SphereCollider>());
 
-        emissiveSphere.transform.localScale = new Vector3(lightComponent.range, lightComponent.range, lightComponent.range);
+        //emissiveSphere.transform.localScale = new Vector3(lightComponent.range * 2, lightComponent.range * 2, lightComponent.range * 2);
         emissiveSphere.GetComponent<Renderer>().material = emissiveMaterial;
 
         emissiveMaterial.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
@@ -55,7 +62,7 @@ public class Nigiri_PointLight : MonoBehaviour {
     {
         emissiveSphere.layer = emissiveLayer;
 
-        emissiveMaterial.SetColor("_EmissionColor", lightComponent.color * lightComponent.intensity);
+        emissiveMaterial.SetColor("_EmissionColor", lightComponent.color * (lightComponent.intensity * 0.5f) * lightComponent.range);
         emissiveMaterial.SetColor("_Color", lightComponent.color);
         emissiveMaterial.EnableKeyword("_EMISSION");
     }

@@ -59,7 +59,7 @@
 		uniform int						skipFirstMipLevel;
 		uniform int						skipLastMipLevel;
 
-		uniform int						usePathCache;
+		//uniform int						usePathCache;
 
 		// Reflection
 		uniform float					rayStep;
@@ -105,7 +105,7 @@
 		uniform int						highestValueSearch;
 		uniform uint					rng_state;
 		
-		uniform uint3					gridOffset;
+		uniform float3					gridOffset;
 
 		uniform sampler2D _CameraGBufferTexture2;
 		half4 _CameraGBufferTexture2_ST;
@@ -115,8 +115,9 @@
 
 		uniform sampler2D NoiseTexture;
 
-		uniform StructuredBuffer<colorStruct> tracedBuffer0;
-		uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
+		//uniform StructuredBuffer<colorStruct> tracedBuffer0;
+		//uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
+		uniform RWStructuredBuffer<uint> voxelUpdateBuffer;
 
 		float ConeTraceBias;
 
@@ -331,12 +332,12 @@ float4 frag_position(v2f i) : SV_Target
 
 	if (Stereo2Mono)
 	{
-		if (i.uv.x < 0.5) return float4(worldPos.xyz - (int3)gridOffset.xyz, lindepth);
+		if (i.uv.x < 0.5) return float4(worldPos.xyz - gridOffset.xyz, lindepth);
 		else return float4(0, 0, 0, 0);
 	}
 	else
 	{
-		return float4(worldPos.xyz - (int3)gridOffset.xyz, lindepth);
+		return float4(worldPos.xyz - gridOffset.xyz, lindepth);
 	}
 }
 
@@ -353,7 +354,7 @@ float3 offsets[6] =
 // Returns the voxel position in the grids
 inline float4 GetVoxelPosition(float3 worldPosition)
 {
-	worldPosition = worldPosition.xyz - (int3)gridOffset.xyz;
+	worldPosition = worldPosition.xyz - gridOffset.xyz;
 	   
 	uint cascade = 1;
 	float cascade1 = 0.33;
@@ -391,6 +392,12 @@ inline float4 GetVoxelPosition(float3 worldPosition)
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfo1(float3 voxelPosition)
 {
+	//voxelUpdateBuffer
+	//uint threeD2oneD(float3 coord)
+
+	uint index = threeD2oneD(voxelPosition);
+	if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
+
 	float4 tex = tex3D(voxelGrid1, voxelPosition);
 	
 	if (neighbourSearch)
@@ -653,7 +660,7 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 // Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
 inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
 {
-	worldPosition = worldPosition.xyz - (int3)gridOffset.xyz;
+	worldPosition = worldPosition.xyz - gridOffset.xyz;
 
 	// Color for storing all the samples
 	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
@@ -684,7 +691,7 @@ inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float
 }
 
 
-inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float3 voxelBufferCoord, out float skyVisibility)
+inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float skyVisibility)
 {
 	//Temp consts till integration
 	//float3 SEGISunlightVector = _WorldSpaceLightPos0;
@@ -751,11 +758,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (currentVoxelInfo.a > 0.0f)
 				{
 					if (depthStopOptimization) hitFound = 1.0f;
-					if (coordSet == 0)
+					/*if (coordSet == 0)
 					{
 						coordSet = 1;
 						voxelBufferCoord = voxelPosition * (coneDistance * 1.72);
-					}
+					}*/
 				}
 				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 			}
@@ -798,11 +805,11 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
-				if (coordSet == 0)
+				/*if (coordSet == 0)
 				{
 					coordSet = 1;
 					voxelBufferCoord = voxelPosition * (coneDistance * 1.72);
-				}
+				}*/
 			}
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
@@ -1014,9 +1021,9 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	float4 reflection = (0).xxxx;
 	///
 	*/
-	uint index = 0;
-	float3 voxelBufferCoord;
-	if (usePathCache)
+	//uint index = 0;
+	//float3 voxelBufferCoord;
+	/*if (usePathCache)
 	{
 		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord, skyVisibility);
 
@@ -1027,9 +1034,9 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 		//voxelBufferCoord.z *= depth;
 		index = voxelBufferCoord.x * (voxelResolution) * (voxelResolution)+voxelBufferCoord.y * (voxelResolution)+voxelBufferCoord.z;
 		tracedBuffer1[index] += float4(gi, 1);
-	}
+	}*/
 
-	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, voxelBufferCoord, skyVisibility);
+	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, skyVisibility);
 	/*if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
 	{
 		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
@@ -1051,7 +1058,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 		else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
 	}*/
 
-	if (usePathCache && !visualizeOcclusion)
+	/*if (usePathCache && !visualizeOcclusion)
 	{
 		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
 
@@ -1063,7 +1070,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 		gi.rgb += hsv2rgb(giHSV);
 
 		if (visualiseCache) gi.rgb = cachedResult.rgb;	
-	}
+	}*/
 	//if (visualizeReflections) gi.rgb = reflection.rgb;
 
 	return gi;
