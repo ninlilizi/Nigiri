@@ -117,7 +117,7 @@
 
 		//uniform StructuredBuffer<colorStruct> tracedBuffer0;
 		//uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
-		uniform RWStructuredBuffer<uint> voxelUpdateBuffer;
+		uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u1);
 
 		float ConeTraceBias;
 
@@ -396,7 +396,8 @@ inline float4 GetVoxelInfo1(float3 voxelPosition)
 	//uint threeD2oneD(float3 coord)
 
 	uint index = threeD2oneD(voxelPosition);
-	if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
+	//if (voxelUpdateBuffer[index] == 0) 
+		voxelUpdateBuffer[index] = 2;
 
 	float4 tex = tex3D(voxelGrid1, voxelPosition);
 	

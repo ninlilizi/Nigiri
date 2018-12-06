@@ -8,7 +8,7 @@ uniform RWTexture3D<float4>			voxelCasacadeGrid1;
 uniform RWTexture3D<float4>			voxelCasacadeGrid2;
 
 //uniform RWStructuredBuffer<float3> RG1;
-uniform RWStructuredBuffer<uint>	lightMapBuffer;
+//uniform RWStructuredBuffer<uint>	lightMapBuffer;
 uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
 
 
@@ -105,17 +105,17 @@ void CSMain1(uint3 id : SV_DispatchThreadID)
 	{
 		uint index = threeD2oneD(uint3(id.xy, i));
 		
-		if (voxelUpdateBuffer[index] == 2)
+		if (voxelUpdateBuffer[index] == 0)
 		{
 			if (RG0[uint3(id.xy, i)].a > 0)
 			{
-				if (lightMapBuffer[index] == 0)
-				{
-					RG0[uint3(id.xy, i)].rgba = (0).xxxx;
+				//if (lightMapBuffer[index] == 0)
+				//{
+					RG0[uint3(id.xy, i)].rgba *= 0.5;
 					//voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 					//voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
-				}
-				lightMapBuffer[index] = 0;
+				//}
+				//lightMapBuffer[index] = 0;
 			}
 		}
 		/*else if (voxelUpdateBuffer[index] == 1)

@@ -16,8 +16,9 @@ float worldVolumeBoundary;
 int highestVoxelResolution;
 uniform uint3					gridOffset;
 
-uniform RWStructuredBuffer<uint> lightMapBuffer : register(u5);
-uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
+uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u5);
+//uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
+uniform RWTexture3D<float4> voxelGrid : register(u6);
 
 float4x4 InverseProjectionMatrix;
 
@@ -394,7 +395,11 @@ FragmentOutput frag(vertOutput i)
 			#endif
 
 			uint index1d = threeD2oneD(index3d);
-			if (newColor.r > 0.1 || newColor.g > 0.1 || newColor.b > 0.1) lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
+			if (newColor.r > 0.1 || newColor.g > 0.1 || newColor.b > 0.1) {
+				//lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
+				voxelGrid[index3d] = lerp(newColor, voxelGrid[index3d], 0.5);
+				voxelUpdateBuffer[index1d] = 1;
+			}
 
 			//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
 			//position /= (2.0 * worldVolumeBoundary);

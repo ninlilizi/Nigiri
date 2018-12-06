@@ -18,7 +18,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     public static RenderTexture positionTexture;
 
-    public static ComputeBuffer lightMapBuffer;
+    //public static ComputeBuffer lightMapBuffer;
     //public static ComputeBuffer positionBuffer;
 
     //public ComputeShader clearComputeCache;
@@ -64,7 +64,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         _rb[0] = lightingTexture.colorBuffer;
         _rb[1] = positionTexture.colorBuffer;
 
-        lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
+        //lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
         //positionBuffer = new ComputeBuffer(1024 * 1024, sizeof(float) * 4, ComputeBufferType.Default);
 
         cam.depthTextureMode = DepthTextureMode.Depth;
@@ -82,16 +82,17 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     {
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingDepthTexture != null) lightingDepthTexture.Release();
-        if (lightMapBuffer != null) lightMapBuffer.Release();
+        //if (lightMapBuffer != null) lightMapBuffer.Release();
         //if (positionBuffer != null) positionBuffer.Release();
     }
 
     public static void DoRender()
     {
-        if (lightingTexture != null && lightMapBuffer != null)
+        if (lightingTexture != null)
         {
-            Graphics.SetRandomWriteTarget(5, lightMapBuffer);
-            //Graphics.SetRandomWriteTarget(6, positionBuffer);
+            Graphics.SetRandomWriteTarget(5, Nigiri.voxelUpdateBuffer);
+            if (Nigiri.gridBufferSwitch) Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
+            else Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid0);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
             cam.RenderWithShader(emissiveShader, "");
             Graphics.ClearRandomWriteTargets();
