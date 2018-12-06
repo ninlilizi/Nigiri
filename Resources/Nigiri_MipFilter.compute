@@ -63,7 +63,7 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 
             offset = offsets[j];
 
-            half4 testColor = Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0);
+            half4 testColor = Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
 			if (testColor.a > 0.01)
 			{
 				tex += testColor;

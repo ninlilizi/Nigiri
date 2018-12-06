@@ -129,6 +129,96 @@ public class Nigiri : MonoBehaviour {
     public float occlusionGain = 0.9f;
     public bool _ambientOnly = false;
 
+
+    [Header("Color Settings")]
+
+
+    // White balance.
+    [SerializeField, Range(-1, 1)]
+    float _colorTemp = 0.0f;
+    [SerializeField, Range(-1, 1)] float _colorTint = 0.0f;
+
+    public float colorTemp
+    {
+        get { return _colorTemp; }
+        set { _colorTemp = value; }
+    }
+    public float colorTint
+    {
+        get { return _colorTint; }
+        set { _colorTint = value; }
+    }
+
+    // Tone mapping.
+    [SerializeField] bool _toneMapping = false;
+    [SerializeField, Range(0, 5)] float _exposure = 1.0f;
+
+    public bool toneMapping
+    {
+        get { return _toneMapping; }
+        set { _toneMapping = value; }
+    }
+    public float exposure
+    {
+        get { return _exposure; }
+        set { _exposure = value; }
+    }
+
+    // Color saturation.
+    [SerializeField] float _saturation = 1.0f;
+
+    public float saturation
+    {
+        get { return _saturation; }
+        set { _saturation = value; }
+    }
+
+    // Curves.
+    [SerializeField] AnimationCurve _rCurve = AnimationCurve.Linear(0, 0, 1, 1);
+    [SerializeField] AnimationCurve _gCurve = AnimationCurve.Linear(0, 0, 1, 1);
+    [SerializeField] AnimationCurve _bCurve = AnimationCurve.Linear(0, 0, 1, 1);
+    [SerializeField] AnimationCurve _cCurve = AnimationCurve.Linear(0, 0, 1, 1);
+
+    public AnimationCurve redCurve
+    {
+        get { return _rCurve; }
+        set { _rCurve = value; UpdateLUT(); }
+    }
+    public AnimationCurve greenCurve
+    {
+        get { return _gCurve; }
+        set { _gCurve = value; UpdateLUT(); }
+    }
+    public AnimationCurve blueCurve
+    {
+        get { return _bCurve; }
+        set { _bCurve = value; UpdateLUT(); }
+    }
+    public AnimationCurve rgbCurve
+    {
+        get { return _cCurve; }
+        set { _cCurve = value; UpdateLUT(); }
+    }
+
+    // Dithering.
+    public enum DitherMode { Off, Ordered, Triangular }
+    [SerializeField] DitherMode _ditherMode = DitherMode.Off;
+
+    public DitherMode ditherMode
+    {
+        get { return _ditherMode; }
+        set { _ditherMode = value; }
+    }
+
+
+    // Reference to the shader.
+    Shader colorShader;
+
+    // Temporary objects.
+    Material _colorMaterial;
+    Texture2D _lutTexture;
+
+
     [Header("Volumetric Lighting")]
     public bool renderVolumetricLighting = false;
     public VolumtericResolution Resolution = VolumtericResolution.Half;
@@ -423,11 +513,17 @@ public class Nigiri : MonoBehaviour {
         else if (prevPosition.z < localCam.transform.position.z - (GIAreaSize * 0.165)) MobilizeGrid();
         ///
 
-        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (4);
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.0625f));
+        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (2);
+        /*if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.0625f));
         else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.0625f));
         else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.0625f), 0, 0);
-        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.0625f), 0, 0);
+        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.0625f), 0, 0);*/
+        /*if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -25);
+        else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 25);
+        else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-25, 0, 0);
+        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3(25, 0, 0);*/
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 20, 0);
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, -20, 0);
         //else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
         emissiveCameraGO.transform.LookAt(localCam.transform);
 
@@ -467,6 +563,9 @@ public class Nigiri : MonoBehaviour {
         //positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
         fxaaMaterial = new Material(fxaaShader);
 
+        colorShader = Shader.Find("Hidden/Nigiri_Color");
+
+
         _downsample1Compute = Resources.Load("Nigiri_AO_Downsample1") as ComputeShader; ;
         _downsample2Compute = Resources.Load("Nigiri_AO_Downsample2") as ComputeShader; ;
         _renderCompute = Resources.Load("Nigiri_AO_Render") as ComputeShader; ;
@@ -493,6 +592,8 @@ public class Nigiri : MonoBehaviour {
         createRenderTextures();
         CreateComputeBuffers();
         MobilizeGrid();
+
+        Setup();
 
         //Get blue noise textures
         blueNoise = new Texture2D[64];
@@ -536,6 +637,20 @@ public class Nigiri : MonoBehaviour {
         localCam.AddCommandBuffer(CameraEvent.BeforeLighting, _preLightPass);
         ///
     }
+
+    void OnValidate()
+    {
+        Setup();
+        UpdateLUT();
+    }
+
+    void Reset()
+    {
+        Setup();
+        UpdateLUT();
+    }
+
+
 
     private void createRenderTextures()
     {
@@ -1031,6 +1146,54 @@ public class Nigiri : MonoBehaviour {
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
         lengthOfCone = GIAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
+        //Color Settings
+        var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+
+        Setup();
+
+        if (linear)
+            _colorMaterial.EnableKeyword("COLORSPACE_LINEAR");
+        else
+            _colorMaterial.DisableKeyword("COLORSPACE_LINEAR");
+
+        if (_colorTemp != 0.0f || _colorTint != 0.0f)
+        {
+            _colorMaterial.EnableKeyword("BALANCING_ON");
+            _colorMaterial.SetVector("_Balance", CalculateColorBalance());
+        }
+        else
+            _colorMaterial.DisableKeyword("BALANCING_ON");
+
+        if (_toneMapping && linear)
+        {
+            _colorMaterial.EnableKeyword("TONEMAPPING_ON");
+            _colorMaterial.SetFloat("_Exposure", _exposure);
+        }
+        else
+            _colorMaterial.DisableKeyword("TONEMAPPING_ON");
+
+        _colorMaterial.SetTexture("_Curves", _lutTexture);
+        _colorMaterial.SetFloat("_Saturation", _saturation);
+
+        if (_ditherMode == DitherMode.Ordered)
+        {
+            _colorMaterial.EnableKeyword("DITHER_ORDERED");
+            _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
+        }
+        else if (_ditherMode == DitherMode.Triangular)
+        {
+            _colorMaterial.DisableKeyword("DITHER_ORDERED");
+            _colorMaterial.EnableKeyword("DITHER_TRIANGULAR");
+        }
+        else
+        {
+            _colorMaterial.DisableKeyword("DITHER_ORDERED");
+            _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
+        }
+
+
+
+
 
         //Experimental grid offsetting
         /*if (isGridMobile)
@@ -1332,14 +1495,21 @@ public class Nigiri : MonoBehaviour {
             if (visualizeVolumetricLight) Graphics.Blit(_volumeLightTexture, destination);
             else
             {
-                _blitAddMaterial.SetTexture("_Source", gi);
+                RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
+                RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
+                temp.filterMode = FilterMode.Bilinear;
+                Graphics.Blit(gi, temp, _colorMaterial);
+
+                _blitAddMaterial.SetTexture("_Source", temp);
                 Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
+                RenderTexture.ReleaseTemporary(temp);
+
             }
-           
+
         }
         else
         {
-            Graphics.Blit(gi, destination);
+            Graphics.Blit(gi, destination, _colorMaterial);
         }
         ///
 
@@ -2324,6 +2494,90 @@ public class Nigiri : MonoBehaviour {
 
     #endregion
 
+
+    #region Color
+    //ColorSUITE
+    // RGBM encoding.
+    static Color EncodeRGBM(float r, float g, float b)
+    {
+        var a = Mathf.Max(Mathf.Max(r, g), Mathf.Max(b, 1e-6f));
+        a = Mathf.Ceil(a * 255) / 255;
+        return new Color(r / a, g / a, b / a, a);
+    }
+
+    // An analytical model of chromaticity of the standard illuminant, by Judd et al.
+    // http://en.wikipedia.org/wiki/Standard_illuminant#Illuminant_series_D
+    // Slightly modifed to adjust it with the D65 white point (x=0.31271, y=0.32902).
+    static float StandardIlluminantY(float x)
+    {
+        return 2.87f * x - 3.0f * x * x - 0.27509507f;
+    }
+
+    // CIE xy chromaticity to CAT02 LMS.
+    // http://en.wikipedia.org/wiki/LMS_color_space#CAT02
+    static Vector3 CIExyToLMS(float x, float y)
+    {
+        var Y = 1.0f;
+        var X = Y * x / y;
+        var Z = Y * (1.0f - x - y) / y;
+
+        var L = 0.7328f * X + 0.4296f * Y - 0.1624f * Z;
+        var M = -0.7036f * X + 1.6975f * Y + 0.0061f * Z;
+        var S = 0.0030f * X + 0.0136f * Y + 0.9834f * Z;
+
+        return new Vector3(L, M, S);
+    }
+
+
+    // Set up the temporary assets.
+    void Setup()
+    {
+        if (_colorMaterial == null)
+        {
+            if (colorShader == null) colorShader = Shader.Find("Hidden/Nigiri_Color");
+            _colorMaterial = new Material(colorShader);
+            _colorMaterial.hideFlags = HideFlags.DontSave;
+        }
+
+        if (_lutTexture == null)
+        {
+            _lutTexture = new Texture2D(512, 1, TextureFormat.ARGB32, false, true);
+            _lutTexture.hideFlags = HideFlags.DontSave;
+            _lutTexture.wrapMode = TextureWrapMode.Clamp;
+            UpdateLUT();
+        }
+    }
+
+    // Update the LUT texture.
+    void UpdateLUT()
+    {
+        for (var x = 0; x < _lutTexture.width; x++)
+        {
+            var u = 1.0f / (_lutTexture.width - 1) * x;
+            var r = _cCurve.Evaluate(_rCurve.Evaluate(u));
+            var g = _cCurve.Evaluate(_gCurve.Evaluate(u));
+            var b = _cCurve.Evaluate(_bCurve.Evaluate(u));
+            _lutTexture.SetPixel(x, 0, EncodeRGBM(r, g, b));
+        }
+        _lutTexture.Apply();
+    }
+
+    // Calculate the color balance coefficients.
+    Vector3 CalculateColorBalance()
+    {
+        // Get the CIE xy chromaticity of the reference white point.
+        // Note: 0.31271 = x value on the D65 white point
+        var x = 0.31271f - _colorTemp * (_colorTemp < 0.0f ? 0.1f : 0.05f);
+        var y = StandardIlluminantY(x) + _colorTint * 0.05f;
+
+        // Calculate the coefficients in the LMS space.
+        var w1 = new Vector3(0.949237f, 1.03542f, 1.08728f); // D65 white point
+        var w2 = CIExyToLMS(x, y);
+        return new Vector3(w1.x / w2.x, w1.y / w2.y, w1.z / w2.z);
+    }
+
+    #endregion
+
     #region Volumetric Light Rendering
 
     public enum VolumtericResolution
@@ -2767,3 +3021,4 @@ public class Nigiri : MonoBehaviour {
     }
 }
 #endregion
+
