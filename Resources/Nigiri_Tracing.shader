@@ -252,65 +252,6 @@
 			return weight;
 		}
 
-		float3 rgb2hsv(float3 c)
-		{
-			float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-			float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
-			float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
-
-			float d = q.x - min(q.w, q.y);
-			float e = 1.0e-10;
-
-			return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
-		}
-
-		float3 hsv2rgb(float3 c)
-		{
-			float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-			float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
-			return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
-		}
-
-		float4 DecodeRGBAuint(uint value)
-		{
-			uint ai = value & 0x0000007F;
-			uint vi = (value / 0x00000080) & 0x000007FF;
-			uint si = (value / 0x00040000) & 0x0000007F;
-			uint hi = value / 0x02000000;
-
-			float h = float(hi) / 127.0;
-			float s = float(si) / 127.0;
-			float v = (float(vi) / 2047.0) * 10.0;
-			float a = ai * 2.0;
-
-			v = pow(v, 3.0);
-
-			float3 color = hsv2rgb(float3(h, s, v));
-
-			return float4(color.rgb, a);
-		}
-
-		uint EncodeRGBAuint(float4 color)
-		{
-			//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
-			float3 hsv = rgb2hsv(color.rgb);
-			hsv.z = pow(hsv.z, 1.0 / 3.0);
-
-			uint result = 0;
-
-			uint a = min(127, uint(color.a / 2.0));
-			uint v = min(2047, uint((hsv.z / 10.0) * 2047));
-			uint s = uint(hsv.y * 127);
-			uint h = uint(hsv.x * 127);
-
-			result += a;
-			result += v * 0x00000080; // << 7
-			result += s * 0x00040000; // << 18
-			result += h * 0x02000000; // << 25
-
-			return result;
-		}
-
 		uint threeD2oneD(float3 coord)
 		{
 			return coord.z * (voxelResolution * voxelResolution) + (coord.y * voxelResolution) + coord.x;
@@ -390,16 +331,15 @@ inline float4 GetVoxelPosition(float3 worldPosition)
 }
 
 // Returns the voxel information from grid 1
-inline float4 GetVoxelInfo1(float3 voxelPosition)
+inline half4 GetVoxelInfo1(float3 voxelPosition)
 {
 	//voxelUpdateBuffer
 	//uint threeD2oneD(float3 coord)
 
 	uint index = threeD2oneD(voxelPosition);
-	//if (voxelUpdateBuffer[index] == 0) 
-		voxelUpdateBuffer[index] = 2;
+	if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
 
-	float4 tex = tex3D(voxelGrid1, voxelPosition);
+	half4 tex = tex3D(voxelGrid1, voxelPosition);
 	
 	if (neighbourSearch)
 	{
@@ -415,9 +355,9 @@ inline float4 GetVoxelInfo1(float3 voxelPosition)
 }
 
 // Returns the voxel information from grid 2
-inline float4 GetVoxelInfo2(float3 voxelPosition)
+inline half4 GetVoxelInfo2(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGrid2, voxelPosition);
+	half4 tex = tex3D(voxelGrid2, voxelPosition);
 
 	if (neighbourSearch)
 	{
@@ -434,9 +374,9 @@ inline float4 GetVoxelInfo2(float3 voxelPosition)
 }
 
 // Returns the voxel information from grid 3
-inline float4 GetVoxelInfo3(float3 voxelPosition)
+inline half4 GetVoxelInfo3(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGrid3, voxelPosition);
+	half4 tex = tex3D(voxelGrid3, voxelPosition);
 
 	if (neighbourSearch)
 	{
@@ -452,9 +392,9 @@ inline float4 GetVoxelInfo3(float3 voxelPosition)
 }
 
 // Returns the voxel information from grid 4
-inline float4 GetVoxelInfo4(float3 voxelPosition)
+inline half4 GetVoxelInfo4(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGrid4, voxelPosition);
+	half4 tex = tex3D(voxelGrid4, voxelPosition);
 	if (neighbourSearch)
 	{
 		[unroll]
@@ -469,9 +409,9 @@ inline float4 GetVoxelInfo4(float3 voxelPosition)
 }
 
 // Returns the voxel information from grid 5
-inline float4 GetVoxelInfo5(float3 voxelPosition)
+inline half4 GetVoxelInfo5(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGrid5, voxelPosition);
+	half4 tex = tex3D(voxelGrid5, voxelPosition);
 	if (neighbourSearch)
 	{
 		[unroll]
@@ -486,9 +426,9 @@ inline float4 GetVoxelInfo5(float3 voxelPosition)
 }
 
 // Returns the voxel information from cascade 1
-inline float4 GetCascadeVoxelInfo2(float3 voxelPosition)
+inline half4 GetCascadeVoxelInfo2(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGridCascade1, voxelPosition);
+	half4 tex = tex3D(voxelGridCascade1, voxelPosition);
 
 	if (neighbourSearch)
 	{
@@ -505,9 +445,9 @@ inline float4 GetCascadeVoxelInfo2(float3 voxelPosition)
 }
 
 // Returns the voxel information from cascade 2
-inline float4 GetCascadeVoxelInfo3(float3 voxelPosition)
+inline half4 GetCascadeVoxelInfo3(float3 voxelPosition)
 {
-	float4 tex = tex3D(voxelGridCascade2, voxelPosition);
+	half4 tex = tex3D(voxelGridCascade2, voxelPosition);
 
 	if (neighbourSearch)
 	{
@@ -567,7 +507,7 @@ float4 frag_debug(v2f i) : SV_Target
 		worldPos = mul(InverseViewMatrix, viewPos).xyz;
 	}
 
-	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	half4 voxelInfo = half4(0.0f, 0.0f, 0.0f, 0.0f);
 	float4 voxelPosition = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	#if defined(GRID_1)
@@ -607,10 +547,10 @@ float3 GetWorldNormal(float2 uv)
 }
 
 // Returns the voxel information
-inline float4 GetVoxelInfo(float3 worldPosition)
+inline half4 GetVoxelInfo(float3 worldPosition)
 {
 	// Default value
-	float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	half4 info = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	uint cascade = 1;
 	float cascade1 = 0.33;
@@ -659,15 +599,15 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 }
 
 // Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
-inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
+inline half4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
 {
 	worldPosition = worldPosition.xyz - gridOffset.xyz;
 
 	// Color for storing all the samples
-	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	half4 accumulatedColor = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	float3 currentPosition = worldPosition + (rayOffset * pixelNormal);
-	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	half4 currentVoxelInfo = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	bool hitFound = false;
 
@@ -727,7 +667,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	//coneOrigin =  float3(coneOrigin.x - (int)gridOffset.x, coneOrigin.y - (int)gridOffset.y, coneOrigin.z - (int)gridOffset.z);
 
 	float3 currentPosition = coneOrigin;
-	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	half4 currentVoxelInfo = half4(0.0f, 0.0f, 0.0f, 0.0f);
 
 	float hitFound = 0.0f;
 
@@ -735,7 +675,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	skyVisibility = 1.0f;
 	//float3 skyVisibility2 = 1.0f;
 	float occlusion;
-	float4 gi = float4(0, 0, 0, 0);
+	half4 gi = half4(0, 0, 0, 0);
 	//float2 interMult = float2(0, 0);
 	float4 voxelPosition = (0).xxxx;
 
@@ -1088,13 +1028,13 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
 	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
 	reflectedRayDirection *= -1.0;
-	float4 reflection = (0).xxxx;
+	half4 reflection = (0).xxxx;
 	///
 	float4 viewSpacePosition = GetViewSpacePosition(UnityStereoTransformScreenSpaceTex(uv.xy));
 	float3 viewVector = normalize(viewSpacePosition.xyz);
 	float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
 
-	float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+	half4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
 
 	float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
 	fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
@@ -1110,12 +1050,12 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 	return reflection.rgb;
 }
 
-float4 frag_lighting(v2f i) : SV_Target
+half4 frag_lighting(v2f i) : SV_Target
 {
 	rng_state = i.uv.x * i.uv.y;
 	float3 directLighting = tex2D(_MainTex, i.uv).rgb;
 
-	float4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
+	half4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
 	//float3 albedo = gBufferSample.rgb;
 	//float ao = gBufferSample.a;
 
@@ -1182,7 +1122,7 @@ float4 frag_lighting(v2f i) : SV_Target
 
 	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = indirectContribution / maximumIterations / 1.85;
 
-	return float4(indirectLighting, 1.0f);
+	return half4(indirectLighting, 1.0f);
 }
 
 float4 frag_normal_texture(v2f i) : SV_Target

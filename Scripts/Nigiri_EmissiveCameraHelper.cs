@@ -48,13 +48,13 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
         cam = GetComponent<Camera>();
 
-        lightingTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
+        lightingTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture.Create();
 
-        lightingDepthTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.Depth);
+        lightingDepthTexture = new RenderTexture(512, 512, 16, RenderTextureFormat.Depth);
         lightingDepthTexture.Create();
 
-        positionTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
+        positionTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
         positionTexture.Create();
 
         lightingTextureDebug = lightingTexture;
