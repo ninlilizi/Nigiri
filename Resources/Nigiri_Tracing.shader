@@ -20,27 +20,35 @@
 			float4 value;
 		};
 
-		uniform sampler3D				voxelGrid1;
-		uniform sampler3D				voxelGrid2;
-		uniform sampler3D				voxelGrid3;
-		uniform sampler3D				voxelGrid4;
-		uniform sampler3D				voxelGrid5;
+		uniform texture3D				voxelGrid1;
+		uniform texture3D				voxelGrid1A;
+		uniform texture3D				voxelGrid2;
+		uniform texture3D				voxelGrid2A;
+		uniform texture3D				voxelGrid3;
+		uniform texture3D				voxelGrid3A;
+		uniform texture3D				voxelGrid4;
+		uniform texture3D				voxelGrid4A;
+		uniform texture3D				voxelGrid5;
+		uniform texture3D				voxelGrid5A;
 		uniform sampler3D				voxelGridCascade1;
 		uniform sampler3D				voxelGridCascade2;	
 
-		uniform sampler2D 				_MainTex;
-		uniform sampler2D				_IndirectTex;
-		uniform sampler2D				_CameraDepthTexture;
-		uniform sampler2D				_CameraDepthNormalsTexture;
-		uniform sampler2D				_CameraGBufferTexture0;
-		uniform sampler2D				_CameraGBufferTexture1;
+		uniform texture2D 				_MainTex;
+		uniform texture2D				_CameraDepthTexture;
+		uniform texture2D				_CameraDepthNormalsTexture;
+		uniform texture2D				_CameraGBufferTexture0;
+		uniform texture2D				_CameraGBufferTexture1;
+		uniform texture2D				_CameraGBufferTexture2;
+		uniform SamplerState			my_point_clamp_sampler;
+		uniform SamplerState			my_linear_clamp_sampler;
 
 		//uniform sampler2D				depthTexture;
 
 		half4							_CameraDepthTexture_ST;
+		half4							_CameraDepthNormalsTexture_ST;
 		half4							_CameraGBufferTexture0_ST;
 		half4							_CameraGBufferTexture1_ST;
-		half4							_CameraDepthNormalsTexture_ST;
+		half4							_CameraGBufferTexture2_ST;
 
 		uniform float4x4				InverseProjectionMatrix;
 		uniform float4x4				InverseViewMatrix;
@@ -103,17 +111,12 @@
 		uniform int						stereoEnabled;
 		uniform int						neighbourSearch;
 		uniform int						highestValueSearch;
-		uniform uint					rng_state;
+		//uniform uint					rng_state;
+		uniform int						subsamplingRatio;
 		
 		uniform float3					gridOffset;
 
-		uniform sampler2D _CameraGBufferTexture2;
-		half4 _CameraGBufferTexture2_ST;
-
-		uniform sampler2D gi;
-		uniform sampler2D lpv;
-
-		uniform sampler2D NoiseTexture;
+		uniform	sampler2D				NoiseTexture;
 
 		//uniform StructuredBuffer<colorStruct> tracedBuffer0;
 		//uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
@@ -168,14 +171,14 @@
 			return o;
 		}
 
-		uint rand_xorshift()
+		/*uint rand_xorshift()
 		{
 			// Xorshift algorithm from George Marsaglia's paper
 			rng_state ^= (rng_state << 13);
 			rng_state ^= (rng_state >> 17);
 			rng_state ^= (rng_state << 5);
 			return rng_state * 0.00000001;
-		}
+		}*/
 
 		float GetDepthTexture(float2 uv)
 		{
@@ -183,20 +186,23 @@
 #if defined(VRWORKS)
 			return 1.0 - SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
 #else
-			return 1.0 - SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			//return 1.0 - SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			return 1.0 - _CameraDepthTexture.Sample(my_point_clamp_sampler, float4(uv.xy, 0.0, 0.0));
 #endif
 #else
 #if defined(VRWORKS)
 			return SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
 #else
-			return SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			//return SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			return _CameraDepthTexture.Sample(my_point_clamp_sampler, float4(uv.xy, 0.0, 0.0));
 #endif
 #endif
 		}
 
 		float4 GetViewSpacePosition(float2 uv)
 		{
-			float depth = tex2Dlod(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			//float depth = tex2Dlod(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+			float depth = _CameraDepthTexture.Sample(my_point_clamp_sampler, float4(uv.xy, 0.0, 0.0));
 
 #if defined(UNITY_REVERSED_Z)
 			depth = 1.0 - depth;
@@ -260,7 +266,8 @@
 float4 frag_position(v2f i) : SV_Target
 {
 	// read low res depth and reconstruct world position
-	float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+	//float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+	float depth = _CameraDepthTexture.Sample(my_point_clamp_sampler, i.uv);
 
 	//linearise depth		
 	float lindepth = Linear01Depth(depth);
@@ -281,6 +288,23 @@ float4 frag_position(v2f i) : SV_Target
 		return float4(worldPos.xyz - gridOffset.xyz, lindepth);
 	}
 }
+
+//http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+float4 RGBMEncode(float3 color) {
+	//color = pow(color, 0.454545); // Convert Linear to Gamma
+	float4 rgbm;
+	color *= 1.0 / 6.0;
+	rgbm.a = saturate(max(max(color.r, color.g), max(color.b, 1e-6)));
+	rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
+	rgbm.rgb = color / rgbm.a;
+	return rgbm;
+}
+
+float3 RGBMDecode(float4 rgbm) {
+	return 6.0 * rgbm.rgb * rgbm.a;
+	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
+}
+///
 
 float3 offsets[6] =
 {
@@ -339,16 +363,18 @@ inline half4 GetVoxelInfo1(float3 voxelPosition)
 	uint index = threeD2oneD(voxelPosition);
 	if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
 
-	half4 tex = tex3D(voxelGrid1, voxelPosition);
+	float4 tex = float4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition)), 
+		voxelGrid1A.Sample(my_linear_clamp_sampler, voxelPosition).r);	
 	
 	if (neighbourSearch)
 	{
-		[unroll]
+		[unroll(6)]
 		for (int j = 0; j < 6; j++)
 		{
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
-			tex = max(tex3D(voxelGrid1, voxelPosition + offset), tex);
+			tex = max(float4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition)), 
+				voxelGrid1A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
 		}
 	}
 	return tex;
@@ -357,16 +383,18 @@ inline half4 GetVoxelInfo1(float3 voxelPosition)
 // Returns the voxel information from grid 2
 inline half4 GetVoxelInfo2(float3 voxelPosition)
 {
-	half4 tex = tex3D(voxelGrid2, voxelPosition);
+	half4 tex = half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition)), 
+		voxelGrid2A.Sample(my_linear_clamp_sampler, voxelPosition).r);
 
 	if (neighbourSearch)
 	{
-		[unroll]
+		[unroll(6)]
 		for (int j = 0; j < 6; j++)
 		{
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
-			tex = max(tex3D(voxelGrid2, voxelPosition + offset), tex);
+			tex = max(half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition)),
+				voxelGrid2A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
 		}
 	}
 
@@ -376,16 +404,18 @@ inline half4 GetVoxelInfo2(float3 voxelPosition)
 // Returns the voxel information from grid 3
 inline half4 GetVoxelInfo3(float3 voxelPosition)
 {
-	half4 tex = tex3D(voxelGrid3, voxelPosition);
+	half4 tex = half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition)),
+		voxelGrid3A.Sample(my_linear_clamp_sampler, voxelPosition).r);
 
 	if (neighbourSearch)
 	{
-		[unroll]
+		[unroll(6)]
 		for (int j = 0; j < 6; j++)
 		{
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
-			tex = max(tex3D(voxelGrid3, voxelPosition + offset), tex);
+			tex = max(half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition)),
+				voxelGrid3A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
 		}
 	}
 	return tex;
@@ -394,15 +424,18 @@ inline half4 GetVoxelInfo3(float3 voxelPosition)
 // Returns the voxel information from grid 4
 inline half4 GetVoxelInfo4(float3 voxelPosition)
 {
-	half4 tex = tex3D(voxelGrid4, voxelPosition);
+	half4 tex = half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition)),
+		voxelGrid4A.Sample(my_linear_clamp_sampler, voxelPosition).r);
+
 	if (neighbourSearch)
 	{
-		[unroll]
+		[unroll(6)]
 		for (int j = 0; j < 6; j++)
 		{
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
-			tex = max(tex3D(voxelGrid4, voxelPosition + offset), tex);
+			tex = max(half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition)),
+				voxelGrid4A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
 		}
 	}
 	return tex;
@@ -411,15 +444,18 @@ inline half4 GetVoxelInfo4(float3 voxelPosition)
 // Returns the voxel information from grid 5
 inline half4 GetVoxelInfo5(float3 voxelPosition)
 {
-	half4 tex = tex3D(voxelGrid5, voxelPosition);
+	half4 tex = half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition)),
+		voxelGrid5A.Sample(my_linear_clamp_sampler, voxelPosition).r);
+
 	if (neighbourSearch)
 	{
-		[unroll]
+		[unroll(6)]
 		for (int j = 0; j < 6; j++)
 		{
 			float3 offset = float3(0, 0, 0);
 			offset = offsets[j];
-			tex = max(tex3D(voxelGrid5, voxelPosition + offset), tex);
+			tex = max(half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition)),
+				voxelGrid5A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
 		}
 	}
 	return tex;
@@ -540,7 +576,8 @@ float4 frag_debug(v2f i) : SV_Target
 
 float3 GetWorldNormal(float2 uv)
 {
-	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, UnityStereoTransformScreenSpaceTex(uv));
+	//float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, UnityStereoTransformScreenSpaceTex(uv));
+	float3 worldSpaceNormal = _CameraGBufferTexture2.Sample(my_point_clamp_sampler, UnityStereoTransformScreenSpaceTex(uv));
 	worldSpaceNormal = normalize(worldSpaceNormal);
 
 	return worldSpaceNormal;
@@ -585,11 +622,16 @@ inline half4 GetVoxelInfo(float3 worldPosition)
 
 		if (cascade == 1)
 		{
-			info = tex3D(voxelGrid1, worldPosition);
-			info += tex3D(voxelGrid2, worldPosition);
-			info += tex3D(voxelGrid3, worldPosition);
-			info += tex3D(voxelGrid4, worldPosition);
-			info += tex3D(voxelGrid5, worldPosition);
+			info = half4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, worldPosition)), 
+				voxelGrid1A.Sample(my_linear_clamp_sampler, worldPosition).r);
+			info += half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, worldPosition)), 
+				voxelGrid2A.Sample(my_linear_clamp_sampler, worldPosition).r);
+			info += half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, worldPosition)),
+				voxelGrid3A.Sample(my_linear_clamp_sampler, worldPosition).r);
+			info += half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, worldPosition)),
+				voxelGrid4A.Sample(my_linear_clamp_sampler, worldPosition).r);
+			info += half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, worldPosition)),
+				voxelGrid5A.Sample(my_linear_clamp_sampler, worldPosition).r);
 		}
 		else if (cascade == 2) info += tex3D(voxelGridCascade1, worldPosition) * 3;
 		else if (cascade == 3) info += tex3D(voxelGridCascade2, worldPosition) * 3;
@@ -612,6 +654,7 @@ inline half4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3
 	bool hitFound = false;
 
 	// Loop for tracing the ray through the scene
+	[loop]
 	for (float i = 0.0f; i < maximumIterationsReflection; i += 1.0f)
 	{
 		// Traverse the ray in the reflected direction
@@ -682,6 +725,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	// Sample voxel grid 1
 	if (skipFirstMipLevel == 0)
 	{
+		[loop]
 		for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
 		{
 			currentPosition += (coneStep * coneDirection);
@@ -728,6 +772,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	gi = (0.0f).xxxx;
 	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration2);
+	[loop]
 	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
 	{
 		currentPosition += (coneStep * coneDirection);
@@ -774,6 +819,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	gi = (0.0f).xxxx;
 	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration3);
+	[loop]
 	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection;
@@ -814,6 +860,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	gi = (0.0f).xxxx;
 	//skyVisibility = 1.0f;
 	currentPosition = worldPosition + (coneDirection * coneStep * iteration4);
+	[loop]
 	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
 	{
 		currentPosition += coneStep * coneDirection;
@@ -854,6 +901,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		hitFound = 0;
 		gi = (0.0f).xxxx;
 		currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
+		[loop]
 		for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 		{
 			currentPosition += coneStep * coneDirection;
@@ -1022,7 +1070,9 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 	///Reflection cone setup
 	float depthValue;
 	float3 viewSpaceNormal;
-	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+	//DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+	DecodeDepthNormal(_CameraDepthNormalsTexture.Sample(my_point_clamp_sampler, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+
 	viewSpaceNormal = normalize(viewSpaceNormal);
 	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
 	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
@@ -1034,7 +1084,8 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 	float3 viewVector = normalize(viewSpacePosition.xyz);
 	float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
 
-	half4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+	//half4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+	half4 spec = _CameraGBufferTexture1.Sample(my_point_clamp_sampler, UnityStereoTransformScreenSpaceTex(uv));
 
 	float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
 	fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
@@ -1052,14 +1103,21 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 
 half4 frag_lighting(v2f i) : SV_Target
 {
-	rng_state = i.uv.x * i.uv.y;
-	float3 directLighting = tex2D(_MainTex, i.uv).rgb;
+	//if (i.uv.x % subsamplingRatio == 0) return (0).xxxx;
 
-	half4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
+
+	//rng_state = i.uv.x * i.uv.y;
+	//float3 directLighting = tex2D(_MainTex, i.uv).rgb;
+	half4 directLighting = _MainTex.Sample(my_point_clamp_sampler, i.uv);
+
+	//half4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
+	half4 gBufferSample = _CameraGBufferTexture0.Sample(my_point_clamp_sampler, i.uv);
+
 	//float3 albedo = gBufferSample.rgb;
 	//float ao = gBufferSample.a;
 
-	float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
+	//float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
+	float metallic = _CameraGBufferTexture1.Sample(my_point_clamp_sampler, i.uv).r;
 
 
 	// read low res depth and reconstruct world position
@@ -1165,7 +1223,7 @@ Pass
 }
 
 // 3 : Composition pass
-Pass
+/*Pass
 {
 	CGPROGRAM
 		#pragma vertex vert
@@ -1200,6 +1258,6 @@ Pass
 	#pragma vertex vert
 	#pragma fragment frag_normal_texture
 	ENDCG
+}*/
 }
-	}
 }

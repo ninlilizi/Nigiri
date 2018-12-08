@@ -3,6 +3,7 @@
 #pragma kernel CSMain2
 
 RWTexture3D<half4> RG0;
+RWTexture3D<half> RG0A;
 
 uniform RWTexture3D<half4>			voxelCasacadeGrid1;
 uniform RWTexture3D<half4>			voxelCasacadeGrid2;
@@ -11,14 +12,29 @@ uniform RWTexture3D<half4>			voxelCasacadeGrid2;
 //uniform RWStructuredBuffer<uint>	lightMapBuffer;
 uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
 
-
-
 cbuffer cbSettings : register(b0)
 {
 	uint Resolution;
 	uint zStagger;
 	uniform float temporalStablityVsRefreshRate;
 };
+
+//http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+float4 RGBMEncode(float3 color) {
+	//color = pow(color, 0.454545); // Convert Linear to Gamma
+	float4 rgbm;
+	color *= 1.0 / 6.0;
+	rgbm.a = saturate(max(max(color.r, color.g), max(color.b, 1e-6)));
+	rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
+	rgbm.rgb = color / rgbm.a;
+	return rgbm;
+}
+
+float3 RGBMDecode(float4 rgbm) {
+	return 6.0 * rgbm.rgb * rgbm.a;
+	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
+}
+///
 
 uint threeD2oneD(float3 coord)
 {
@@ -33,6 +49,7 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 	for (uint i = 0; i < Resolution; i++)
 	{
 		RG0[uint3(id.xy, i)] = 0;
+		RG0A[uint3(id.xy, i)] = 0;
 	}
 }
 
@@ -47,11 +64,12 @@ void CSMain1(uint3 id : SV_DispatchThreadID)
 		
 		if (voxelUpdateBuffer[index] == 0)
 		{
-			if (RG0[uint3(id.xy, i)].a > 0)
+			if (RG0A[uint3(id.xy, i)] > 0)
 			{
 				//if (lightMapBuffer[index] == 0)
 				//{
-					RG0[uint3(id.xy, i)].rgba *= 0.5;
+					RG0[uint3(id.xy, i)] = RGBMEncode(RGBMDecode(RG0[uint3(id.xy, i)]) * 0.9);
+					RG0A[uint3(id.xy, i)] *= 0.9;
 					//voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 					//voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 				//}

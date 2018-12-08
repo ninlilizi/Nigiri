@@ -19,6 +19,7 @@ uniform uint3					gridOffset;
 uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u5);
 //uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
 uniform RWTexture3D<half4> voxelGrid : register(u6);
+uniform RWTexture3D<half> voxelGridA : register(u7);
 
 float4x4 InverseProjectionMatrix;
 
@@ -78,64 +79,22 @@ vertOutput vert(appdata_full v)
 	return o;
 }
 
-float3 rgb2hsv(float3 c)
-{
-	float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
-	float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
-	float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
-
-	float d = q.x - min(q.w, q.y);
-	float e = 1.0e-10;
-
-	return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
+//http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+float4 RGBMEncode(float3 color) {
+	//color = pow(color, 0.454545); // Convert Linear to Gamma
+	float4 rgbm;
+	color *= 1.0 / 6.0;
+	rgbm.a = saturate(max(max(color.r, color.g), max(color.b, 1e-6)));
+	rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
+	rgbm.rgb = color / rgbm.a;
+	return rgbm;
 }
 
-float3 hsv2rgb(float3 c)
-{
-	float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
-	float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
-	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
+float3 RGBMDecode(float4 rgbm) {
+	//return 6.0 * rgbm.rgb * rgbm.a;
+	return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
 }
-
-float4 DecodeRGBAuint(uint value)
-{
-	uint ai = value & 0x0000007F;
-	uint vi = (value / 0x00000080) & 0x000007FF;
-	uint si = (value / 0x00040000) & 0x0000007F;
-	uint hi = value / 0x02000000;
-
-	float h = float(hi) / 127.0;
-	float s = float(si) / 127.0;
-	float v = (float(vi) / 2047.0) * 10.0;
-	float a = ai * 2.0;
-
-	v = pow(v, 3.0);
-
-	float3 color = hsv2rgb(float3(h, s, v));
-
-	return float4(color.rgb, a);
-}
-
-uint EncodeRGBAuint(float4 color)
-{
-	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
-	float3 hsv = rgb2hsv(color.rgb);
-	hsv.z = pow(hsv.z, 1.0 / 3.0);
-
-	uint result = 0;
-
-	uint a = min(127, uint(color.a / 2.0));
-	uint v = min(2047, uint((hsv.z / 10.0) * 2047));
-	uint s = uint(hsv.y * 127);
-	uint h = uint(hsv.x * 127);
-
-	result += a;
-	result += v * 0x00000080; // << 7
-	result += s * 0x00040000; // << 18
-	result += h * 0x02000000; // << 25
-
-	return result;
-}
+///
 
 inline uint3 GetVoxelPosition(float3 worldPosition)
 {
@@ -384,20 +343,13 @@ FragmentOutput frag(vertOutput i)
 			float3 shadowColor = albedo.rgb * lightColor1 * NL * atten;
 			///
 			
-			#if defined(_EMISSION_MAP)
-				newColor = shadowColor + (tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * EmissiveStrength,
-					_Emission.g * EmissiveStrength,
-					_Emission.b * EmissiveStrength, 2)));
-			#else
-				newColor = float4(shadowColor, 0) + (float4(_Emission.r * EmissiveStrength,
-					_Emission.g * EmissiveStrength,
-					_Emission.b * EmissiveStrength, 2));
-			#endif
+			newColor = float4(shadowColor, 0) + (float4(GetEmission(i) * EmissiveStrength, 1));
 
 			uint index1d = threeD2oneD(index3d);
-			if (newColor.r > 0.1 || newColor.g > 0.1 || newColor.b > 0.1) {
+			if (newColor.r > 0 || newColor.g > 0 || newColor.b > 0) {
 				//lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
-				voxelGrid[index3d] = lerp(newColor, voxelGrid[index3d], 0.5);
+				voxelGrid[index3d] = RGBMEncode(lerp(newColor.rgb, RGBMDecode(voxelGrid[index3d]), 0.5));
+				voxelGridA[index3d] = lerp(newColor.a, voxelGridA[index3d], 0.5);
 				voxelUpdateBuffer[index1d] = 1;
 			}
 
