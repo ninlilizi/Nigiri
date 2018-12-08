@@ -36,7 +36,7 @@ public class Nigiri : MonoBehaviour {
     [Tooltip("A higher speed, but lower quality light propagation")]
     public bool neighbourPropagation = false;
     public bool gaussianMipFiltering = true;
-    public bool bilinearFiltering = true;
+    private bool bilinearFiltering = true;
     public bool primaryVoxelization = true;
     public bool secondaryVoxelization = true;
 
@@ -623,7 +623,7 @@ public class Nigiri : MonoBehaviour {
             }
 
             blueNoise[i] = blueNoiseTexture;
-
+            blueNoise[i].wrapMode = TextureWrapMode.Repeat;
         }
 
         //pathCacheBuffer = new PathCacheBuffer();
@@ -789,55 +789,55 @@ public class Nigiri : MonoBehaviour {
 
         //voxelPropagationGrid = new RenderTexture (voxelGridDescriptorFloat4);
         //voxelPropagatedGrid = new RenderTexture(voxelGridDescriptorFloat4);
-        voxelGrid0 = new RenderTexture(voxelGridDescriptorARGB32);
+        voxelGrid0 = new RenderTexture(voxelGridDescriptorHalf4);
         voxelGrid0A = new RenderTexture(voxelGridDescriptorR8);
-        voxelGrid1 = new RenderTexture(voxelGridDescriptorARGB32);
+        voxelGrid1 = new RenderTexture(voxelGridDescriptorHalf4);
         voxelGrid1A = new RenderTexture(voxelGridDescriptorR8);
 
-        voxelGridDescriptorARGB32.width = highestVoxelResolution / 2;
-        voxelGridDescriptorARGB32.height = highestVoxelResolution / 2;
-        voxelGridDescriptorARGB32.volumeDepth = highestVoxelResolution / 2;
+        voxelGridDescriptorHalf4.width = highestVoxelResolution / 2;
+        voxelGridDescriptorHalf4.height = highestVoxelResolution / 2;
+        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 2;
 
         voxelGridDescriptorR8.width = highestVoxelResolution / 2;
         voxelGridDescriptorR8.height = highestVoxelResolution / 2;
         voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 2;
 
-        voxelGrid2 = new RenderTexture (voxelGridDescriptorARGB32);
+        voxelGrid2 = new RenderTexture (voxelGridDescriptorHalf4);
 		voxelGrid2A = new RenderTexture (voxelGridDescriptorR8);
         voxelGridCascade1 = new RenderTexture(voxelGridDescriptorHalf4);
 
-        voxelGridDescriptorARGB32.width = highestVoxelResolution / 4;
-        voxelGridDescriptorARGB32.height = highestVoxelResolution / 4;
-        voxelGridDescriptorARGB32.volumeDepth = highestVoxelResolution / 4;
+        voxelGridDescriptorHalf4.width = highestVoxelResolution / 4;
+        voxelGridDescriptorHalf4.height = highestVoxelResolution / 4;
+        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 4;
 
         voxelGridDescriptorR8.width = highestVoxelResolution / 4;
         voxelGridDescriptorR8.height = highestVoxelResolution / 4;
         voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 4;
 
-        voxelGrid3 = new RenderTexture (voxelGridDescriptorARGB32);
+        voxelGrid3 = new RenderTexture (voxelGridDescriptorHalf4);
 		voxelGrid3A = new RenderTexture (voxelGridDescriptorR8);
         voxelGridCascade2 = new RenderTexture(voxelGridDescriptorHalf4);
 
-        voxelGridDescriptorARGB32.width = highestVoxelResolution / 8;
-        voxelGridDescriptorARGB32.height = highestVoxelResolution / 8;
-        voxelGridDescriptorARGB32.volumeDepth = highestVoxelResolution / 8;
+        voxelGridDescriptorHalf4.width = highestVoxelResolution / 8;
+        voxelGridDescriptorHalf4.height = highestVoxelResolution / 8;
+        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 8;
 
         voxelGridDescriptorR8.width = highestVoxelResolution / 8;
         voxelGridDescriptorR8.height = highestVoxelResolution / 8;
         voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 8;
 
-        voxelGrid4 = new RenderTexture (voxelGridDescriptorARGB32);
+        voxelGrid4 = new RenderTexture (voxelGridDescriptorHalf4);
 		voxelGrid4A = new RenderTexture (voxelGridDescriptorR8);
 
-        voxelGridDescriptorARGB32.width = highestVoxelResolution / 16;
-        voxelGridDescriptorARGB32.height = highestVoxelResolution / 16;
-        voxelGridDescriptorARGB32.volumeDepth = highestVoxelResolution / 16;
+        voxelGridDescriptorHalf4.width = highestVoxelResolution / 16;
+        voxelGridDescriptorHalf4.height = highestVoxelResolution / 16;
+        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 16;
 
         voxelGridDescriptorR8.width = highestVoxelResolution / 16;
         voxelGridDescriptorR8.height = highestVoxelResolution / 16;
         voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 16;
 
-        voxelGrid5 = new RenderTexture (voxelGridDescriptorARGB32);
+        voxelGrid5 = new RenderTexture (voxelGridDescriptorHalf4);
         voxelGrid5A = new RenderTexture (voxelGridDescriptorR8);
 
         //voxelInjectionGrid.filterMode = FilterMode.Bilinear;

@@ -68,7 +68,7 @@ void CSMain1(uint3 id : SV_DispatchThreadID)
 			{
 				//if (lightMapBuffer[index] == 0)
 				//{
-					RG0[uint3(id.xy, i)] = RGBMEncode(RGBMDecode(RG0[uint3(id.xy, i)]) * 0.9);
+					RG0[uint3(id.xy, i)] *= 0.9;
 					RG0A[uint3(id.xy, i)] *= 0.9;
 					//voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 					//voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;

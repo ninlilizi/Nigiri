@@ -357,108 +357,115 @@ inline float4 GetVoxelPosition(float3 worldPosition)
 // Returns the voxel information from grid 1
 inline half4 GetVoxelInfo1(float3 voxelPosition)
 {
-	//voxelUpdateBuffer
-	//uint threeD2oneD(float3 coord)
-
-	uint index = threeD2oneD(voxelPosition);
-	if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
-
-	float4 tex = float4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition)), 
-		voxelGrid1A.Sample(my_linear_clamp_sampler, voxelPosition).r);	
-	
-	if (neighbourSearch)
+	if (voxelGrid1A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
-		[unroll(6)]
-		for (int j = 0; j < 6; j++)
+		uint index = threeD2oneD(voxelPosition);
+		if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
+
+		float4 tex = voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition);
+
+		if (neighbourSearch)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(float4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition)), 
-				voxelGrid1A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
+			[unroll(6)]
+			for (int j = 0; j < 6; j++)
+			{
+				float3 offset = float3(0, 0, 0);
+				offset = offsets[j];
+				tex = max(voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition + offset), tex);
+			}
 		}
+		return tex;
 	}
-	return tex;
+	else return (0).xxxx;
 }
 
 // Returns the voxel information from grid 2
 inline half4 GetVoxelInfo2(float3 voxelPosition)
 {
-	half4 tex = half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition)), 
-		voxelGrid2A.Sample(my_linear_clamp_sampler, voxelPosition).r);
-
-	if (neighbourSearch)
+	if (voxelGrid2A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
-		[unroll(6)]
-		for (int j = 0; j < 6; j++)
-		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition)),
-				voxelGrid2A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
-		}
-	}
+		float4 tex = voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition);
 
-	return tex;
+		if (neighbourSearch)
+		{
+			[unroll(6)]
+			for (int j = 0; j < 6; j++)
+			{
+				float3 offset = float3(0, 0, 0);
+				offset = offsets[j];
+				tex = max(voxelGrid2.Sample(my_linear_clamp_sampler, voxelPosition + offset), tex);
+			}
+		}
+
+		return tex;
+	}
+	else return (0).xxxx;
 }
 
 // Returns the voxel information from grid 3
 inline half4 GetVoxelInfo3(float3 voxelPosition)
 {
-	half4 tex = half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition)),
-		voxelGrid3A.Sample(my_linear_clamp_sampler, voxelPosition).r);
-
-	if (neighbourSearch)
+	if (voxelGrid3A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
-		[unroll(6)]
-		for (int j = 0; j < 6; j++)
+		float4 tex = voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition);
+
+		if (neighbourSearch)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition)),
-				voxelGrid3A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
+			[unroll(6)]
+			for (int j = 0; j < 6; j++)
+			{
+				float3 offset = float3(0, 0, 0);
+				offset = offsets[j];
+				tex = max(voxelGrid3.Sample(my_linear_clamp_sampler, voxelPosition + offset), tex);
+			}
 		}
+		return tex;
 	}
-	return tex;
+	else return (0).xxxx;
 }
 
 // Returns the voxel information from grid 4
 inline half4 GetVoxelInfo4(float3 voxelPosition)
 {
-	half4 tex = half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition)),
-		voxelGrid4A.Sample(my_linear_clamp_sampler, voxelPosition).r);
-
-	if (neighbourSearch)
+	if (voxelGrid4A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
-		[unroll(6)]
-		for (int j = 0; j < 6; j++)
+		float4 tex = voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition);
+
+		if (neighbourSearch)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition)),
-				voxelGrid4A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
+			[unroll(6)]
+			for (int j = 0; j < 6; j++)
+			{
+				float3 offset = float3(0, 0, 0);
+				offset = offsets[j];
+				tex = max(voxelGrid4.Sample(my_linear_clamp_sampler, voxelPosition + offset), tex);
+			}
 		}
+		return tex;
 	}
-	return tex;
+	else return (0).xxxx;
 }
 
 // Returns the voxel information from grid 5
 inline half4 GetVoxelInfo5(float3 voxelPosition)
 {
-	half4 tex = half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition)),
-		voxelGrid5A.Sample(my_linear_clamp_sampler, voxelPosition).r);
-
-	if (neighbourSearch)
+	if (voxelGrid5A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
-		[unroll(6)]
-		for (int j = 0; j < 6; j++)
+		float4 tex = voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition);
+
+		if (neighbourSearch)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition)),
-				voxelGrid5A.Sample(my_linear_clamp_sampler, voxelPosition).r), tex);
+			[unroll(6)]
+			for (int j = 0; j < 6; j++)
+			{
+				float3 offset = float3(0, 0, 0);
+				offset = offsets[j];
+				tex = max(voxelGrid5.Sample(my_linear_clamp_sampler, voxelPosition + offset), tex);
+			}
 		}
+		return tex;
 	}
-	return tex;
+	else return (0).xxxx;
 }
 
 // Returns the voxel information from cascade 1
@@ -622,16 +629,11 @@ inline half4 GetVoxelInfo(float3 worldPosition)
 
 		if (cascade == 1)
 		{
-			info = half4(RGBMDecode(voxelGrid1.Sample(my_linear_clamp_sampler, worldPosition)), 
-				voxelGrid1A.Sample(my_linear_clamp_sampler, worldPosition).r);
-			info += half4(RGBMDecode(voxelGrid2.Sample(my_linear_clamp_sampler, worldPosition)), 
-				voxelGrid2A.Sample(my_linear_clamp_sampler, worldPosition).r);
-			info += half4(RGBMDecode(voxelGrid3.Sample(my_linear_clamp_sampler, worldPosition)),
-				voxelGrid3A.Sample(my_linear_clamp_sampler, worldPosition).r);
-			info += half4(RGBMDecode(voxelGrid4.Sample(my_linear_clamp_sampler, worldPosition)),
-				voxelGrid4A.Sample(my_linear_clamp_sampler, worldPosition).r);
-			info += half4(RGBMDecode(voxelGrid5.Sample(my_linear_clamp_sampler, worldPosition)),
-				voxelGrid5A.Sample(my_linear_clamp_sampler, worldPosition).r);
+			info = voxelGrid1.Sample(my_linear_clamp_sampler, worldPosition);
+			info += voxelGrid2.Sample(my_linear_clamp_sampler, worldPosition);
+			info += voxelGrid3.Sample(my_linear_clamp_sampler, worldPosition);
+			info += voxelGrid4.Sample(my_linear_clamp_sampler, worldPosition);
+			info += voxelGrid5.Sample(my_linear_clamp_sampler, worldPosition);
 		}
 		else if (cascade == 2) info += tex3D(voxelGridCascade1, worldPosition) * 3;
 		else if (cascade == 3) info += tex3D(voxelGridCascade2, worldPosition) * 3;

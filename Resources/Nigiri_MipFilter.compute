@@ -37,10 +37,11 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         float texel = 1.0 / destinationRes;
 
 		half4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
-		half texA = SourceA.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
+		//half texA = SourceA.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
 
 		Destination[uint3(id.xy, i)] = tex;
-		DestinationA[uint3(id.xy, i)] = texA;
+		if (tex.a > 0) DestinationA[uint3(id.xy, i)] = 1;
+		else DestinationA[uint3(id.xy, i)] = 0;
     }
 }
 
@@ -85,8 +86,7 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 
             offset = offsets[j];
 
-            float4 testColor = half4(RGBMDecode(Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0)), 
-				SourceA.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0)) * 0.5;
+			float4 testColor = Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
 			//half testColorA = SourceA.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
 
 			if (testColor.a > 0.01)
@@ -101,7 +101,8 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 		//texA /= c;
         
 
-        Destination[uint3(id.xy, i)] = RGBMEncode(tex.rgb);
-		DestinationA[uint3(id.xy, i)] = tex.a;
+        Destination[uint3(id.xy, i)] = tex;
+		if (tex.a > 0) DestinationA[uint3(id.xy, i)] = 1;
+		else DestinationA[uint3(id.xy, i)] = 0;
     }
 }

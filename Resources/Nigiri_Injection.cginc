@@ -91,8 +91,8 @@ float4 RGBMEncode(float3 color) {
 }
 
 float3 RGBMDecode(float4 rgbm) {
-	//return 6.0 * rgbm.rgb * rgbm.a;
-	return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
+	return 6.0 * rgbm.rgb * rgbm.a;
+	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
 }
 ///
 

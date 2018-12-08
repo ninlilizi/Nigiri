@@ -53,9 +53,10 @@ float4 RGBMEncode(float3 color) {
 }
 
 float3 RGBMDecode(float4 rgbm) {
-	return 6.0 * rgbm.rgb * rgbm.a; // Also converts Gamma to Linear
+	return 6.0 * rgbm.rgb * rgbm.a;
 	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
 }
+///
 
 // M matrix, for encoding
 const static float3x3 M = float3x3(
@@ -227,7 +228,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	{
 		//voxelGrid[voxelPosition.xyz] *= temporalStablityVsRefreshRate;
 
-		half4 oldColor = float4(RGBMDecode(voxelGrid[voxelPosition.xyz]), voxelGridA[voxelPosition.xyz]);
+		half4 oldColor = voxelGrid[voxelPosition.xyz];
 
 		half4 newMixedColor = (0).xxxx;
 		if (nearestNeighbourPropagation == 1)
@@ -238,7 +239,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 			for (int x = 0; x < 16; x++)
 			{
 				float3 offset = offsets[x];
-				half4 testColor = float4(RGBMDecode(voxelGrid[float3(voxelPosition.xyz + offset.xyz)]), voxelGridA[voxelPosition.xyz + offset.xyz]);
+				half4 testColor = voxelGrid[float3(voxelPosition.xyz + offset.xyz)];
 				if (testColor.a > 0.1)
 				{
 					mixedColor += testColor;
@@ -295,18 +296,19 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 			if (voxelUpdateBuffer[index] == 0)
 			{
 				voxelGrid[voxelPosition.xyz] =
-					RGBMEncode(lerp(newMixedColor.rgb, oldColor.rgb, 0.95));
+					lerp(newMixedColor, oldColor, 0.9);
 
-				voxelGridA[voxelPosition.xyz] =
-					lerp(newMixedColor.a, oldColor.a, 0.9);
+				voxelGridA[voxelPosition.xyz] = 1;
+				//	lerp(newMixedColor.a, oldColor.a, 0.9);
 			}
 			else
 			{
 				voxelGrid[voxelPosition.xyz] =
-					RGBMEncode(lerp(newMixedColor.rgb, oldColor.rgb, 0.99));
+					lerp(newMixedColor, oldColor, 0.99);
 
-				voxelGridA[voxelPosition.xyz] =
-					lerp(newMixedColor.a, oldColor.a, 0.99);
+				voxelGridA[voxelPosition.xyz] = 1;
+				//voxelGridA[voxelPosition.xyz] =
+				//	lerp(newMixedColor.a, oldColor.a, 0.99);
 			}
 		}
 		/*else if (lumaDiff < lumaThreshold)
