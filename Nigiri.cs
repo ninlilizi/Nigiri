@@ -283,6 +283,8 @@ public class Nigiri : MonoBehaviour {
 
 
     [Header("Debug Settings")]
+    //Varaiable
+    public string vramUsed;
     public bool VisualiseGI = false;
     //private bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
@@ -370,11 +372,11 @@ public class Nigiri : MonoBehaviour {
 
     int frameSwitch = 0;
     //int voxelizationSlice = 0;
-    public int mipSwitch = 0;
+    private int mipSwitch = 0;
     //int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
     public static bool gridBufferSwitch = false;
-    public int gridBufferCounter = 0;
+    private int gridBufferCounter = 0;
     //int mobilizeGridCounter = 0;
     //int voxelStaggerSwitch = 0;
     //bool fastResolveSwitch = true;
@@ -485,7 +487,7 @@ public class Nigiri : MonoBehaviour {
         fastResolveSwitch = true;
     }*/
 
-        void Update()
+    void Update()
     {
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
@@ -551,6 +553,9 @@ public class Nigiri : MonoBehaviour {
         voxelGrid5.filterMode = filterMode;*/
 
         UpdateVoxelGrid();
+
+        // This line goes at the end of update or OnRender
+        vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " MB";
     }
 
     // Use this for initialization
@@ -1681,8 +1686,147 @@ public class Nigiri : MonoBehaviour {
         prevPosition = GetComponent<Camera>().transform.position;
     }
 
+public int bitValue(RenderTexture x)
+{
 
-    class PathCacheBuffer
+    int bit = 0;
+    switch (x.format)
+    {
+        case RenderTextureFormat.ARGB32:
+            break;
+        case RenderTextureFormat.Depth:
+            break;
+        case RenderTextureFormat.ARGBHalf:
+            bit = 16 * 4;
+            break;
+        case RenderTextureFormat.Shadowmap:
+            break;
+        case RenderTextureFormat.RGB565:
+            break;
+        case RenderTextureFormat.ARGB4444:
+            break;
+        case RenderTextureFormat.ARGB1555:
+            break;
+        case RenderTextureFormat.Default:
+            break;
+        case RenderTextureFormat.ARGB2101010:
+            break;
+        case RenderTextureFormat.DefaultHDR:
+            break;
+        case RenderTextureFormat.ARGB64:
+            break;
+        case RenderTextureFormat.ARGBFloat:
+            break;
+        case RenderTextureFormat.RGFloat:
+            break;
+        case RenderTextureFormat.RGHalf:
+            break;
+        case RenderTextureFormat.RFloat:
+            bit = 32;
+            break;
+        case RenderTextureFormat.RHalf:
+            bit = 16;
+            break;
+        case RenderTextureFormat.R8:
+            bit = 8;
+            break;
+        case RenderTextureFormat.ARGBInt:
+            break;
+        case RenderTextureFormat.RGInt:
+            break;
+        case RenderTextureFormat.RInt:
+            break;
+        case RenderTextureFormat.BGRA32:
+            break;
+        case RenderTextureFormat.RGB111110Float:
+            break;
+        case RenderTextureFormat.RG32:
+            break;
+        case RenderTextureFormat.RGBAUShort:
+            break;
+        case RenderTextureFormat.RG16:
+            break;
+        case RenderTextureFormat.BGRA10101010_XR:
+            break;
+        case RenderTextureFormat.BGR101010_XR:
+            break;
+        default:
+            break;
+    }
+    if (bit == 0)
+        Debug.Log(bit + " " + x.name + " bit Value is 0, resolve");
+    return bit;
+}
+
+
+///// <summary>
+///// Estimates the VRAM usage of all the render textures used to render GI.
+///// </summary>
+public float vramUsage  //TODO: Update vram usage calculation
+{
+    get
+    {
+        if (!enabled)
+        {
+            return 0.0f;
+        }
+        long v = 0;
+
+        if (lightingTexture != null)
+            v += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
+
+        if (lightingTextureMono != null)
+            v += lightingTextureMono.width * lightingTextureMono.height * bitValue(lightingTextureMono); ;
+
+        if (positionTexture != null)
+            v += positionTexture.width * positionTexture.height * bitValue(positionTexture);
+
+        if (depthTexture != null)
+            v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
+
+        if (gi != null)
+            v += gi.width * gi.height * bitValue(depthTexture);
+
+        if (blur != null)
+            v += blur.width * blur.height * bitValue(blur);
+
+        /*if (voxelInjectionGrid != null)
+            v += voxelInjectionGrid.width * voxelInjectionGrid.height * bitValue(voxelInjectionGrid);
+        if (voxelPropagatedGrid != null)
+            v += voxelPropagatedGrid.width * voxelPropagatedGrid.height * bitValue(voxelPropagatedGrid);*/
+        if (voxelGrid1 != null)
+            v += voxelGrid1.width * voxelGrid1.height * voxelGrid1.volumeDepth * bitValue(voxelGrid1);
+        if (voxelGrid2 != null)
+            v += voxelGrid2.width * voxelGrid2.height * voxelGrid2.volumeDepth * bitValue(voxelGrid2);
+        if (voxelGrid3 != null)
+            v += voxelGrid3.width * voxelGrid3.height * voxelGrid3.volumeDepth * bitValue(voxelGrid3);
+        if (voxelGrid4 != null)
+            v += voxelGrid4.width * voxelGrid4.height * voxelGrid4.volumeDepth * bitValue(voxelGrid4);
+        if (voxelGrid5 != null)
+            v += voxelGrid5.width * voxelGrid5.height * voxelGrid5.volumeDepth * bitValue(voxelGrid5);
+        if (voxelGrid1A != null)
+            v += voxelGrid1A.width * voxelGrid1A.height * voxelGrid1A.volumeDepth * bitValue(voxelGrid1A);
+        if (voxelGrid2A != null)
+            v += voxelGrid2A.width * voxelGrid2A.height * voxelGrid2A.volumeDepth * bitValue(voxelGrid2A);
+        if (voxelGrid3A != null)
+            v += voxelGrid3A.width * voxelGrid3A.height * voxelGrid3A.volumeDepth * bitValue(voxelGrid3A);
+        if (voxelGrid4A != null)
+            v += voxelGrid4A.width * voxelGrid4A.height * voxelGrid4A.volumeDepth * bitValue(voxelGrid4A);
+        if (voxelGrid5A != null)
+            v += voxelGrid5A.width * voxelGrid5A.height * voxelGrid5A.volumeDepth * bitValue(voxelGrid5A);
+
+            if (voxelGridCascade1 != null)
+            v += voxelGridCascade1.width * voxelGridCascade1.height * voxelGridCascade1.volumeDepth * bitValue(voxelGridCascade1);
+        if (voxelGridCascade2 != null)
+            v += voxelGridCascade2.width * voxelGridCascade2.height * voxelGridCascade2.volumeDepth * bitValue(voxelGridCascade2);
+
+        float vram = (v / 8388608.0f);
+
+        return vram;
+    }
+}
+
+class PathCacheBuffer
     {
         int size;
         readonly int stride = sizeof(float) * 4;
