@@ -18,7 +18,7 @@ uniform uint3					gridOffset;
 
 uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u5);
 //uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
-uniform RWTexture3D<float4> voxelGrid : register(u6);
+uniform RWTexture3D<half4> voxelGrid : register(u6);
 
 float4x4 InverseProjectionMatrix;
 

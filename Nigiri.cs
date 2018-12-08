@@ -522,8 +522,8 @@ public class Nigiri : MonoBehaviour {
         else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 25);
         else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-25, 0, 0);
         else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3(25, 0, 0);*/
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 20, 0);
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, -20, 0);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, emissiveCamera.orthographicSize * 0.5f, 0);
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, -(emissiveCamera.orthographicSize * 0.5f), 0);
         //else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
         emissiveCameraGO.transform.LookAt(localCam.transform);
 
@@ -624,8 +624,8 @@ public class Nigiri : MonoBehaviour {
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.orthographicSize = 25;
-            emissiveCamera.farClipPlane = 25;
+            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.165f);
+            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.165f);
             emissiveCamera.enabled = false;
             emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
             Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
