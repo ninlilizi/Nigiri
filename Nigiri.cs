@@ -735,7 +735,7 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.Create();
         positionTexture.Create();
         depthTexture.Create();
-        colorCache.Create();
+        giUpsample.Create();
         blur.Create();
         gi.Create();
 
@@ -1743,9 +1743,12 @@ public float vramUsage  //TODO: Update vram usage calculation
             v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
 
         if (gi != null)
-            v += gi.width * gi.height * bitValue(depthTexture);
+            v += gi.width * gi.height * bitValue(gi);
 
-        if (blur != null)
+        if (giUpsample != null)
+            v += giUpsample.width * giUpsample.height * bitValue(giUpsample);
+
+            if (blur != null)
             v += blur.width * blur.height * bitValue(blur);
 
         /*if (voxelInjectionGrid != null)
