@@ -33,6 +33,7 @@
 		uniform sampler3D				voxelGridCascade1;
 		uniform sampler3D				voxelGridCascade2;	
 
+		uniform texture2D				gi;
 		uniform texture2D 				_MainTex;
 		uniform texture2D				_CameraDepthTexture;
 		uniform texture2D				_CameraDepthNormalsTexture;
@@ -120,7 +121,9 @@
 
 		//uniform StructuredBuffer<colorStruct> tracedBuffer0;
 		//uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
-		uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u1);
+		//uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u1);
+
+		//uniform RWTexture2D<float4>		colorCache : register(u2);
 
 		float ConeTraceBias;
 
@@ -360,7 +363,7 @@ inline half4 GetVoxelInfo1(float3 voxelPosition)
 	if (voxelGrid1A.Sample(my_point_clamp_sampler, voxelPosition).r > 0.1)
 	{
 		uint index = threeD2oneD(voxelPosition);
-		if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
+		//2if (voxelUpdateBuffer[index] == 0) voxelUpdateBuffer[index] = 2;
 
 		float4 tex = voxelGrid1.Sample(my_linear_clamp_sampler, voxelPosition);
 
@@ -999,70 +1002,7 @@ inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, 
 	float3 direction1 = normalize(cross(worldNormal, randomVector));
 	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
 
-	/*
-	///Reflection cone setup
-	float depthValue;
-	float3 viewSpaceNormal;
-	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
-	viewSpaceNormal = normalize(viewSpaceNormal);
-	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
-	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
-	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
-	reflectedRayDirection *= -1.0;
-	float4 reflection = (0).xxxx;
-	///
-	*/
-	//uint index = 0;
-	//float3 voxelBufferCoord;
-	/*if (usePathCache)
-	{
-		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord, skyVisibility);
-
-		//voxelBufferCoord.x += (blueNoise.x * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.y += (blueNoise.y * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.z += (blueNoise.z * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.xy *= uv;
-		//voxelBufferCoord.z *= depth;
-		index = voxelBufferCoord.x * (voxelResolution) * (voxelResolution)+voxelBufferCoord.y * (voxelResolution)+voxelBufferCoord.z;
-		tracedBuffer1[index] += float4(gi, 1);
-	}*/
-
 	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, skyVisibility);
-	/*if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
-	{
-		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
-		float3 viewVector = normalize(viewSpacePosition.xyz);
-		float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
-
-		float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
-		
-		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a), 5.0);
-		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
-		fresnel *= saturate(spec.a * 6.0);
-
-		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain;
-		//reflection.rgb *= maximumIterationsReflection * BalanceGain;
-
-		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
-
-		if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
-		else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
-	}*/
-
-	/*if (usePathCache && !visualizeOcclusion)
-	{
-		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
-
-		//Average HSV values independantly for prettier result
-		half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
-		half4 giHSV = float4(rgb2hsv(gi), 0);
-		gi.rgb *= cachedResult.rgb * EmissiveAttribution;
-		giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
-		gi.rgb += hsv2rgb(giHSV);
-
-		if (visualiseCache) gi.rgb = cachedResult.rgb;	
-	}*/
-	//if (visualizeReflections) gi.rgb = reflection.rgb;
 
 	return gi;
 }
@@ -1105,23 +1045,6 @@ inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, floa
 
 half4 frag_lighting(v2f i) : SV_Target
 {
-	//if (i.uv.x % subsamplingRatio == 0) return (0).xxxx;
-
-
-	//rng_state = i.uv.x * i.uv.y;
-	//float3 directLighting = tex2D(_MainTex, i.uv).rgb;
-	half4 directLighting = _MainTex.Sample(my_point_clamp_sampler, i.uv);
-
-	//half4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
-	half4 gBufferSample = _CameraGBufferTexture0.Sample(my_point_clamp_sampler, i.uv);
-
-	//float3 albedo = gBufferSample.rgb;
-	//float ao = gBufferSample.a;
-
-	//float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
-	float metallic = _CameraGBufferTexture1.Sample(my_point_clamp_sampler, i.uv).r;
-
-
 	// read low res depth and reconstruct world position
 	float depth = GetDepthTexture(i.uv);
 
@@ -1168,21 +1091,10 @@ half4 frag_lighting(v2f i) : SV_Target
 
 	float skyVisibility;
 	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth, skyVisibility);
-	float3 indirectLighting = directLighting + ((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution;
-	//indirectLighting = directLighting + indirectLighting * gBufferSample.a * gBufferSample.rgb;
-	//if (skyVisibility == 0) indirectLighting += directLighting;
-	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
-	{
-		indirectLighting = ComputeReflection(worldPos, i.uv, indirectLighting, skyVisibility);
-	}
 
-	//else indirectLighting *= 1.85;
+	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectContribution = indirectContribution / maximumIterations / 1.85;
 
-	
-
-	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = indirectContribution / maximumIterations / 1.85;
-
-	return half4(indirectLighting, 1.0f);
+	return half4(indirectContribution, 1.0f);
 }
 
 float4 frag_normal_texture(v2f i) : SV_Target
@@ -1224,42 +1136,76 @@ Pass
 	ENDCG
 }
 
-// 3 : Composition pass
-/*Pass
-{
-	CGPROGRAM
-		#pragma vertex vert
-		#pragma fragment frag_blur
-		#pragma fragmentoption ARB_precision_hint_fastest
-		#pragma multi_compile_instancing
-		#if defined (VRWORKS)
-			#pragma multi_compile VRWORKS_MRS VRWORKS_LMS VRWORKS_NONE
-		#endif
-
-		float4 frag_blur(v2f input) : COLOR0
-		{
-			half3 col = tex2D(_MainTex, input.uv).rgb;
-			half3 giCol = tex2D(gi, input.uv).rgb;
-			half3 lpvCol = tex2D(lpv, input.uv).rgb;
-			//half3 gBufferSample = tex2D(_CameraGBufferTexture0, input.uv).rgb;
-			//half3 finalLighting = giCol.rgb + lerp(col.rgb, gBufferSample.rgb * 0.25, 0.25);
-
-			if (!VisualiseGI) return float4(giCol + lpvCol, 1);
-			else return float4(giCol, 1);
-
-			//return float4(finalLighting, 1);
-		}
-
-		ENDCG
-}
-
-// 4 : Normal texture writing
+// 2 : Composition pass
 Pass
 {
 	CGPROGRAM
 	#pragma vertex vert
-	#pragma fragment frag_normal_texture
+	#pragma fragment frag_composite
+	#pragma target 5.0
+	
+
+	half4 frag_composite(v2f i) : SV_Target
+	{
+	half4 directLighting = _MainTex.Sample(my_point_clamp_sampler, i.uv);
+	half4 giSample = gi.Sample(my_point_clamp_sampler, i.uv);
+	half4 gBufferSample = _CameraGBufferTexture0.Sample(my_point_clamp_sampler, i.uv);
+	float metallic = _CameraGBufferTexture1.Sample(my_point_clamp_sampler, i.uv).r;
+
+	// read low res depth and reconstruct world position
+	float depth = GetDepthTexture(i.uv);
+
+	//linearise depth		
+	float lindepth = Linear01Depth(1 - depth);
+
+	//get view and then world positions		
+
+	float4 viewPos = float4(0, 0, 0, 0);
+	float3 worldPos = float3(0, 0, 0);
+if (stereoEnabled)
+{
+	//Fix Stereo View Matrix
+	float depth = GetDepthTexture(i.uv);
+	float4x4 proj, eyeToWorld;
+
+	if (i.uv.x < .5) // Left Eye
+	{
+		i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
+		proj = _LeftEyeProjection;
+		eyeToWorld = _LeftEyeToWorld;
+	}
+	else // Right Eye
+	{
+		i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
+		proj = _RightEyeProjection;
+		eyeToWorld = _RightEyeToWorld;
+	}
+
+	float2 uvClip = i.uv * 2.0 - 1.0;
+	float4 clipPos = float4(uvClip, 1 - depth, 1.0);
+	viewPos = mul(proj, clipPos); // inverse projection by clip position
+	viewPos /= viewPos.w; // perspective division
+	worldPos = mul(eyeToWorld, viewPos).xyz;
+	//Fix Stereo View Matrix/
+}
+else
+{
+	viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+	worldPos = mul(InverseViewMatrix, viewPos).xyz;
+}
+	float3 indirectLighting = (0).xxx;
+	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = giSample;
+	else indirectLighting = directLighting + ((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * giSample;
+
+	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
+	{
+		indirectLighting = ComputeReflection(worldPos, i.uv, indirectLighting, skyVisibility);
+	}
+
+	return half4(indirectLighting, 1.0f);
+
+	}
 	ENDCG
-}*/
+}
 }
 }

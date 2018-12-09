@@ -50,7 +50,7 @@ public class Nigiri : MonoBehaviour {
     public int fastResolveFactor = 2;*/
 
     [Header("Cone Trace Settings")]
-    [Range(1, 4)]
+    [Range(1, 16)]
     public int subsamplingRatio = 1;
     [Range(1, 32)]
     public int maximumIterations = 8;
@@ -349,6 +349,8 @@ public class Nigiri : MonoBehaviour {
     private RenderTexture lightingTexture2Mono;
     private RenderTexture positionTexture;
     private RenderTexture depthTexture;
+
+    private RenderTexture colorCache;
     //public RenderTexture occlusionTexture;
     //private RenderTexture orthographicPositionTexture;
 
@@ -356,6 +358,7 @@ public class Nigiri : MonoBehaviour {
 
     private RenderTexture blur;
     private RenderTexture gi;
+    private RenderTexture giUpsample;
 
 
     //private PathCacheBuffer pathCacheBuffer;
@@ -685,8 +688,10 @@ public class Nigiri : MonoBehaviour {
         else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
-        gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+        gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        giUpsample = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+        //colorCache = new RenderTexture(3, 2, 0, RenderTextureFormat.ARGBFloat);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
@@ -698,8 +703,11 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.autoGenerateMips = true;*/
 
         depthTexture.filterMode = FilterMode.Bilinear;
+        //colorCache.filterMode = FilterMode.Point;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
+
+        //colorCache.enableRandomWrite = true;
 
         if (localCam.stereoEnabled)
         {
@@ -727,6 +735,7 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.Create();
         positionTexture.Create();
         depthTexture.Create();
+        colorCache.Create();
         blur.Create();
         gi.Create();
 
@@ -1227,43 +1236,6 @@ public class Nigiri : MonoBehaviour {
             _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
         }
 
-
-
-
-
-        //Experimental grid offsetting
-        /*if (isGridMobile)
-        {
-            if (mobilizeGridCounter > 3)
-            {
-                if (gridBufferSwitch)
-                {
-                    gridOffset1 = localCam.transform.position;
-                    clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
-                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                }
-                else
-                {
-                    gridOffset0 = localCam.transform.position;
-                    clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
-                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                }
-
-                isGridMobile = false;
-                mobilizeGridCounter = 0;
-                gridBufferSwitch = !gridBufferSwitch;
-            }
-            else
-            {
-                mobilizeGridCounter++;
-                tracerMaterial.SetVector("gridOffset", prevGridPosition);
-            }
-        }
-        else tracerMaterial.SetVector("gridOffset", gridOffset);*/
-        ///
-
         tracerMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         tracerMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
         Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
@@ -1435,30 +1407,11 @@ public class Nigiri : MonoBehaviour {
 			Graphics.Blit (source, destination, tracerMaterial, 1);
             return;
 		} else {
-            /*if (usePathCache)
-            {
-                if (tracedTexture1UpdateCount > 48)
-                {
-                    clearComputeCache.SetInt("Resolution", 256);
-                    clearComputeCache.SetBuffer(1, "RG1", pathCacheBuffer.back);
-                    clearComputeCache.SetInt("zStagger", tracedTexture1UpdateCount - 48);
-                    clearComputeCache.Dispatch(1, 256 / 16, 256 / 16, 1);
-                }
-                else if (tracedTexture1UpdateCount > 32)
-                {
-                    transferIntsCompute.SetBuffer(3, "ResultBuffer", pathCacheBuffer.front);
-                    transferIntsCompute.SetBuffer(3, "InputBuffer", pathCacheBuffer.back);
-                    transferIntsCompute.SetInt("zStagger", tracedTexture1UpdateCount - 32);
-                    transferIntsCompute.SetInt("Resolution", 256);
-                    transferIntsCompute.Dispatch(3, 256 / 16, 256 / 16, 1);
-                }
-                tracedTexture1UpdateCount = (tracedTexture1UpdateCount + 1) % (65);
-            }*/
-
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
             //Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
             //Graphics.SetRandomWriteTarget(1, pathCacheBuffer.back);
             Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer, true);
+            //Graphics.SetRandomWriteTarget(2, colorCache);
             //tracerMaterial.SetBuffer("voxelUpdateBuffer", voxelUpdateBuffer);
             Graphics.Blit (source, gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
@@ -1487,6 +1440,9 @@ public class Nigiri : MonoBehaviour {
 
             Graphics.Blit(gi, blur, fxaaMaterial, 0);
             Graphics.Blit(blur, gi, fxaaMaterial, 1);
+
+            tracerMaterial.SetTexture("gi", gi);
+            Graphics.Blit(source, giUpsample, tracerMaterial, 3);
 
              //Graphics.Blit(gi, destination);
 
@@ -1558,7 +1514,7 @@ public class Nigiri : MonoBehaviour {
                 RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
                 RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
                 temp.filterMode = FilterMode.Bilinear;
-                Graphics.Blit(gi, temp, _colorMaterial);
+                Graphics.Blit(giUpsample, temp, _colorMaterial);
 
                 _blitAddMaterial.SetTexture("_Source", temp);
                 Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
@@ -1569,7 +1525,7 @@ public class Nigiri : MonoBehaviour {
         }
         else
         {
-            Graphics.Blit(gi, destination, _colorMaterial);
+            Graphics.Blit(giUpsample, destination, _colorMaterial);
         }
         ///
 
@@ -1589,10 +1545,12 @@ public class Nigiri : MonoBehaviour {
         //if (occlusionTexture != null) occlusionTexture.Release();
         //if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
+        if (giUpsample != null) giUpsample.Release();
         if (blur != null) blur.Release();
+        //if (colorCache != null) colorCache.Release();
 
         //if (lightingCurveLUT != null) lightingCurveLUT.Release();
-                
+
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
