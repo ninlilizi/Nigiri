@@ -1,17 +1,12 @@
-<h1 align=center>NKLI</h1>
-
-<p align="center">
-  <img src="https://i.imgur.com/gtkjoxj.png">
-</p>
-
+<h1 align=center>Nigiri</h1>
 
 # Features.
-* 2D, Single Pass Rendering (Single Pass Instanced support once PP2 adds SPI)
-* Runs on Unity version 2018 (2017 support is coming)
-* Functions as a PostProcessing v2 effect
-* Samples cones across frames. Giving a 32cone result for the cost of 2 per frame.
+* 2D, Single Pass Stereo Rendering
+* Runs on Unity version 2018.2 ONLY
+* Depth buffer based voxelisation is less GPU intensive that other methods.
+* Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
 
-A fully-dynamic voxel-based global illumination system for Unity. More details at http://www.sonicether.com/segi/
+An almost-dynamic voxel-based global illumination system for Unity.
 
 <p align="center" style="display: inline-block;">
   <img height="248px" width="440px" src="https://i.imgur.com/xoR4ab6.jpg">
