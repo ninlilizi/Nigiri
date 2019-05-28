@@ -37,9 +37,9 @@ Please refer to the User Guide.pdf for usage instructions.
 If you need some help, feel free to ask any questions in the [official thread](https://forum.unity.com/threads/segi-fully-dynamic-global-illumination.410310) on Unity forums.
 
 # Licence
- Nigiri as a whole is CC BY-NC 4.0. With select elements as stated below being MIT.
+ Nigiri as a whole is CC BY-NC 4.0. With select attributions as stated below being MIT.
 
-# Credits
+# Attributions
 * Sonic Ether for SEGI (https://github.com/sonicether/SEGI)<br>
 * Cat Like Coding for FXAA (https://catlikecoding.com/unity/tutorials/advanced-rendering/fxaa/)<br>
 * Cat Like Coding for Bulk of Spherical Harmics shader (https://catlikecoding.com/unity/tutorials/rendering/part-20/)<br>
