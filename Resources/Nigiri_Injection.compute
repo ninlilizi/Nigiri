@@ -87,7 +87,7 @@ void CSMain(uint3 id3 : SV_DispatchThreadID)
 	for (uint z = 0; z < highestVoxelResolution; z++)
 	{
 		float4 decodedColor = DecodeRGBAuint(lightMapBuffer[threeD2oneD(float3(id3.xy, z))]);
-		voxelGrid[float3(id3.xy, z)] = float4(lerp(decodedColor.rgb / (decodedColor.a + 1), voxelGrid[float3(id3.xy, z)].rgb, 0.8), decodedColor.a);
+		voxelGrid[float3(id3.xy, z)] = float4(lerp(decodedColor.rgb / (decodedColor.a + 1), voxelGrid[float3(id3.xy, z)], 0.8), decodedColor.a);
 		lightMapBuffer[threeD2oneD(float3(id3.xy, z))] = 0;
 	}
 }

@@ -36,7 +36,7 @@ public class Nigiri : MonoBehaviour {
     [Tooltip("A higher speed, but lower quality light propagation")]
     public bool neighbourPropagation = false;
     public bool gaussianMipFiltering = true;
-    private bool bilinearFiltering = true;
+    public bool bilinearFiltering = true;
     public bool primaryVoxelization = true;
     public bool secondaryVoxelization = true;
 
@@ -283,7 +283,6 @@ public class Nigiri : MonoBehaviour {
 
 
     [Header("Debug Settings")]
-    //Varaiable
     public string vramUsed;
     public bool VisualiseGI = false;
     //private bool VisualiseCache = false;
@@ -321,25 +320,17 @@ public class Nigiri : MonoBehaviour {
 
 
     //[Header("Render Textures")]
-    private RenderTextureDescriptor voxelGridDescriptorHalf4;
-    private RenderTextureDescriptor voxelGridDescriptorARGB32;
-    private RenderTextureDescriptor voxelGridDescriptorR8;
+    private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
     //public static RenderTexture voxelInjectionGrid;
     //public static RenderTexture voxelPropagationGrid;
     //public static RenderTexture voxelPropagatedGrid;
     public static RenderTexture voxelGrid0;
-    public static RenderTexture voxelGrid0A;
     public static RenderTexture voxelGrid1;
-    public static RenderTexture voxelGrid1A;
     public static RenderTexture voxelGrid2;
-    public static RenderTexture voxelGrid2A;
     public static RenderTexture voxelGrid3;
-    public static RenderTexture voxelGrid3A;
     public static RenderTexture voxelGrid4;
-    public static RenderTexture voxelGrid4A;
     public static RenderTexture voxelGrid5;
-    public static RenderTexture voxelGrid5A;
     public static RenderTexture voxelGridCascade1;
     public static RenderTexture voxelGridCascade2;
 
@@ -349,8 +340,6 @@ public class Nigiri : MonoBehaviour {
     private RenderTexture lightingTexture2Mono;
     private RenderTexture positionTexture;
     private RenderTexture depthTexture;
-
-    private RenderTexture colorCache;
     //public RenderTexture occlusionTexture;
     //private RenderTexture orthographicPositionTexture;
 
@@ -358,7 +347,6 @@ public class Nigiri : MonoBehaviour {
 
     private RenderTexture blur;
     private RenderTexture gi;
-    private RenderTexture giUpsample;
 
 
     //private PathCacheBuffer pathCacheBuffer;
@@ -375,15 +363,15 @@ public class Nigiri : MonoBehaviour {
 
     int frameSwitch = 0;
     //int voxelizationSlice = 0;
-    private int mipSwitch = 0;
+    int mipSwitch = 0;
     //int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
     public static bool gridBufferSwitch = false;
-    private int gridBufferCounter = 0;
+    public int gridBufferCounter = 0;
     //int mobilizeGridCounter = 0;
     //int voxelStaggerSwitch = 0;
     //bool fastResolveSwitch = true;
-    private bool isGridMobile = false;
+    public bool isGridMobile = false;
 
     //bool prevPropagateLight = false;
     //private Vector3 prevRoatation;
@@ -490,7 +478,7 @@ public class Nigiri : MonoBehaviour {
         fastResolveSwitch = true;
     }*/
 
-    void Update()
+        void Update()
     {
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
@@ -526,38 +514,39 @@ public class Nigiri : MonoBehaviour {
         else if (prevPosition.z < localCam.transform.position.z - (GIAreaSize * 0.165)) MobilizeGrid();
         ///
 
-        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (4);
+        emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (2);
         /*if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.0625f));
         else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, (int)(GIAreaSize * 0.0625f));
         else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(int)(GIAreaSize * 0.0625f), 0, 0);
         else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3((int)(GIAreaSize * 0.0625f), 0, 0);*/
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(emissiveCamera.orthographicSize * 0.5f));
-        else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, emissiveCamera.orthographicSize * 0.5f);
-        else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-(emissiveCamera.orthographicSize * 0.5f), 0, 0);
-        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3(emissiveCamera.orthographicSize * 0.5f, 0, 0);
-        //else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, emissiveCamera.orthographicSize * 0.5f, 0);
-        //if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, -(emissiveCamera.orthographicSize * 0.5f), 0);
+        /*if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -25);
+        else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 25);
+        else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-25, 0, 0);
+        else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3(25, 0, 0);*/
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(GIAreaSize / 2), 0);
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(GIAreaSize / 2), 0);
         //else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
         emissiveCameraGO.transform.LookAt(localCam.transform);
 
-        /*FilterMode filterMode = FilterMode.Point;
+        emissiveCamera.orthographicSize = (int)(GIAreaSize / 2);
+        emissiveCamera.farClipPlane = GIAreaSize;
+
+        FilterMode filterMode = FilterMode.Point;
         if (bilinearFiltering) filterMode = FilterMode.Bilinear;
 
         //voxelPropagationGrid.filterMode = filterMode;
         //voxelPropagatedGrid.filterMode = filterMode;
         voxelGridCascade1.filterMode = filterMode;
         voxelGrid0.filterMode = filterMode;
-        voxelGrid0A.filterMode = filterMode;
         voxelGrid1.filterMode = filterMode;
-        voxelGrid1A.filterMode = filterMode;
         voxelGrid2.filterMode = filterMode;
         voxelGrid3.filterMode = filterMode;
         voxelGrid4.filterMode = filterMode;
-        voxelGrid5.filterMode = filterMode;*/
+        voxelGrid5.filterMode = filterMode;
 
         UpdateVoxelGrid();
 
-        // This line goes at the end of update or OnRender
+        // This line goes at the end of update or OnRender 
         vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " MB";
     }
 
@@ -626,7 +615,7 @@ public class Nigiri : MonoBehaviour {
             }
 
             blueNoise[i] = blueNoiseTexture;
-            blueNoise[i].wrapMode = TextureWrapMode.Repeat;
+
         }
 
         //pathCacheBuffer = new PathCacheBuffer();
@@ -638,12 +627,10 @@ public class Nigiri : MonoBehaviour {
             emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
             //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
             emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
+            //emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
             emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
             emissiveCamera.CopyFrom(GetComponent<Camera>());
             emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.orthographicSize = (int)(GIAreaSize * 0.165f);
-            emissiveCamera.farClipPlane = (int)(GIAreaSize * 0.165f);
             emissiveCamera.enabled = false;
             emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
             Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
@@ -684,14 +671,12 @@ public class Nigiri : MonoBehaviour {
 
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
-        else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
+        if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+        else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
-        gi = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        giUpsample = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+        gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
-        //colorCache = new RenderTexture(3, 2, 0, RenderTextureFormat.ARGBFloat);
         //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
@@ -703,11 +688,8 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.autoGenerateMips = true;*/
 
         depthTexture.filterMode = FilterMode.Bilinear;
-        //colorCache.filterMode = FilterMode.Point;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
-
-        //colorCache.enableRandomWrite = true;
 
         if (localCam.stereoEnabled)
         {
@@ -735,7 +717,6 @@ public class Nigiri : MonoBehaviour {
         lightingTexture2.Create();
         positionTexture.Create();
         depthTexture.Create();
-        giUpsample.Create();
         blur.Create();
         gi.Create();
 
@@ -758,96 +739,50 @@ public class Nigiri : MonoBehaviour {
 	// Function to initialize the voxel grid data
 	private void InitializeVoxelGrid() {
 
-		voxelGridDescriptorHalf4 = new RenderTextureDescriptor ();
-		voxelGridDescriptorHalf4.bindMS = false;
-		voxelGridDescriptorHalf4.colorFormat = RenderTextureFormat.ARGBHalf;
-		voxelGridDescriptorHalf4.depthBufferBits = 0;
-		voxelGridDescriptorHalf4.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-		voxelGridDescriptorHalf4.enableRandomWrite = true;
-		voxelGridDescriptorHalf4.width = highestVoxelResolution;
-		voxelGridDescriptorHalf4.height = highestVoxelResolution;
-		voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution;
-		voxelGridDescriptorHalf4.msaaSamples = 1;
-		voxelGridDescriptorHalf4.sRGB = true;
-
-        voxelGridDescriptorARGB32 = new RenderTextureDescriptor();
-        voxelGridDescriptorARGB32.bindMS = false;
-        voxelGridDescriptorARGB32.colorFormat = RenderTextureFormat.ARGB32;
-        voxelGridDescriptorARGB32.depthBufferBits = 0;
-        voxelGridDescriptorARGB32.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-        voxelGridDescriptorARGB32.enableRandomWrite = true;
-        voxelGridDescriptorARGB32.width = highestVoxelResolution;
-        voxelGridDescriptorARGB32.height = highestVoxelResolution;
-        voxelGridDescriptorARGB32.volumeDepth = highestVoxelResolution;
-        voxelGridDescriptorARGB32.msaaSamples = 1;
-        voxelGridDescriptorARGB32.sRGB = true;
-
-        voxelGridDescriptorR8 = new RenderTextureDescriptor();
-        voxelGridDescriptorR8.bindMS = false;
-        voxelGridDescriptorR8.colorFormat = RenderTextureFormat.R8;
-        voxelGridDescriptorR8.depthBufferBits = 0;
-        voxelGridDescriptorR8.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-        voxelGridDescriptorR8.enableRandomWrite = true;
-        voxelGridDescriptorR8.width = highestVoxelResolution;
-        voxelGridDescriptorR8.height = highestVoxelResolution;
-        voxelGridDescriptorR8.volumeDepth = highestVoxelResolution;
-        voxelGridDescriptorR8.msaaSamples = 1;
-        voxelGridDescriptorR8.sRGB = true;
+		voxelGridDescriptorFloat4 = new RenderTextureDescriptor ();
+		voxelGridDescriptorFloat4.bindMS = false;
+		voxelGridDescriptorFloat4.colorFormat = RenderTextureFormat.ARGBHalf;
+		voxelGridDescriptorFloat4.depthBufferBits = 0;
+		voxelGridDescriptorFloat4.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
+		voxelGridDescriptorFloat4.enableRandomWrite = true;
+		voxelGridDescriptorFloat4.width = highestVoxelResolution;
+		voxelGridDescriptorFloat4.height = highestVoxelResolution;
+		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution;
+		voxelGridDescriptorFloat4.msaaSamples = 1;
+		voxelGridDescriptorFloat4.sRGB = true;
 
         //voxelInjectionGrid = new RenderTexture(voxelGridDescriptorFloat4);
 
         //voxelPropagationGrid = new RenderTexture (voxelGridDescriptorFloat4);
         //voxelPropagatedGrid = new RenderTexture(voxelGridDescriptorFloat4);
-        voxelGrid0 = new RenderTexture(voxelGridDescriptorHalf4);
-        voxelGrid0A = new RenderTexture(voxelGridDescriptorR8);
-        voxelGrid1 = new RenderTexture(voxelGridDescriptorHalf4);
-        voxelGrid1A = new RenderTexture(voxelGridDescriptorR8);
+        voxelGrid0 = new RenderTexture(voxelGridDescriptorFloat4);
+        voxelGrid1 = new RenderTexture(voxelGridDescriptorFloat4);
 
-        voxelGridDescriptorHalf4.width = highestVoxelResolution / 2;
-        voxelGridDescriptorHalf4.height = highestVoxelResolution / 2;
-        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 2;
+        voxelGridDescriptorFloat4.width = highestVoxelResolution / 2;
+		voxelGridDescriptorFloat4.height = highestVoxelResolution / 2;
+		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 2;
 
-        voxelGridDescriptorR8.width = highestVoxelResolution / 2;
-        voxelGridDescriptorR8.height = highestVoxelResolution / 2;
-        voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 2;
+		voxelGrid2 = new RenderTexture (voxelGridDescriptorFloat4);
+        voxelGridCascade1 = new RenderTexture(voxelGridDescriptorFloat4);
 
-        voxelGrid2 = new RenderTexture (voxelGridDescriptorHalf4);
-		voxelGrid2A = new RenderTexture (voxelGridDescriptorR8);
-        voxelGridCascade1 = new RenderTexture(voxelGridDescriptorHalf4);
+        voxelGridDescriptorFloat4.width = highestVoxelResolution / 4;
+		voxelGridDescriptorFloat4.height = highestVoxelResolution / 4;
+		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 4;
 
-        voxelGridDescriptorHalf4.width = highestVoxelResolution / 4;
-        voxelGridDescriptorHalf4.height = highestVoxelResolution / 4;
-        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 4;
+		voxelGrid3 = new RenderTexture (voxelGridDescriptorFloat4);
+        voxelGridCascade2 = new RenderTexture(voxelGridDescriptorFloat4);
 
-        voxelGridDescriptorR8.width = highestVoxelResolution / 4;
-        voxelGridDescriptorR8.height = highestVoxelResolution / 4;
-        voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 4;
+        voxelGridDescriptorFloat4.width = highestVoxelResolution / 8;
+		voxelGridDescriptorFloat4.height = highestVoxelResolution / 8;
+		voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 8;
 
-        voxelGrid3 = new RenderTexture (voxelGridDescriptorHalf4);
-		voxelGrid3A = new RenderTexture (voxelGridDescriptorR8);
-        voxelGridCascade2 = new RenderTexture(voxelGridDescriptorHalf4);
+		voxelGrid4 = new RenderTexture (voxelGridDescriptorFloat4);
 
-        voxelGridDescriptorHalf4.width = highestVoxelResolution / 8;
-        voxelGridDescriptorHalf4.height = highestVoxelResolution / 8;
-        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 8;
+        voxelGridDescriptorFloat4.width = highestVoxelResolution / 16;
+        voxelGridDescriptorFloat4.height = highestVoxelResolution / 16;
+        voxelGridDescriptorFloat4.volumeDepth = highestVoxelResolution / 16;
 
-        voxelGridDescriptorR8.width = highestVoxelResolution / 8;
-        voxelGridDescriptorR8.height = highestVoxelResolution / 8;
-        voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 8;
-
-        voxelGrid4 = new RenderTexture (voxelGridDescriptorHalf4);
-		voxelGrid4A = new RenderTexture (voxelGridDescriptorR8);
-
-        voxelGridDescriptorHalf4.width = highestVoxelResolution / 16;
-        voxelGridDescriptorHalf4.height = highestVoxelResolution / 16;
-        voxelGridDescriptorHalf4.volumeDepth = highestVoxelResolution / 16;
-
-        voxelGridDescriptorR8.width = highestVoxelResolution / 16;
-        voxelGridDescriptorR8.height = highestVoxelResolution / 16;
-        voxelGridDescriptorR8.volumeDepth = highestVoxelResolution / 16;
-
-        voxelGrid5 = new RenderTexture (voxelGridDescriptorHalf4);
-        voxelGrid5A = new RenderTexture (voxelGridDescriptorR8);
+        voxelGrid5 = new RenderTexture (voxelGridDescriptorFloat4);
 
         //voxelInjectionGrid.filterMode = FilterMode.Bilinear;
 
@@ -858,17 +793,11 @@ public class Nigiri : MonoBehaviour {
         voxelGridCascade1.Create();
         voxelGridCascade2.Create();
         voxelGrid0.Create();
-        voxelGrid0A.Create();
         voxelGrid1.Create();
-        voxelGrid1A.Create();
         voxelGrid2.Create();
-        voxelGrid2A.Create();
 		voxelGrid3.Create();
-		voxelGrid3A.Create();
 		voxelGrid4.Create();
-		voxelGrid4A.Create();
 		voxelGrid5.Create();
-		voxelGrid5A.Create();
 
 	}
 
@@ -1003,13 +932,11 @@ public class Nigiri : MonoBehaviour {
             {
                 nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
                 nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGridA", voxelGrid0A);
             }
             else
             {
                 nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
                 nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGridA", voxelGrid1A);
             }
         }
         else
@@ -1018,13 +945,11 @@ public class Nigiri : MonoBehaviour {
             {
                 nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
                 nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGridA", voxelGrid1A);
             }
             else
             {
                 nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
                 nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGridA", voxelGrid0A);
             }
         }
 
@@ -1040,24 +965,67 @@ public class Nigiri : MonoBehaviour {
             nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
         }
 
+        /*if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
+        {
+            // Voxelize secondary cam
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
+            nigiri_VoxelEntry.SetInt("useDepth", 1);
+            nigiri_VoxelEntry.Dispatch(kernelHandle, Nigiri_EmissiveCameraHelper.lightingTexture.width / 16, Nigiri_EmissiveCameraHelper.lightingTexture.height / 16, 1); ;
+        }*/
+
         Graphics.ClearRandomWriteTargets();
 
+        /*
+        // Do light propagation
+        if (propagateLight)
+        {
+            lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
+            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
+            lightPropagateCompute.SetBuffer(0, "maskClearBuffer", voxelUpdateBuffer);
+            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
+
+            for (int i = 0; i < LPVIterations; i++)
+            {
+                lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
+                lightPropagateCompute.SetBuffer(1, "maskClearBuffer", voxelUpdateBuffer);
+                lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+                lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+                lightPropagateCompute.Dispatch(1, voxelizationSliceDispatch, 1, 1);
+            }
+
+            lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
+            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagatedGrid);
+            lightPropagateCompute.SetBuffer(0, "maskClearBuffer", voxelUpdateBuffer);
+            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
+            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
+            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
+        }
+        */
+
+
+        /*if (mipSwitch == 0 && propagateLight)
+        {
+            int destinationRes = (int)highestVoxelResolution / 2;
+            mipFilterCompute.SetInt("destinationRes", destinationRes);
+            //if (fastResolveSwitch && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
+            //else if (fastResolveSwitch && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
+            if (propagateLight && fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagationGrid);
+            else if (propagateLight && !fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
+            else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
+            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
+            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+        }*/
         if (mipSwitch == 0)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            if (gridBufferSwitch)
-            {
-                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
-                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "SourceA", voxelGrid1A);
-            }
-            else
-            {
-                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid0);
-                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "SourceA", voxelGrid0A);
-            }
+            //if (propagateLight) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
+            if (gridBufferSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
+            else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid0);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "DestinationA", voxelGrid2A);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 1)
@@ -1065,9 +1033,7 @@ public class Nigiri : MonoBehaviour {
             int destinationRes = (int)highestVoxelResolution / 4;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid2);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "SourceA", voxelGrid2A);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid3);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "DestinationA", voxelGrid3A);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         else if (mipSwitch == 2)
@@ -1075,9 +1041,7 @@ public class Nigiri : MonoBehaviour {
             int destinationRes = (int)highestVoxelResolution / 8;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid3);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "SourceA", voxelGrid3A);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid4);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "DestinationA", voxelGrid4A);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
 
             if (isGridMobile)
@@ -1088,7 +1052,6 @@ public class Nigiri : MonoBehaviour {
                     {
                         gridOffset1 = localCam.transform.position;
                         clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
-                        clearComputeCache.SetTexture(0, "RG0A", voxelGrid1A);
                         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
                         //clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
                         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
@@ -1097,7 +1060,6 @@ public class Nigiri : MonoBehaviour {
                     {
                         gridOffset0 = localCam.transform.position;
                         clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
-                        clearComputeCache.SetTexture(0, "RG0A", voxelGrid0A);
                         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
                         //clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
                         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
@@ -1113,9 +1075,7 @@ public class Nigiri : MonoBehaviour {
             int destinationRes = (int)highestVoxelResolution / 16;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid4);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "SourceA", voxelGrid4A);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid5);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "DestinationA", voxelGrid5A);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
@@ -1236,6 +1196,43 @@ public class Nigiri : MonoBehaviour {
             _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
         }
 
+
+
+
+
+        //Experimental grid offsetting
+        /*if (isGridMobile)
+        {
+            if (mobilizeGridCounter > 3)
+            {
+                if (gridBufferSwitch)
+                {
+                    gridOffset1 = localCam.transform.position;
+                    clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
+                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+                }
+                else
+                {
+                    gridOffset0 = localCam.transform.position;
+                    clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
+                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
+                }
+
+                isGridMobile = false;
+                mobilizeGridCounter = 0;
+                gridBufferSwitch = !gridBufferSwitch;
+            }
+            else
+            {
+                mobilizeGridCounter++;
+                tracerMaterial.SetVector("gridOffset", prevGridPosition);
+            }
+        }
+        else tracerMaterial.SetVector("gridOffset", gridOffset);*/
+        ///
+
         tracerMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         tracerMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
         Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
@@ -1280,7 +1277,6 @@ public class Nigiri : MonoBehaviour {
         //tracerMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
         //tracerMaterial.SetFloat("OcclusionPower", OcclusionPower);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
-        tracerMaterial.SetInt("subsamplingRatio", subsamplingRatio);
 
         //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);
         //Graphics.Blit(blur, lightingTexture, _bilateralBlurMaterial, 2);
@@ -1308,14 +1304,12 @@ public class Nigiri : MonoBehaviour {
             if (isGridMobile)
             {
                 tracerMaterial.SetVector("gridOffset", gridOffset0);
-                //tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
-                //tracerMaterial.SetTexture("voxelGridA", voxelGrid0A);
+                tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
             }
             else
             {
                 tracerMaterial.SetVector("gridOffset", gridOffset1);
-                //tracerMaterial.SetTexture("voxelGrid", voxelGrid1);
-                //tracerMaterial.SetTexture("voxelGridA", voxelGrid1);
+                tracerMaterial.SetTexture("voxelGrid", voxelGrid1);
             }
         }
         else
@@ -1323,13 +1317,12 @@ public class Nigiri : MonoBehaviour {
             if (isGridMobile)
             {
                 tracerMaterial.SetVector("gridOffset", gridOffset1);
-                //racerMaterial.SetTexture("voxelGrid", voxelGrid1);
+                tracerMaterial.SetTexture("voxelGrid", voxelGrid1);
             }
             else
             {
                 tracerMaterial.SetVector("gridOffset", gridOffset0);
-                //tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
-                //tracerMaterial.SetTexture("voxelGridA", voxelGrid0A);
+                tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
             }
         }
 
@@ -1349,24 +1342,12 @@ public class Nigiri : MonoBehaviour {
 
 
         //if (propagateLight) tracerMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
-        if (gridBufferSwitch)
-        {
-            tracerMaterial.SetTexture("voxelGrid1", voxelGrid1);
-            tracerMaterial.SetTexture("voxelGrid1A", voxelGrid1A);
-        }
-        else
-        {
-            tracerMaterial.SetTexture("voxelGrid1", voxelGrid0);
-            tracerMaterial.SetTexture("voxelGrid1A", voxelGrid0A);
-        }
+        if (gridBufferSwitch) tracerMaterial.SetTexture("voxelGrid1", voxelGrid1);
+        else tracerMaterial.SetTexture("voxelGrid1", voxelGrid0);
         tracerMaterial.SetTexture("voxelGrid2", voxelGrid2);
-        tracerMaterial.SetTexture("voxelGrid2A", voxelGrid2A);
         tracerMaterial.SetTexture("voxelGrid3", voxelGrid3);
-        tracerMaterial.SetTexture("voxelGrid3A", voxelGrid3A);
         tracerMaterial.SetTexture("voxelGrid4", voxelGrid4);
-        tracerMaterial.SetTexture("voxelGrid4A", voxelGrid4A);
         tracerMaterial.SetTexture("voxelGrid5", voxelGrid5);
-        tracerMaterial.SetTexture("voxelGrid5A", voxelGrid5A);
         tracerMaterial.SetTexture("voxelGridCascade1", voxelGridCascade1);
         tracerMaterial.SetTexture("voxelGridCascade2", voxelGridCascade2);
 
@@ -1407,27 +1388,38 @@ public class Nigiri : MonoBehaviour {
 			Graphics.Blit (source, destination, tracerMaterial, 1);
             return;
 		} else {
+            /*if (usePathCache)
+            {
+                if (tracedTexture1UpdateCount > 48)
+                {
+                    clearComputeCache.SetInt("Resolution", 256);
+                    clearComputeCache.SetBuffer(1, "RG1", pathCacheBuffer.back);
+                    clearComputeCache.SetInt("zStagger", tracedTexture1UpdateCount - 48);
+                    clearComputeCache.Dispatch(1, 256 / 16, 256 / 16, 1);
+                }
+                else if (tracedTexture1UpdateCount > 32)
+                {
+                    transferIntsCompute.SetBuffer(3, "ResultBuffer", pathCacheBuffer.front);
+                    transferIntsCompute.SetBuffer(3, "InputBuffer", pathCacheBuffer.back);
+                    transferIntsCompute.SetInt("zStagger", tracedTexture1UpdateCount - 32);
+                    transferIntsCompute.SetInt("Resolution", 256);
+                    transferIntsCompute.Dispatch(3, 256 / 16, 256 / 16, 1);
+                }
+                tracedTexture1UpdateCount = (tracedTexture1UpdateCount + 1) % (65);
+            }*/
+
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
             //Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
             //Graphics.SetRandomWriteTarget(1, pathCacheBuffer.back);
             Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer, true);
-            //Graphics.SetRandomWriteTarget(2, colorCache);
             //tracerMaterial.SetBuffer("voxelUpdateBuffer", voxelUpdateBuffer);
             Graphics.Blit (source, gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
 
             // Clear voxels not updated, but traced through this frame.
             voxelGrid1.filterMode = FilterMode.Point;
-            if (gridBufferSwitch)
-            {
-                clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-                clearComputeCache.SetTexture(1, "RG0A", voxelGrid1A);
-            }
-            else
-            {
-                clearComputeCache.SetTexture(1, "RG0", voxelGrid0);
-                clearComputeCache.SetTexture(1, "RG0A", voxelGrid0A);
-            }
+            if (gridBufferSwitch) clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
+            else clearComputeCache.SetTexture(1, "RG0", voxelGrid0);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
             clearComputeCache.SetInt("Resolution", highestVoxelResolution);
@@ -1440,9 +1432,6 @@ public class Nigiri : MonoBehaviour {
 
             Graphics.Blit(gi, blur, fxaaMaterial, 0);
             Graphics.Blit(blur, gi, fxaaMaterial, 1);
-
-            tracerMaterial.SetTexture("gi", gi);
-            Graphics.Blit(source, giUpsample, tracerMaterial, 3);
 
              //Graphics.Blit(gi, destination);
 
@@ -1514,7 +1503,7 @@ public class Nigiri : MonoBehaviour {
                 RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
                 RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
                 temp.filterMode = FilterMode.Bilinear;
-                Graphics.Blit(giUpsample, temp, _colorMaterial);
+                Graphics.Blit(gi, temp, _colorMaterial);
 
                 _blitAddMaterial.SetTexture("_Source", temp);
                 Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
@@ -1525,7 +1514,7 @@ public class Nigiri : MonoBehaviour {
         }
         else
         {
-            Graphics.Blit(giUpsample, destination, _colorMaterial);
+            Graphics.Blit(gi, destination, _colorMaterial);
         }
         ///
 
@@ -1545,12 +1534,10 @@ public class Nigiri : MonoBehaviour {
         //if (occlusionTexture != null) occlusionTexture.Release();
         //if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
-        if (giUpsample != null) giUpsample.Release();
         if (blur != null) blur.Release();
-        //if (colorCache != null) colorCache.Release();
 
         //if (lightingCurveLUT != null) lightingCurveLUT.Release();
-
+                
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
@@ -1561,17 +1548,11 @@ public class Nigiri : MonoBehaviour {
         if (voxelGridCascade1 != null) voxelGridCascade1.Release();
         if (voxelGridCascade2 != null) voxelGridCascade2.Release();
         if (voxelGrid0 != null) voxelGrid0.Release();
-        if (voxelGrid0A != null) voxelGrid0A.Release();
         if (voxelGrid1 != null) voxelGrid1.Release();
-        if (voxelGrid1A != null) voxelGrid1A.Release();
         if (voxelGrid2 != null) voxelGrid2.Release();
-        if (voxelGrid2A != null) voxelGrid2A.Release();
         if (voxelGrid3 != null) voxelGrid3.Release();
-        if (voxelGrid3A != null) voxelGrid3A.Release();
         if (voxelGrid4 != null) voxelGrid4.Release();
-        if (voxelGrid4A != null) voxelGrid4A.Release();
         if (voxelGrid5 != null) voxelGrid5.Release();
-        if (voxelGrid5A != null) voxelGrid5A.Release();
 
         if (voxelUpdateBuffer != null) voxelUpdateBuffer.Release();
 
@@ -1596,44 +1577,36 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);*/
 
         clearComputeCache.SetTexture(0, "RG0", voxelGridCascade1);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid2A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 2);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 2, highestVoxelResolution / 16 / 2, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGridCascade2);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid3A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 4);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 4, highestVoxelResolution / 16 / 4, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid0A);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid1A);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid2);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid2A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 2);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 2, highestVoxelResolution / 16 / 2, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid3);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid3A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 4);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 4, highestVoxelResolution / 16 / 4, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid4);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid4A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 8);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 8, highestVoxelResolution / 16 / 8, 1);
+        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGrid5);
-        clearComputeCache.SetTexture(0, "RG0A", voxelGrid5A);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution / 16);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16 / 16, highestVoxelResolution / 16 / 16, 1);
+        clearComputeCache.SetInt("Resolution", 256);
+        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         //lpvSwitch = 0;
         mipSwitch = 0;
@@ -1644,150 +1617,140 @@ public class Nigiri : MonoBehaviour {
         prevPosition = GetComponent<Camera>().transform.position;
     }
 
-public int bitValue(RenderTexture x)
-{
-
-    int bit = 0;
-    switch (x.format)
+    public int bitValue(RenderTexture x)
     {
-        case RenderTextureFormat.ARGB32:
-            break;
-        case RenderTextureFormat.Depth:
-            break;
-        case RenderTextureFormat.ARGBHalf:
-            bit = 16 * 4;
-            break;
-        case RenderTextureFormat.Shadowmap:
-            break;
-        case RenderTextureFormat.RGB565:
-            break;
-        case RenderTextureFormat.ARGB4444:
-            break;
-        case RenderTextureFormat.ARGB1555:
-            break;
-        case RenderTextureFormat.Default:
-            break;
-        case RenderTextureFormat.ARGB2101010:
-            break;
-        case RenderTextureFormat.DefaultHDR:
-            break;
-        case RenderTextureFormat.ARGB64:
-            break;
-        case RenderTextureFormat.ARGBFloat:
-            break;
-        case RenderTextureFormat.RGFloat:
-            break;
-        case RenderTextureFormat.RGHalf:
-            break;
-        case RenderTextureFormat.RFloat:
-            bit = 32;
-            break;
-        case RenderTextureFormat.RHalf:
-            bit = 16;
-            break;
-        case RenderTextureFormat.R8:
-            bit = 8;
-            break;
-        case RenderTextureFormat.ARGBInt:
-            break;
-        case RenderTextureFormat.RGInt:
-            break;
-        case RenderTextureFormat.RInt:
-            break;
-        case RenderTextureFormat.BGRA32:
-            break;
-        case RenderTextureFormat.RGB111110Float:
-            break;
-        case RenderTextureFormat.RG32:
-            break;
-        case RenderTextureFormat.RGBAUShort:
-            break;
-        case RenderTextureFormat.RG16:
-            break;
-        case RenderTextureFormat.BGRA10101010_XR:
-            break;
-        case RenderTextureFormat.BGR101010_XR:
-            break;
-        default:
-            break;
-    }
-    if (bit == 0)
-        Debug.Log(bit + " " + x.name + " bit Value is 0, resolve");
-    return bit;
-}
 
-
-///// <summary>
-///// Estimates the VRAM usage of all the render textures used to render GI.
-///// </summary>
-public float vramUsage  //TODO: Update vram usage calculation
-{
-    get
-    {
-        if (!enabled)
+        int bit = 0;
+        switch (x.format)
         {
-            return 0.0f;
+            case RenderTextureFormat.ARGB32:
+                break;
+            case RenderTextureFormat.Depth:
+                break;
+            case RenderTextureFormat.ARGBHalf:
+                bit = 16 * 4;
+                break;
+            case RenderTextureFormat.Shadowmap:
+                break;
+            case RenderTextureFormat.RGB565:
+                break;
+            case RenderTextureFormat.ARGB4444:
+                break;
+            case RenderTextureFormat.ARGB1555:
+                break;
+            case RenderTextureFormat.Default:
+                break;
+            case RenderTextureFormat.ARGB2101010:
+                break;
+            case RenderTextureFormat.DefaultHDR:
+                break;
+            case RenderTextureFormat.ARGB64:
+                break;
+            case RenderTextureFormat.ARGBFloat:
+                break;
+            case RenderTextureFormat.RGFloat:
+                break;
+            case RenderTextureFormat.RGHalf:
+                break;
+            case RenderTextureFormat.RFloat:
+                bit = 32;
+                break;
+            case RenderTextureFormat.RHalf:
+                bit = 16;
+                break;
+            case RenderTextureFormat.R8:
+                bit = 8;
+                break;
+            case RenderTextureFormat.ARGBInt:
+                break;
+            case RenderTextureFormat.RGInt:
+                break;
+            case RenderTextureFormat.RInt:
+                break;
+            case RenderTextureFormat.BGRA32:
+                break;
+            case RenderTextureFormat.RGB111110Float:
+                break;
+            case RenderTextureFormat.RG32:
+                break;
+            case RenderTextureFormat.RGBAUShort:
+                break;
+            case RenderTextureFormat.RG16:
+                break;
+            case RenderTextureFormat.BGRA10101010_XR:
+                break;
+            case RenderTextureFormat.BGR101010_XR:
+                break;
+            default:
+                break;
         }
-        long v = 0;
+        if (bit == 0)
+            Debug.Log(bit + " " + x.name + " bit Value is 0, resolve");
+        return bit;
+    }
 
-        if (lightingTexture != null)
-            v += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
 
-        if (lightingTextureMono != null)
-            v += lightingTextureMono.width * lightingTextureMono.height * bitValue(lightingTextureMono); ;
+    ///// <summary> 
+    ///// Estimates the VRAM usage of all the render textures used to render GI. 
+    ///// </summary> 
+    public float vramUsage  //TODO: Update vram usage calculation 
+    {
+        get
+        {
+            if (!enabled)
+            {
+                return 0.0f;
+            }
+            long v = 0;
 
-        if (positionTexture != null)
-            v += positionTexture.width * positionTexture.height * bitValue(positionTexture);
+            if (lightingTexture != null)
+                v += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
 
-        if (depthTexture != null)
-            v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
+            if (lightingTextureMono != null)
+                v += lightingTextureMono.width * lightingTextureMono.height * bitValue(lightingTextureMono); ;
 
-        if (gi != null)
-            v += gi.width * gi.height * bitValue(gi);
+            if (positionTexture != null)
+                v += positionTexture.width * positionTexture.height * bitValue(positionTexture);
 
-        if (giUpsample != null)
-            v += giUpsample.width * giUpsample.height * bitValue(giUpsample);
+            if (depthTexture != null)
+                v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
+
+            if (gi != null)
+                v += gi.width * gi.height * bitValue(gi);
+
+            //if (giUpsample != null)
+            //    v += giUpsample.width * giUpsample.height * bitValue(giUpsample);
 
             if (blur != null)
-            v += blur.width * blur.height * bitValue(blur);
+                v += blur.width * blur.height * bitValue(blur);
 
-        /*if (voxelInjectionGrid != null)
-            v += voxelInjectionGrid.width * voxelInjectionGrid.height * bitValue(voxelInjectionGrid);
-        if (voxelPropagatedGrid != null)
-            v += voxelPropagatedGrid.width * voxelPropagatedGrid.height * bitValue(voxelPropagatedGrid);*/
-        if (voxelGrid1 != null)
-            v += voxelGrid1.width * voxelGrid1.height * voxelGrid1.volumeDepth * bitValue(voxelGrid1);
-        if (voxelGrid2 != null)
-            v += voxelGrid2.width * voxelGrid2.height * voxelGrid2.volumeDepth * bitValue(voxelGrid2);
-        if (voxelGrid3 != null)
-            v += voxelGrid3.width * voxelGrid3.height * voxelGrid3.volumeDepth * bitValue(voxelGrid3);
-        if (voxelGrid4 != null)
-            v += voxelGrid4.width * voxelGrid4.height * voxelGrid4.volumeDepth * bitValue(voxelGrid4);
-        if (voxelGrid5 != null)
-            v += voxelGrid5.width * voxelGrid5.height * voxelGrid5.volumeDepth * bitValue(voxelGrid5);
-        if (voxelGrid1A != null)
-            v += voxelGrid1A.width * voxelGrid1A.height * voxelGrid1A.volumeDepth * bitValue(voxelGrid1A);
-        if (voxelGrid2A != null)
-            v += voxelGrid2A.width * voxelGrid2A.height * voxelGrid2A.volumeDepth * bitValue(voxelGrid2A);
-        if (voxelGrid3A != null)
-            v += voxelGrid3A.width * voxelGrid3A.height * voxelGrid3A.volumeDepth * bitValue(voxelGrid3A);
-        if (voxelGrid4A != null)
-            v += voxelGrid4A.width * voxelGrid4A.height * voxelGrid4A.volumeDepth * bitValue(voxelGrid4A);
-        if (voxelGrid5A != null)
-            v += voxelGrid5A.width * voxelGrid5A.height * voxelGrid5A.volumeDepth * bitValue(voxelGrid5A);
+            /*if (voxelInjectionGrid != null) 
+                v += voxelInjectionGrid.width * voxelInjectionGrid.height * bitValue(voxelInjectionGrid); 
+            if (voxelPropagatedGrid != null) 
+                v += voxelPropagatedGrid.width * voxelPropagatedGrid.height * bitValue(voxelPropagatedGrid);*/
+            if (voxelGrid1 != null)
+                v += voxelGrid1.width * voxelGrid1.height * voxelGrid1.volumeDepth * bitValue(voxelGrid1);
+            if (voxelGrid2 != null)
+                v += voxelGrid2.width * voxelGrid2.height * voxelGrid2.volumeDepth * bitValue(voxelGrid2);
+            if (voxelGrid3 != null)
+                v += voxelGrid3.width * voxelGrid3.height * voxelGrid3.volumeDepth * bitValue(voxelGrid3);
+            if (voxelGrid4 != null)
+                v += voxelGrid4.width * voxelGrid4.height * voxelGrid4.volumeDepth * bitValue(voxelGrid4);
+            if (voxelGrid5 != null)
+                v += voxelGrid5.width * voxelGrid5.height * voxelGrid5.volumeDepth * bitValue(voxelGrid5);
 
             if (voxelGridCascade1 != null)
-            v += voxelGridCascade1.width * voxelGridCascade1.height * voxelGridCascade1.volumeDepth * bitValue(voxelGridCascade1);
-        if (voxelGridCascade2 != null)
-            v += voxelGridCascade2.width * voxelGridCascade2.height * voxelGridCascade2.volumeDepth * bitValue(voxelGridCascade2);
+                v += voxelGridCascade1.width * voxelGridCascade1.height * voxelGridCascade1.volumeDepth * bitValue(voxelGridCascade1);
+            if (voxelGridCascade2 != null)
+                v += voxelGridCascade2.width * voxelGridCascade2.height * voxelGridCascade2.volumeDepth * bitValue(voxelGridCascade2);
 
-        float vram = (v / 8388608.0f);
+            float vram = (v / 8388608.0f);
 
-        return vram;
+            return vram;
+        }
     }
-}
 
-class PathCacheBuffer
+    class PathCacheBuffer
     {
         int size;
         readonly int stride = sizeof(float) * 4;

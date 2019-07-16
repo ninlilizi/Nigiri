@@ -1,32 +1,13 @@
 #pragma kernel CSMain
 #pragma kernel CSMainGaussian
 
-RWTexture3D<half4> Destination;
-RWTexture3D<half> DestinationA;
-Texture3D<half4> Source;
-Texture3D<half> SourceA;
+RWTexture3D<float4> Destination;
+Texture3D<float4> Source;
 
 SamplerState _LinearClamp;
 SamplerState _PointClamp;
 
 int destinationRes;
-
-//http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
-float4 RGBMEncode(float3 color) {
-	//color = pow(color, 0.454545); // Convert Linear to Gamma
-	float4 rgbm;
-	color *= 1.0 / 6.0;
-	rgbm.a = saturate(max(max(color.r, color.g), max(color.b, 1e-6)));
-	rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
-	rgbm.rgb = color / rgbm.a;
-	return rgbm;
-}
-
-float3 RGBMDecode(float4 rgbm) {
-	return 6.0 * rgbm.rgb * rgbm.a;
-	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
-}
-///
 
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
@@ -36,12 +17,9 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         float3 fcoord = float3((float)id.x / destinationRes, (float)id.y / destinationRes, (float)i / destinationRes);
         float texel = 1.0 / destinationRes;
 
-		half4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
-		//half texA = SourceA.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
+        float4 tex = Source.SampleLevel(_LinearClamp, fcoord + texel * 0.5, 1.0f);
 
 		Destination[uint3(id.xy, i)] = tex;
-		if (tex.a > 0) DestinationA[uint3(id.xy, i)] = 1;
-		else DestinationA[uint3(id.xy, i)] = 0;
     }
 }
 
@@ -74,8 +52,7 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
         float3 fcoord = float3((float)id.x / destinationRes, (float)id.y / destinationRes, (float)i / destinationRes);
         float texel = 1.0 / destinationRes;
 
-        half4 tex = half4(0,0,0,0);
-		//half texA = 0;
+        float4 tex = float4(0,0,0,0);
 
 
         int c = 1;
@@ -86,23 +63,17 @@ void CSMainGaussian (uint3 id : SV_DispatchThreadID)
 
             offset = offsets[j];
 
-			float4 testColor = Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
-			//half testColorA = SourceA.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
-
+            half4 testColor = Source.SampleLevel(_PointClamp, fcoord + texel * 0.5 + offset * texel * 0.75, 0.0) * 0.5;
 			if (testColor.a > 0.01)
 			{
 				tex += testColor;
-				//texA += testColorA;
 				c++;
 			}
         }
 
         tex /= c;
-		//texA /= c;
         
 
         Destination[uint3(id.xy, i)] = tex;
-		if (tex.a > 0) DestinationA[uint3(id.xy, i)] = 1;
-		else DestinationA[uint3(id.xy, i)] = 0;
     }
 }

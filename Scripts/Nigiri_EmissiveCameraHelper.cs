@@ -13,8 +13,8 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     public static RenderTexture lightingTexture;
     public static RenderTexture lightingDepthTexture;
-    //public RenderTexture lightingTextureDebug;
-   // public RenderTexture lightingDepthTextureDebug;
+    public RenderTexture lightingTextureDebug;
+    public RenderTexture lightingDepthTextureDebug;
 
     public static RenderTexture positionTexture;
 
@@ -48,17 +48,17 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
         cam = GetComponent<Camera>();
 
-        lightingTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBHalf);
+        lightingTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.Create();
 
-        lightingDepthTexture = new RenderTexture(512, 512, 16, RenderTextureFormat.Depth);
+        lightingDepthTexture = new RenderTexture(1024, 1024, 16, RenderTextureFormat.Depth);
         lightingDepthTexture.Create();
 
-        positionTexture = new RenderTexture(512, 512, 0, RenderTextureFormat.ARGBFloat);
+        positionTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
         positionTexture.Create();
 
-        //lightingTextureDebug = lightingTexture;
-        //lightingDepthTextureDebug = lightingDepthTexture;
+        lightingTextureDebug = lightingTexture;
+        lightingDepthTextureDebug = lightingDepthTexture;
 
         _rb = new RenderBuffer[2];
         _rb[0] = lightingTexture.colorBuffer;
@@ -91,25 +91,16 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (lightingTexture != null)
         {
             Graphics.SetRandomWriteTarget(5, Nigiri.voxelUpdateBuffer);
-            if (Nigiri.gridBufferSwitch)
-            {
-                Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
-                Graphics.SetRandomWriteTarget(7, Nigiri.voxelGrid1A);
-            }
-            else
-            {
-                Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid0);
-                Graphics.SetRandomWriteTarget(7, Nigiri.voxelGrid0A);
-            }
+            if (Nigiri.gridBufferSwitch) Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
+            else Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid0);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
             cam.RenderWithShader(emissiveShader, "");
             Graphics.ClearRandomWriteTargets();
         }
     }
 
-    [ImageEffectTransformsToLDR]
-    private void OnRenderImage(RenderTexture source, RenderTexture destination)
+    private void OnpostRender()
     {
-        Graphics.Blit(source, destination);
+        //lightingTextureDebug = lightingTexture;
     }
 }

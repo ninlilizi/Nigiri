@@ -2,15 +2,16 @@
 #pragma kernel CSMain1
 #pragma kernel CSMain2
 
-RWTexture3D<half4> RG0;
-RWTexture3D<half> RG0A;
+RWTexture3D<float4> RG0;
 
-uniform RWTexture3D<half4>			voxelCasacadeGrid1;
-uniform RWTexture3D<half4>			voxelCasacadeGrid2;
+uniform RWTexture3D<float4>			voxelCasacadeGrid1;
+uniform RWTexture3D<float4>			voxelCasacadeGrid2;
 
 //uniform RWStructuredBuffer<float3> RG1;
 //uniform RWStructuredBuffer<uint>	lightMapBuffer;
 uniform RWStructuredBuffer<uint>	voxelUpdateBuffer;
+
+
 
 cbuffer cbSettings : register(b0)
 {
@@ -19,22 +20,65 @@ cbuffer cbSettings : register(b0)
 	uniform float temporalStablityVsRefreshRate;
 };
 
-//http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
-float4 RGBMEncode(float3 color) {
-	//color = pow(color, 0.454545); // Convert Linear to Gamma
-	float4 rgbm;
-	color *= 1.0 / 6.0;
-	rgbm.a = saturate(max(max(color.r, color.g), max(color.b, 1e-6)));
-	rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
-	rgbm.rgb = color / rgbm.a;
-	return rgbm;
+float3 rgb2hsv(float3 c)
+{
+	float4 k = float4(0.0, -1.0 / 3.0, 2.0 / 3.0, -1.0);
+	float4 p = lerp(float4(c.bg, k.wz), float4(c.gb, k.xy), step(c.b, c.g));
+	float4 q = lerp(float4(p.xyw, c.r), float4(c.r, p.yzx), step(p.x, c.r));
+
+	float d = q.x - min(q.w, q.y);
+	float e = 1.0e-10;
+
+	return float3(abs(q.z + (q.w - q.y) / (6.0 * d + e)), d / (q.x + e), q.x);
 }
 
-float3 RGBMDecode(float4 rgbm) {
-	return 6.0 * rgbm.rgb * rgbm.a;
-	//return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
+float3 hsv2rgb(float3 c)
+{
+	float4 k = float4(1.0, 2.0 / 3.0, 1.0 / 3.0, 3.0);
+	float3 p = abs(frac(c.xxx + k.xyz) * 6.0 - k.www);
+	return c.z * lerp(k.xxx, saturate(p - k.xxx), c.y);
 }
-///
+
+float4 DecodeRGBAuint(uint value)
+{
+	uint ai = value & 0x0000007F;
+	uint vi = (value / 0x00000080) & 0x000007FF;
+	uint si = (value / 0x00040000) & 0x0000007F;
+	uint hi = value / 0x02000000;
+
+	float h = float(hi) / 127.0;
+	float s = float(si) / 127.0;
+	float v = (float(vi) / 2047.0) * 10.0;
+	float a = ai * 2.0;
+
+	v = pow(v, 3.0);
+
+	float3 color = hsv2rgb(float3(h, s, v));
+
+	return float4(color.rgb, a);
+}
+
+uint EncodeRGBAuint(float4 color)
+{
+	//7[HHHHHHH] 7[SSSSSSS] 11[VVVVVVVVVVV] 7[AAAAAAAA]
+	float3 hsv = rgb2hsv(color.rgb);
+	hsv.z = pow(abs(hsv.z), 1.0 / 3.0);
+
+	uint result = 0;
+
+	uint a = min(127, uint(color.a / 2.0));
+	uint v = min(2047, uint((hsv.z / 10.0) * 2047));
+	uint s = uint(hsv.y * 127);
+	uint h = uint(hsv.x * 127);
+
+	result += a;
+	result += v * 0x00000080; // << 7
+	result += s * 0x00040000; // << 18
+	result += h * 0x02000000; // << 25
+
+	return result;
+}
+
 
 uint threeD2oneD(float3 coord)
 {
@@ -49,7 +93,6 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 	for (uint i = 0; i < Resolution; i++)
 	{
 		RG0[uint3(id.xy, i)] = 0;
-		RG0A[uint3(id.xy, i)] = 0;
 	}
 }
 
@@ -64,12 +107,11 @@ void CSMain1(uint3 id : SV_DispatchThreadID)
 		
 		if (voxelUpdateBuffer[index] == 0)
 		{
-			if (RG0A[uint3(id.xy, i)] > 0)
+			if (RG0[uint3(id.xy, i)].a > 0)
 			{
 				//if (lightMapBuffer[index] == 0)
 				//{
-					RG0[uint3(id.xy, i)] *= 0.9;
-					RG0A[uint3(id.xy, i)] *= 0.9;
+					RG0[uint3(id.xy, i)].rgba *= 0.5;
 					//voxelCasacadeGrid1[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 					//voxelCasacadeGrid2[uint3(id.xy, i)] *= temporalStablityVsRefreshRate;
 				//}
