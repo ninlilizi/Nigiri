@@ -1239,7 +1239,7 @@ public class Nigiri : MonoBehaviour {
 		tracerMaterial.SetFloat ("maximumIterations", maximumIterations);
         tracerMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
         tracerMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
-        Shader.SetGlobalFloat("EmissiveStrength", EmissiveIntensity);
+        Shader.SetGlobalFloat("emissiveIntensity", EmissiveIntensity);
         tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         //tracerMaterial.SetFloat("coneWidth", coneWidth);
         tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);
