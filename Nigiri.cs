@@ -804,100 +804,44 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid ()
     {
+        int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
+
+        if (gridBufferSwitch)
+        {
+            if (isGridMobile)
+            {
+                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
+                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset0.x, gridOffset0.y, gridOffset0.z, 0));
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
+            }
+            else
+            {
+                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
+                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset1.x, gridOffset1.y, gridOffset1.z, 0));
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+            }
+        }
+        else
+        {
+            if (isGridMobile)
+            {
+                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
+                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset1.x, gridOffset1.y, gridOffset1.z, 0));
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+            }
+            else
+            {
+                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
+                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset0.x, gridOffset0.y, gridOffset0.z, 0));
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
+            }
+        }
+
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
             emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
             Nigiri_EmissiveCameraHelper.DoRender();
         }
-
-        //if (Nigiri_EmissiveCameraHelper.lightMapBuffer == null) return;
-
-        /*if (fastResolveSwitch)
-        {
-            if (fastResolveFactor == 5)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (4);
-                voxelizationSliceOffset = 4194304;
-                voxelizationSliceDispatch = 16384;
-
-                if (voxelizationSlice == 3 && lpvSwitch == 2) fastResolveSwitch = false;
-            }
-            if (fastResolveFactor == 4)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (8);
-                voxelizationSliceOffset = 2097152;
-                voxelizationSliceDispatch = 8192;
-
-                if (voxelizationSlice == 7 && lpvSwitch == 2) fastResolveSwitch = false;
-            }
-            else if (fastResolveFactor == 3)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (16);
-                voxelizationSliceOffset = 1048576;
-                voxelizationSliceDispatch = 4096;
-                if (voxelizationSlice == 15 && lpvSwitch == 2) fastResolveSwitch = false;
-            }
-            else if (fastResolveFactor == 2)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (32);
-                voxelizationSliceOffset = 524288;
-                voxelizationSliceDispatch = 2048;
-                if (voxelizationSlice == 31 && lpvSwitch == 2) fastResolveSwitch = false;
-            }
-            else if (fastResolveFactor == 1)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (64);
-                voxelizationSliceOffset = 262144;
-                voxelizationSliceDispatch = 1024;
-                if (voxelizationSlice == 63 && lpvSwitch == 2) fastResolveSwitch = false;
-            }
-
-        }
-        else
-        {
-            if (updateSpeedFactor == 4)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (8);
-                voxelizationSliceOffset = 2097152;
-                voxelizationSliceDispatch = 8192;
-            }
-            else if (updateSpeedFactor == 3)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (16);
-                voxelizationSliceOffset = 1048576;
-                voxelizationSliceDispatch = 4096;
-            }
-            else if (updateSpeedFactor == 2)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (32);
-                voxelizationSliceOffset = 524288;
-                voxelizationSliceDispatch = 2048;
-            }
-            else if (updateSpeedFactor == 1)
-            {
-                voxelizationSlice = (voxelizationSlice + 1) % (64);
-                voxelizationSliceOffset = 262144;
-                voxelizationSliceDispatch = 1024;
-            }
-        }
-        if (voxelizationSlice == 0) lpvSwitch = (lpvSwitch + 1) % (3);*/
-
-
-
-        // Clear voxels that were not updated last frame
-        //if (!isGridMobile)
-        //{
-
-        //}
-
-        //if (voxelUpdateBuffer != null) voxelUpdateBuffer.Release();
-        //voxelUpdateBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(uint), ComputeBufferType.Default);
-
-        //clearComputeCache.SetBuffer(2, "voxelUpdateBuffer", voxelUpdateBuffer);
-        //clearComputeCache.Dispatch(2, (highestVoxelResolution * highestVoxelResolution  * highestVoxelResolution) / 1024, 1, 1);
-
-        // Kernel index for the entry point in compute shader
-        int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids
         Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer);
@@ -926,33 +870,6 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
         nigiri_VoxelEntry.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
         //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset);
-        if (gridBufferSwitch)
-        {
-            if (isGridMobile)
-            {
-                nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-            }
-            else
-            {
-                nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-            }
-        }
-        else
-        {
-            if (isGridMobile)
-            {
-                nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-            }
-            else
-            {
-                nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-            }
-        }
-
 
         // Voxelize main cam
         if (primaryVoxelization)
@@ -965,59 +882,8 @@ public class Nigiri : MonoBehaviour {
             nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
         }
 
-        /*if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
-        {
-            // Voxelize secondary cam
-            nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", Nigiri_EmissiveCameraHelper.positionTexture);
-            nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", Nigiri_EmissiveCameraHelper.lightingTexture);
-            nigiri_VoxelEntry.SetInt("useDepth", 1);
-            nigiri_VoxelEntry.Dispatch(kernelHandle, Nigiri_EmissiveCameraHelper.lightingTexture.width / 16, Nigiri_EmissiveCameraHelper.lightingTexture.height / 16, 1); ;
-        }*/
-
         Graphics.ClearRandomWriteTargets();
 
-        /*
-        // Do light propagation
-        if (propagateLight)
-        {
-            lightPropagateCompute.SetTexture(0, "RG0", voxelGrid1);
-            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagationGrid);
-            lightPropagateCompute.SetBuffer(0, "maskClearBuffer", voxelUpdateBuffer);
-            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
-
-            for (int i = 0; i < LPVIterations; i++)
-            {
-                lightPropagateCompute.SetTexture(1, "RG0", voxelPropagationGrid);
-                lightPropagateCompute.SetBuffer(1, "maskClearBuffer", voxelUpdateBuffer);
-                lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-                lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-                lightPropagateCompute.Dispatch(1, voxelizationSliceDispatch, 1, 1);
-            }
-
-            lightPropagateCompute.SetTexture(0, "RG0", voxelPropagationGrid);
-            lightPropagateCompute.SetTexture(0, "RG1", voxelPropagatedGrid);
-            lightPropagateCompute.SetBuffer(0, "maskClearBuffer", voxelUpdateBuffer);
-            lightPropagateCompute.SetInt("offsetStart", voxelizationSlice * voxelizationSliceOffset);
-            lightPropagateCompute.SetInt("Resolution", highestVoxelResolution);
-            lightPropagateCompute.Dispatch(0, voxelizationSliceDispatch, 1, 1);
-        }
-        */
-
-
-        /*if (mipSwitch == 0 && propagateLight)
-        {
-            int destinationRes = (int)highestVoxelResolution / 2;
-            mipFilterCompute.SetInt("destinationRes", destinationRes);
-            //if (fastResolveSwitch && lpvSwitch == 0) mipFilterCompute.SetTexture(0, "Source", voxelGrid1);
-            //else if (fastResolveSwitch && lpvSwitch > 0) mipFilterCompute.SetTexture(0, "Source", voxelPropagationGrid);
-            if (propagateLight && fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagationGrid);
-            else if (propagateLight && !fastResolveSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
-            else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }*/
         if (mipSwitch == 0)
         {
             int destinationRes = (int)highestVoxelResolution / 2;

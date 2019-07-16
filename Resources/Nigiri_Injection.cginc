@@ -422,7 +422,7 @@ FragmentOutput frag(vertOutput i)
 
 	FragmentOutput output;
 	output.mrt0 = newColor;
-	output.mrt1 = float4(i.wPos, 1);
+	output.mrt1 = float4((GetVoxelPosition(i.wPos) / 128), 1);
 	return output;
 
 }

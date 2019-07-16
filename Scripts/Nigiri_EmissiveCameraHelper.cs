@@ -17,6 +17,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public RenderTexture lightingDepthTextureDebug;
 
     public static RenderTexture positionTexture;
+    public RenderTexture positionTextureDebug;
 
     //public static ComputeBuffer lightMapBuffer;
     //public static ComputeBuffer positionBuffer;
@@ -57,8 +58,10 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         positionTexture = new RenderTexture(1024, 1024, 0, RenderTextureFormat.ARGBFloat);
         positionTexture.Create();
 
+        positionTextureDebug = positionTexture;
         lightingTextureDebug = lightingTexture;
         lightingDepthTextureDebug = lightingDepthTexture;
+        
 
         _rb = new RenderBuffer[2];
         _rb[0] = lightingTexture.colorBuffer;
@@ -80,8 +83,14 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     private void OnDisable()
     {
+        if (positionTexture != null) positionTexture.Release();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingDepthTexture != null) lightingDepthTexture.Release();
+
+        if (positionTextureDebug != null) positionTextureDebug.Release();
+        if (lightingTextureDebug != null) lightingTextureDebug.Release();
+        if (lightingDepthTextureDebug != null) lightingDepthTextureDebug.Release();
+
         //if (lightMapBuffer != null) lightMapBuffer.Release();
         //if (positionBuffer != null) positionBuffer.Release();
     }
