@@ -17,6 +17,9 @@ Check the [Releases](https://github.com/ninlilizi/Nigiri/releases) section above
 
 You can also click the "Clone or Download" button and select "Download Zip", then extract the contents to "Assets/Plugins/SEGI" in your project to test out the latest unreleased versions of SEGI.
 
+Some of the files are store using LFS. For now please checkout using git commandline or github desktop app to ensure git lfs is initiated and can download those files.
+
+
 * Quick start instructions pending in this space...
 
 # Community
