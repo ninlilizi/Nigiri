@@ -2,7 +2,7 @@
 
 # Features.
 * 2D, Single Pass Stereo Rendering
-* Runs on Unity version 2018.2 ONLY
+* Runs on Unity version 2018.4 ONLY
 * Depth buffer based voxelisation is less GPU intensive that other methods.
 * Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
 
