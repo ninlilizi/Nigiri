@@ -22,6 +22,14 @@ Some of the files are store using LFS. For now please checkout using git command
 
 * Quick start instructions pending in this space...
 
+
+# Using Nigiri
+Ensure your player settings are set to linear color space. 
+Create or select a camera. Make sure the camera is set to deferred rendering path.
+Add Nigiri component to the camera.
+Tweak your almost realtime gi.
+
+
 # Community
 If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm) on Unity forums.
 
