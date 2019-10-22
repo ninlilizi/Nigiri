@@ -9,7 +9,7 @@ Special mention to the following, for testing and introducing me to a world of n
 Sonikku A, neoshaman, ddutchie, jefferytitan, shinyclef
 
 
-Major contribustions for specific components detailed below.
+Major contributions for specific components detailed below.
 
 ---
 * Nigiri.cs, Nigiri_Blit_CameraDepthTexture.shader, Nigiri_Blit_gBuffer0.shader, Nigiri_Blit_Position_LastCameraDepthTexture.shader, Nigiri_Blit_Stereo2Mono.shader
