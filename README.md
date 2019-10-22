@@ -1,5 +1,7 @@
 <h1 align=center>Nigiri</h1>
 
+Please, note. This project is considered a work in progress and is still evolving over time.
+
 # Features.
 * 2D, Single Pass Stereo Rendering
 * Runs on Unity version 2018.4 ONLY (Will update, time permitting.)
