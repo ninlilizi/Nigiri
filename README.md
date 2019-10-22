@@ -34,7 +34,15 @@ Tweak your almost realtime gi.
 If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm) on Unity forums.
 
 # Licence
- Nigiri as a whole is CC BY-NC 4.0. With select attributions as stated below being MIT.
+All code contributions and inclusions are to the best of my knowledge, MIT.
+
+Nigiri as a whole, is also provided under standard MIT licence terms. With a simple request, that as I am a disabled person, struggling to attain suitable employment due to my health issues making a 9-5 commitment unviable. That if you profit from this work, donations are appreciated, but offers of actual paid work would make so much difference to my life. I'm dying of exposure out here.</br>
+
+* Special mention to the following, for testing and introducing me to a world of new ideas and techniques:</br>
+Sonikku A, neoshaman, ddutchie, jefferytitan, shinyclef
+
+Major contribustions for specific components detailed here (https://github.com/ninlilizi/Nigiri/blob/master/LICENSE)</br>
+
 
 # Attributions
 * Sonic Ether for SEGI (https://github.com/sonicether/SEGI)<br>
