@@ -44,7 +44,7 @@ Nigiri as a whole, is also provided under standard MIT licence terms. With a sim
 * Special mention to the following, for testing and introducing me to a world of new ideas and techniques:</br>
 Sonikku A, neoshaman, [ddutchie](https://github.com/ddutchie), jefferytitan, shinyclef
 
-Major contributions for specific components detailed here (https://github.com/ninlilizi/Nigiri/blob/master/LICENSE)</br>
+[Major contributions for specific components detailed here](https://github.com/ninlilizi/Nigiri/blob/master/LICENSE)</br>
 
 
 # Attributions
