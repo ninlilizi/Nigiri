@@ -38,13 +38,13 @@ If you need some help, feel free to ask any questions in the [Discord](https://d
 # Licence
 All code contributions and inclusions are to the best of my knowledge, MIT.
 
-Nigiri as a whole, is also provided under standard MIT licence terms. With a simple request, that as I am a disabled person, struggling to attain suitable employment due to my health issues making a 9-5 commitment unviable. That if you profit from this work, donations are appreciated, but offers of actual paid work would make so much difference to my life. I'm dying of exposure out here.</br>
-[My resume is here!](https://nkli.net/Files/Abigail%20Hocking%20-%20Resume.pdf)</br>
+Nigiri as a whole, is also provided under standard MIT licence terms. With a simple request, that as I am a disabled person, struggling to attain suitable employment due to my health issues making a 9-5 commitment unviable. That if you profit from this work, donations are appreciated, but offers of actual paid work would make so much difference to my life. I'm dying of exposure out here!</br>
+[Link to my resume](https://nkli.net/Files/Abigail%20Hocking%20-%20Resume.pdf)</br>
 
 * Special mention to the following, for testing and introducing me to a world of new ideas and techniques:</br>
-Sonikku A, neoshaman, ddutchie, jefferytitan, shinyclef
+Sonikku A, neoshaman, [ddutchie](https://github.com/ddutchie), jefferytitan, shinyclef
 
-Major contribustions for specific components detailed here (https://github.com/ninlilizi/Nigiri/blob/master/LICENSE)</br>
+Major contributions for specific components detailed here (https://github.com/ninlilizi/Nigiri/blob/master/LICENSE)</br>
 
 
 # Attributions
