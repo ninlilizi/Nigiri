@@ -39,6 +39,7 @@ If you need some help, feel free to ask any questions in the [Discord](https://d
 All code contributions and inclusions are to the best of my knowledge, MIT.
 
 Nigiri as a whole, is also provided under standard MIT licence terms. With a simple request, that as I am a disabled person, struggling to attain suitable employment due to my health issues making a 9-5 commitment unviable. That if you profit from this work, donations are appreciated, but offers of actual paid work would make so much difference to my life. I'm dying of exposure out here.</br>
+[My resume is here!](https://nkli.net/Files/Abigail%20Hocking%20-%20Resume.pdf)</br>
 
 * Special mention to the following, for testing and introducing me to a world of new ideas and techniques:</br>
 Sonikku A, neoshaman, ddutchie, jefferytitan, shinyclef
