@@ -53,5 +53,6 @@ Sonikku A, neoshaman, [ddutchie](https://github.com/ddutchie), jefferytitan, shi
 * [Cat Like Coding for Bulk of Spherical Harmics shader](https://catlikecoding.com/unity/tutorials/rendering/part-20/)<br>
 * [keijiro for MiniEngineAO](https://github.com/keijiro/MiniEngineAO)<br>
 * [keijiro for Gaussian Blur](https://github.com/keijiro)
+* [keijiro for Tonemapping](https://github.com/keijiro/ColorSuite)
 * [For depth based voxelization](https://github.com/parikshit6321/PVGI/blob/master/Assets/ProgressiveVoxelizedGI/Shaders/VoxelGridEntry.compute)
 * This list, plus MIT declarations will be correct and actually acurate before this goes public!
