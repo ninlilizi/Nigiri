@@ -55,4 +55,3 @@ Sonikku A, neoshaman, [ddutchie](https://github.com/ddutchie), jefferytitan, shi
 * [keijiro for Gaussian Blur](https://github.com/keijiro)
 * [keijiro for Tonemapping](https://github.com/keijiro/ColorSuite)
 * [For depth based voxelization](https://github.com/parikshit6321/PVGI/blob/master/Assets/ProgressiveVoxelizedGI/Shaders/VoxelGridEntry.compute)
-* This list, plus MIT declarations will be correct and actually acurate before this goes public!
