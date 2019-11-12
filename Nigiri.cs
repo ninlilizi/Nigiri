@@ -18,7 +18,6 @@ public class Nigiri : MonoBehaviour {
     };
 
     [Header("General Settings")]
-    //private Vector2Int resolution = new Vector2Int(256, 256);
     [Range(0.01f, 8)]
     public float indirectLightingStrength = 1.0f;
     [Range(0.0f, 8)]
@@ -40,39 +39,17 @@ public class Nigiri : MonoBehaviour {
     public bool primaryVoxelization = true;
     public bool secondaryVoxelization = true;
 
-    /*[Header("Light Propagation Settings")]
-    public bool propagateLight = false;
-    [Range(1, 8)]
-    public int LPVIterations = 1;
-    [Range(1, 4)]
-    public int updateSpeedFactor = 1;
-    [Range(1, 5)]
-    public int fastResolveFactor = 2;*/
-
     [Header("Cone Trace Settings")]
     [Range(1, 16)]
     public int subsamplingRatio = 1;
     [Range(1, 32)]
     public int maximumIterations = 8;
-    //[Range(0.01f, 4)]
-    //public float coneLength = 0.5f;
-    //[Range(0.01f, 12)]
-    //public float coneWidth = 6;
     [Range(0.1f, 4)]
     public float GIGain = 1;
     [Range(0.1f, 4)]
     public float NearLightGain = 1.14f;
-    //[Range(0.1f, 2)]
-    //public float OcclusionStrength = 0.15f;
-    //[Range(0.1f, 1)]
-    //public float NearOcclusionStrength = 0.5f;
-    //[Range(0.1f, 1)]
-    //public float FarOcclusionStrength = 1;
-    //[Range(0.1f, 1)]
-    //public float OcclusionPower = 0.65f;
     [Range(0.01f, 2)]
     public float coneTraceBias = 1;
-    //private bool usePathCache = false;
     public bool depthStopOptimization = true;
     [Tooltip("Searches nearest neighbours of ray hit for highest value")]
     public bool neighbourSearch = false;
@@ -308,8 +285,6 @@ public class Nigiri : MonoBehaviour {
     private ComputeShader clearComputeCache;
     private ComputeShader transferIntsCompute;
     private ComputeShader mipFilterCompute;
-    //private ComputeShader lightPropagateCompute;
-    //public ComputeShader nigiri_lightingCurveLUTCompute;
 
     //[Header("Materials")]
     private Material tracerMaterial;
@@ -322,10 +297,6 @@ public class Nigiri : MonoBehaviour {
     //[Header("Render Textures")]
     private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-    //public static RenderTexture voxelInjectionGrid;
-    //public static RenderTexture voxelPropagationGrid;
-    //public static RenderTexture voxelPropagatedGrid;
-    public static RenderTexture voxelGrid0;
     public static RenderTexture voxelGrid1;
     public static RenderTexture voxelGrid2;
     public static RenderTexture voxelGrid3;
@@ -334,22 +305,16 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGridCascade1;
     public static RenderTexture voxelGridCascade2;
 
-    private RenderTexture lightingTexture;
-    private RenderTexture lightingTexture2;
-    private RenderTexture lightingTextureMono;
-    private RenderTexture lightingTexture2Mono;
-    private RenderTexture positionTexture;
-    private RenderTexture depthTexture;
-    //public RenderTexture occlusionTexture;
-    //private RenderTexture orthographicPositionTexture;
-
-    //public RenderTexture lightingCurveLUT;
+    public RenderTexture lightingTexture;
+    public RenderTexture lightingTexture2;
+    public RenderTexture lightingTextureMono;
+    public RenderTexture lightingTexture2Mono;
+    public RenderTexture positionTexture;
+    public RenderTexture depthTexture;
 
     private RenderTexture blur;
     private RenderTexture gi;
 
-
-    //private PathCacheBuffer pathCacheBuffer;
     private ComputeBuffer voxelUpdateCounter;
     public static ComputeBuffer voxelUpdateBuffer;
     private int tracedTexture1UpdateCount;
@@ -362,25 +327,13 @@ public class Nigiri : MonoBehaviour {
     int voxelizationSliceDispatch;
 
     int frameSwitch = 0;
-    //int voxelizationSlice = 0;
     int mipSwitch = 0;
-    //int lpvSwitch = 0;
     int emissiveCameraLocationSwitch;
-    public static bool gridBufferSwitch = false;
-    public int gridBufferCounter = 0;
-    //int mobilizeGridCounter = 0;
-    //int voxelStaggerSwitch = 0;
-    //bool fastResolveSwitch = true;
-    public bool isGridMobile = false;
 
-    //bool prevPropagateLight = false;
-    //private Vector3 prevRoatation;
     private Vector3 prevPosition;
     private Vector3 prevGridPosition;
 
-    //private Vector3 gridOffset;
-    private Vector3 gridOffset0;
-    private Vector3 gridOffset1;
+    private Vector3 gridOffset;
 
     GameObject emissiveCameraGO;
     Camera emissiveCamera;
@@ -447,38 +400,7 @@ public class Nigiri : MonoBehaviour {
         GenerateDitherTexture();
     }
 
-    private void MobilizeGrid()
-    {
-        //TriggerFastUpdate();
-
-        //mobilizeGridCounter = 0;
-        //prevRoatation = localCam.transform.eulerAngles;
-        prevPosition = localCam.transform.position;
-
-        //prevGridPosition = gridOffset;
-        //gridOffset = localCam.transform.position;
-        isGridMobile = true;
-        gridBufferCounter = 0;
-
-        if (gridBufferSwitch) gridOffset0 = localCam.transform.position;
-        else gridOffset1 = localCam.transform.position;
-        /*clearComputeCache.SetTexture(3, "RG0", voxelPropagatedGrid);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);
-
-        clearComputeCache.SetTexture(3, "RG0", voxelPropagationGrid);
-        clearComputeCache.SetInt("Res", 256);
-        clearComputeCache.Dispatch(3, 256 / 16, 256 / 16, 1);*/
-    }
-
-    /*private void TriggerFastUpdate()
-    {
-        lpvSwitch = 0;
-        voxelizationSlice = 0;
-        fastResolveSwitch = true;
-    }*/
-
-        void Update()
+    void Update()
     {
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
@@ -498,21 +420,6 @@ public class Nigiri : MonoBehaviour {
             skyColor = RenderSettings.ambientSkyColor;
             //else skyColor = RenderSettings.skybox.color;
         }
-
-        // Trigger a fast refresh is camera movement has likely caused unresolved data to become visible
-        /*if (prevRoatation.x > localCam.transform.eulerAngles.x + 45) TriggerFastUpdate();
-        else if (prevRoatation.x < localCam.transform.eulerAngles.x - 45) TriggerFastUpdate();
-        else if (prevRoatation.y > localCam.transform.eulerAngles.y + 45) TriggerFastUpdate();
-        else if (prevRoatation.y < localCam.transform.eulerAngles.y - 45) TriggerFastUpdate();
-        else if (prevRoatation.z > localCam.transform.eulerAngles.z + 45) TriggerFastUpdate();
-        else if (prevRoatation.z < localCam.transform.eulerAngles.z - 45) TriggerFastUpdate();*/
-        if (prevPosition.x > localCam.transform.position.x + (GIAreaSize * 0.165)) MobilizeGrid();
-        else if (prevPosition.x < localCam.transform.position.x - (GIAreaSize * 0.165)) MobilizeGrid();
-        else if (prevPosition.y > localCam.transform.position.y + (GIAreaSize * 0.165)) MobilizeGrid();
-        else if (prevPosition.y < localCam.transform.position.y - (GIAreaSize * 0.165)) MobilizeGrid();
-        else if (prevPosition.z > localCam.transform.position.z + (GIAreaSize * 0.165)) MobilizeGrid();
-        else if (prevPosition.z < localCam.transform.position.z - (GIAreaSize * 0.165)) MobilizeGrid();
-        ///
 
         emissiveCameraLocationSwitch = (emissiveCameraLocationSwitch + 1) % (2);
         /*if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, -(int)(GIAreaSize * 0.0625f));
@@ -534,10 +441,7 @@ public class Nigiri : MonoBehaviour {
         FilterMode filterMode = FilterMode.Point;
         if (bilinearFiltering) filterMode = FilterMode.Bilinear;
 
-        //voxelPropagationGrid.filterMode = filterMode;
-        //voxelPropagatedGrid.filterMode = filterMode;
         voxelGridCascade1.filterMode = filterMode;
-        voxelGrid0.filterMode = filterMode;
         voxelGrid1.filterMode = filterMode;
         voxelGrid2.filterMode = filterMode;
         voxelGrid3.filterMode = filterMode;
@@ -560,14 +464,10 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache = Resources.Load("Nigiri_Clear") as ComputeShader;
         transferIntsCompute = Resources.Load("Nigiri_TransferInts") as ComputeShader;
         mipFilterCompute = Resources.Load("Nigiri_MipFilter") as ComputeShader;
-        //lightPropagateCompute = Resources.Load("Nigiri_LightPropagation") as ComputeShader;
-        //nigiri_lightingCurveLUTCompute = Resources.Load("Nigiri_lightingCurveLUT") as ComputeShader;
-        //blur = Shader.Find("Hidden/Nigiri_BilateralBlur");
         depthShader = Shader.Find("Hidden/Nigiri_Blit_CameraDepthTexture");
         blitGBufferShader = Shader.Find("Hidden/Nigiri_Blit_gBuffer0");
         fxaaShader = Shader.Find("Hidden/Nigiri_FXAA");
         stereo2MonoShader = Shader.Find("Hidden/Nigiri_Blit_Stereo2Mono");
-        //positionShader = Shader.Find("Hidden/Nigiri_Blit_Position_LastCameraDepthTexture");
         fxaaMaterial = new Material(fxaaShader);
 
         colorShader = Shader.Find("Hidden/Nigiri_Color");
@@ -591,35 +491,29 @@ public class Nigiri : MonoBehaviour {
         if (depthMaterial == null) depthMaterial = new Material(depthShader);
         if (stereo2MonoMaterial == null) stereo2MonoMaterial = new Material(stereo2MonoShader);
 
-        //if (temporalStablityVsRefreshRate > 0.975f) temporalStablityVsRefreshRate = 0.975f;
-
-        //if (positionMaterial == null) positionMaterial = new Material(positionShader);
+        gridOffset = localCam.transform.position;
 
         InitializeVoxelGrid();
         createRenderTextures();
         CreateComputeBuffers();
-        MobilizeGrid();
 
         Setup();
 
         //Get blue noise textures
-        blueNoise = new Texture2D[64];
-        for (int i = 0; i < 64; i++)
+        blueNoise = new Texture2D[8];
+        for (int i = 0; i < 8; i++)
         {
             string fileName = "LDR_RGBA_" + i.ToString();
-            Texture2D blueNoiseTexture = Resources.Load("Noise Textures/" + fileName) as Texture2D;
+            Texture2D blueNoiseTexture = Resources.Load("Noise Textures/256_256/" + fileName) as Texture2D;
 
             if (blueNoiseTexture == null)
             {
-                Debug.LogWarning("Unable to find noise texture \"Assets/SEGI/Resources/Noise Textures/" + fileName + "\" for SEGI!");
+                Debug.LogWarning("Unable to find noise texture \"Assets/Nigiri/Resources/Noise Textures/" + fileName + "\" for Nigiri!");
             }
 
             blueNoise[i] = blueNoiseTexture;
 
         }
-
-        //pathCacheBuffer = new PathCacheBuffer();
-        //pathCacheBuffer.Init(highestVoxelResolution);
 
         if (!emissiveCameraGO)
         {
@@ -677,15 +571,8 @@ public class Nigiri : MonoBehaviour {
         else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
-        //lightingCurveLUT = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBFloat);
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
-
-        /*lightingTexture.useMipMap = true;
-        lightingTexture2.useMipMap = true;
-
-        lightingTexture.autoGenerateMips = true;
-        lightingTexture2.autoGenerateMips = true;*/
 
         depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
@@ -709,19 +596,12 @@ public class Nigiri : MonoBehaviour {
             lightingTexture2Mono.Create();
         }
 
-        //lightingCurveLUT.filterMode = FilterMode.Point;
-
-        //lightingCurveLUT.enableRandomWrite = true;
-
         lightingTexture.Create();
         lightingTexture2.Create();
         positionTexture.Create();
         depthTexture.Create();
         blur.Create();
         gi.Create();
-
-        //lightingCurveLUT.Create();
-
     }
 
     private void CreateComputeBuffers()
@@ -751,11 +631,6 @@ public class Nigiri : MonoBehaviour {
 		voxelGridDescriptorFloat4.msaaSamples = 1;
 		voxelGridDescriptorFloat4.sRGB = true;
 
-        //voxelInjectionGrid = new RenderTexture(voxelGridDescriptorFloat4);
-
-        //voxelPropagationGrid = new RenderTexture (voxelGridDescriptorFloat4);
-        //voxelPropagatedGrid = new RenderTexture(voxelGridDescriptorFloat4);
-        voxelGrid0 = new RenderTexture(voxelGridDescriptorFloat4);
         voxelGrid1 = new RenderTexture(voxelGridDescriptorFloat4);
 
         voxelGridDescriptorFloat4.width = highestVoxelResolution / 2;
@@ -784,15 +659,8 @@ public class Nigiri : MonoBehaviour {
 
         voxelGrid5 = new RenderTexture (voxelGridDescriptorFloat4);
 
-        //voxelInjectionGrid.filterMode = FilterMode.Bilinear;
-
-        //voxelInjectionGrid.Create();
-
-        //voxelPropagationGrid.Create();
-        //voxelPropagatedGrid.Create();
         voxelGridCascade1.Create();
         voxelGridCascade2.Create();
-        voxelGrid0.Create();
         voxelGrid1.Create();
         voxelGrid2.Create();
 		voxelGrid3.Create();
@@ -805,37 +673,6 @@ public class Nigiri : MonoBehaviour {
 	private void UpdateVoxelGrid ()
     {
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
-
-        if (gridBufferSwitch)
-        {
-            if (isGridMobile)
-            {
-                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
-                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset0.x, gridOffset0.y, gridOffset0.z, 0));
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-            }
-            else
-            {
-                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
-                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset1.x, gridOffset1.y, gridOffset1.z, 0));
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-            }
-        }
-        else
-        {
-            if (isGridMobile)
-            {
-                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset1);
-                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset1.x, gridOffset1.y, gridOffset1.z, 0));
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-            }
-            else
-            {
-                //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset0);
-                Shader.SetGlobalVector("gridOffset", new Vector4(gridOffset0.x, gridOffset0.y, gridOffset0.z, 0));
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid0);
-            }
-        }
 
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
@@ -857,7 +694,6 @@ public class Nigiri : MonoBehaviour {
             nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
         }
         
-        //nigiri_VoxelEntry.SetBuffer(0, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", Nigiri_EmissiveCameraHelper.lightingDepthTexture);
         nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
@@ -869,11 +705,11 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
         nigiri_VoxelEntry.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-        //nigiri_VoxelEntry.SetVector("gridOffset", gridOffset);
 
         // Voxelize main cam
         if (primaryVoxelization)
         {
+            nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGridCascade1);
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGridCascade2);
             nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
@@ -888,9 +724,7 @@ public class Nigiri : MonoBehaviour {
         {
             int destinationRes = (int)highestVoxelResolution / 2;
             mipFilterCompute.SetInt("destinationRes", destinationRes);
-            //if (propagateLight) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelPropagatedGrid);
-            if (gridBufferSwitch) mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
-            else mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid0);
+            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
@@ -909,32 +743,6 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid3);
             mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid4);
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-
-            if (isGridMobile)
-            {
-                if (gridBufferCounter == 4)
-                {
-                    if (gridBufferSwitch)
-                    {
-                        gridOffset1 = localCam.transform.position;
-                        clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
-                        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                        //clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-                        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                    }
-                    else
-                    {
-                        gridOffset0 = localCam.transform.position;
-                        clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
-                        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                        //clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
-                        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                    }
-                    isGridMobile = false;
-                    gridBufferSwitch = !gridBufferSwitch;
-                }
-                gridBufferCounter = (gridBufferCounter + 1) % (5);
-            }
         }
         else if (mipSwitch == 3)
         {
@@ -945,11 +753,6 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
-
-        //stopwatch.Stop();
-        //double after = stopwatch.Elapsed.TotalMilliseconds;
-        //Debug.Log("<Nigiri> Voxelization completed in " + (after - before) + "ms");
-        //computeLUTBuffer.Release();
     }
 
 
@@ -976,19 +779,6 @@ public class Nigiri : MonoBehaviour {
         }
 
         Camera localCam = GetComponent<Camera>();
-
-        /*if (pathCacheBuffer == null)
-        {
-            Debug.Log("<SEGI> Creating path cache buffers");
-            pathCacheBuffer = new PathCacheBuffer();
-            pathCacheBuffer.Init(highestVoxelResolution);
-        }
-
-        if (pathCacheBuffer.front == null || pathCacheBuffer.back == null)
-        {
-            Debug.Log("<SEGI> Recreating patch cache buffers");
-            pathCacheBuffer.Init(highestVoxelResolution);
-        }*/
 
         //Fix stereo rendering matrix
         if (localCam.stereoEnabled)
@@ -1062,43 +852,6 @@ public class Nigiri : MonoBehaviour {
             _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
         }
 
-
-
-
-
-        //Experimental grid offsetting
-        /*if (isGridMobile)
-        {
-            if (mobilizeGridCounter > 3)
-            {
-                if (gridBufferSwitch)
-                {
-                    gridOffset1 = localCam.transform.position;
-                    clearComputeCache.SetTexture(0, "RG0", voxelGrid1);
-                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                }
-                else
-                {
-                    gridOffset0 = localCam.transform.position;
-                    clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
-                    clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-                    clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-                }
-
-                isGridMobile = false;
-                mobilizeGridCounter = 0;
-                gridBufferSwitch = !gridBufferSwitch;
-            }
-            else
-            {
-                mobilizeGridCounter++;
-                tracerMaterial.SetVector("gridOffset", prevGridPosition);
-            }
-        }
-        else tracerMaterial.SetVector("gridOffset", gridOffset);*/
-        ///
-
         tracerMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
         tracerMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
         Shader.SetGlobalFloat("worldVolumeBoundary", GIAreaSize);
@@ -1109,7 +862,6 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         //tracerMaterial.SetFloat("coneWidth", coneWidth);
         tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);
-        //tracerMaterial.SetInt("usePathCache", usePathCache ? 1 : 0);
         tracerMaterial.SetColor("sunColor", sunColor);
         tracerMaterial.SetColor("skyColor", skyColor);
         if (sunLight != null) tracerMaterial.SetVector("sunLight", sunLight.transform.rotation.eulerAngles);
@@ -1133,29 +885,17 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetInt("StochasticSampling", stochasticSampling ? 1 : 0);
         tracerMaterial.SetFloat("stochasticSamplingScale", stochasticFactor);
         tracerMaterial.SetInt("VisualiseGI", VisualiseGI ? 1 : 0);
-        //tracerMaterial.SetInt("visualiseCache", VisualiseCache ? 1 : 0);
         tracerMaterial.SetInt("visualizeOcclusion", visualizeOcclusion ? 1 : 0);
         tracerMaterial.SetInt("visualizeReflections", visualizeReflections ? 1 : 0);
         tracerMaterial.SetFloat("GIGain", GIGain);
         tracerMaterial.SetFloat("NearLightGain", NearLightGain);
-        //tracerMaterial.SetFloat("OcclusionStrength", OcclusionStrength);
-        //tracerMaterial.SetFloat("NearOcclusionStrength", NearOcclusionStrength);
-        //tracerMaterial.SetFloat("FarOcclusionStrength", FarOcclusionStrength);
-        //tracerMaterial.SetFloat("OcclusionPower", OcclusionPower);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
-
-        //Graphics.Blit(source, blur, _bilateralBlurMaterial, 1);
-        //Graphics.Blit(blur, lightingTexture, _bilateralBlurMaterial, 2);
 
         Graphics.Blit(source, lightingTexture);
         Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
 
-        //Graphics.Blit(lightingTexture2, blur, _bilateralBlurMaterial, 1);
-        //Graphics.Blit(blur, lightingTexture2, _bilateralBlurMaterial, 2);
-
         if (localCam.stereoEnabled)
         {
-            //stereo2MonoMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
             Graphics.Blit(lightingTexture, lightingTextureMono, stereo2MonoMaterial);
             Graphics.Blit(lightingTexture2, lightingTexture2Mono, stereo2MonoMaterial);
         }
@@ -1165,40 +905,12 @@ public class Nigiri : MonoBehaviour {
         depthMaterial.SetInt("debug", visualizeDepth ? 1 : 0);
         Graphics.Blit(null, depthTexture, depthMaterial);
 
-        if (gridBufferSwitch)
-        {
-            if (isGridMobile)
-            {
-                tracerMaterial.SetVector("gridOffset", gridOffset0);
-                tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
-            }
-            else
-            {
-                tracerMaterial.SetVector("gridOffset", gridOffset1);
-                tracerMaterial.SetTexture("voxelGrid", voxelGrid1);
-            }
-        }
-        else
-        {
-            if (isGridMobile)
-            {
-                tracerMaterial.SetVector("gridOffset", gridOffset1);
-                tracerMaterial.SetTexture("voxelGrid", voxelGrid1);
-            }
-            else
-            {
-                tracerMaterial.SetVector("gridOffset", gridOffset0);
-                tracerMaterial.SetTexture("voxelGrid", voxelGrid0);
-            }
-        }
-
         //We only want to retrieve a single eye for the positional texture if we're in stereo
         tracerMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
         Graphics.Blit(source, positionTexture, tracerMaterial, 0);
         tracerMaterial.SetInt("Stereo2Mono", 0);
 
-        if (gridBufferSwitch) tracerMaterial.SetVector("gridOffset", gridOffset1);
-        else tracerMaterial.SetVector("gridOffset", gridOffset0);
+        tracerMaterial.SetVector("gridOffset", gridOffset);
 
         if (visualizeDepth)
         {
@@ -1206,10 +918,7 @@ public class Nigiri : MonoBehaviour {
             return;
         }
 
-
-        //if (propagateLight) tracerMaterial.SetTexture("voxelGrid1", voxelPropagatedGrid);
-        if (gridBufferSwitch) tracerMaterial.SetTexture("voxelGrid1", voxelGrid1);
-        else tracerMaterial.SetTexture("voxelGrid1", voxelGrid0);
+        tracerMaterial.SetTexture("voxelGrid1", voxelGrid1);
         tracerMaterial.SetTexture("voxelGrid2", voxelGrid2);
         tracerMaterial.SetTexture("voxelGrid3", voxelGrid3);
         tracerMaterial.SetTexture("voxelGrid4", voxelGrid4);
@@ -1254,43 +963,18 @@ public class Nigiri : MonoBehaviour {
 			Graphics.Blit (source, destination, tracerMaterial, 1);
             return;
 		} else {
-            /*if (usePathCache)
-            {
-                if (tracedTexture1UpdateCount > 48)
-                {
-                    clearComputeCache.SetInt("Resolution", 256);
-                    clearComputeCache.SetBuffer(1, "RG1", pathCacheBuffer.back);
-                    clearComputeCache.SetInt("zStagger", tracedTexture1UpdateCount - 48);
-                    clearComputeCache.Dispatch(1, 256 / 16, 256 / 16, 1);
-                }
-                else if (tracedTexture1UpdateCount > 32)
-                {
-                    transferIntsCompute.SetBuffer(3, "ResultBuffer", pathCacheBuffer.front);
-                    transferIntsCompute.SetBuffer(3, "InputBuffer", pathCacheBuffer.back);
-                    transferIntsCompute.SetInt("zStagger", tracedTexture1UpdateCount - 32);
-                    transferIntsCompute.SetInt("Resolution", 256);
-                    transferIntsCompute.Dispatch(3, 256 / 16, 256 / 16, 1);
-                }
-                tracedTexture1UpdateCount = (tracedTexture1UpdateCount + 1) % (65);
-            }*/
-
-            Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 64]);
-            //Shader.SetGlobalBuffer("tracedBuffer0", pathCacheBuffer.front);
-            //Graphics.SetRandomWriteTarget(1, pathCacheBuffer.back);
+            Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer, true);
-            //tracerMaterial.SetBuffer("voxelUpdateBuffer", voxelUpdateBuffer);
             Graphics.Blit (source, gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
 
             // Clear voxels not updated, but traced through this frame.
             voxelGrid1.filterMode = FilterMode.Point;
-            if (gridBufferSwitch) clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
-            else clearComputeCache.SetTexture(1, "RG0", voxelGrid0);
+            clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid2", voxelGridCascade2);
             clearComputeCache.SetInt("Resolution", highestVoxelResolution);
             clearComputeCache.SetBuffer(1, "voxelUpdateBuffer", voxelUpdateBuffer);
-            //clearComputeCache.SetBuffer(1, "lightMapBuffer", Nigiri_EmissiveCameraHelper.lightMapBuffer);
             clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
             clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
             if (gaussianMipFiltering) voxelGrid1.filterMode = FilterMode.Bilinear;
@@ -1390,30 +1074,20 @@ public class Nigiri : MonoBehaviour {
     {
         if (_renderCommand != null) UnregisterCommandBuffers();
 
-        //if (pathCacheBuffer != null) pathCacheBuffer.Cleanup();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (lightingTextureMono != null) lightingTextureMono.Release();
         if (lightingTexture2Mono != null) lightingTexture2Mono.Release();
         if (positionTexture != null) positionTexture.Release();
         if (depthTexture != null) depthTexture.Release();
-        //if (occlusionTexture != null) occlusionTexture.Release();
-        //if (orthographicPositionTexture != null) orthographicPositionTexture.Release();
         if (gi != null) gi.Release();
         if (blur != null) blur.Release();
-
-        //if (lightingCurveLUT != null) lightingCurveLUT.Release();
-                
+             
         if (voxelUpdateCounter != null) voxelUpdateCounter.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
-        //if (voxelInjectionGrid != null) voxelInjectionGrid.Release();
-
-        //if (voxelPropagationGrid != null) voxelPropagationGrid.Release();
-        //if (voxelPropagatedGrid != null) voxelPropagatedGrid.Release();
         if (voxelGridCascade1 != null) voxelGridCascade1.Release();
         if (voxelGridCascade2 != null) voxelGridCascade2.Release();
-        if (voxelGrid0 != null) voxelGrid0.Release();
         if (voxelGrid1 != null) voxelGrid1.Release();
         if (voxelGrid2 != null) voxelGrid2.Release();
         if (voxelGrid3 != null) voxelGrid3.Release();
@@ -1434,23 +1108,11 @@ public class Nigiri : MonoBehaviour {
 
         CreateComputeBuffers();
 
-        /*clearComputeCache.SetTexture(0, "RG0", voxelPropagationGrid);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);
-
-        clearComputeCache.SetTexture(0, "RG0", voxelPropagatedGrid);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, 256 / 16, 256 / 16, 1);*/
-
         clearComputeCache.SetTexture(0, "RG0", voxelGridCascade1);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
         clearComputeCache.SetTexture(0, "RG0", voxelGridCascade2);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-        clearComputeCache.SetTexture(0, "RG0", voxelGrid0);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
@@ -1474,12 +1136,7 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.SetInt("Resolution", 256);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
 
-        //lpvSwitch = 0;
         mipSwitch = 0;
-        //voxelizationSlice = 0;
-        //fastResolveSwitch = true;
-        //prevPropagateLight = propagateLight;
-        //prevRoatation = GetComponent<Camera>().transform.eulerAngles;
         prevPosition = GetComponent<Camera>().transform.position;
     }
 
@@ -1584,16 +1241,9 @@ public class Nigiri : MonoBehaviour {
             if (gi != null)
                 v += gi.width * gi.height * bitValue(gi);
 
-            //if (giUpsample != null)
-            //    v += giUpsample.width * giUpsample.height * bitValue(giUpsample);
-
             if (blur != null)
                 v += blur.width * blur.height * bitValue(blur);
 
-            /*if (voxelInjectionGrid != null) 
-                v += voxelInjectionGrid.width * voxelInjectionGrid.height * bitValue(voxelInjectionGrid); 
-            if (voxelPropagatedGrid != null) 
-                v += voxelPropagatedGrid.width * voxelPropagatedGrid.height * bitValue(voxelPropagatedGrid);*/
             if (voxelGrid1 != null)
                 v += voxelGrid1.width * voxelGrid1.height * voxelGrid1.volumeDepth * bitValue(voxelGrid1);
             if (voxelGrid2 != null)
