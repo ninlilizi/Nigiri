@@ -33,7 +33,8 @@ Tweak your almost realtime gi.
 
 
 # Community
-If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm) on Unity forums.
+If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm).   
+A Unity Forum thread will also be available at a later time.
 
 # Licence
 All code contributions and inclusions are to the best of my knowledge, MIT.
