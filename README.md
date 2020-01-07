@@ -1,6 +1,9 @@
+*Please, note. This project is considered a work in progress and is still evolving over time.*
 <h1 align=center>Nigiri</h1>
-
-Please, note. This project is considered a work in progress and is still evolving over time.
+An almost-dynamic voxel-based global illumination system for Unity.
+<p align="center" style="display: inline-block;">
+  <img height="256px" width="597px" src="https://i.imgur.com/qZMa7px.jpg">
+</p>
 
 # Features.
 * 2D, Single Pass Stereo Rendering
@@ -8,11 +11,8 @@ Please, note. This project is considered a work in progress and is still evolvin
 * Depth buffer based voxelisation is less GPU intensive that other methods.
 * Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
 
-An almost-dynamic voxel-based global illumination system for Unity.
-
-<p align="center" style="display: inline-block;">
-  <img height="256px" width="597px" src="https://i.imgur.com/qZMa7px.jpg">
-</p>
+# Roadmap
+https://github.com/ninlilizi/Nigiri/wiki/Roadmap
 
 # Installation
 Check the [Releases](https://github.com/ninlilizi/Nigiri/releases) section above to download a version of Nigiri that is a simple .unitypackage file which is ready for you to import into your project. 
@@ -33,7 +33,8 @@ Tweak your almost realtime gi.
 
 
 # Community
-If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm) on Unity forums.
+If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm).   
+A Unity Forum thread will also be available at a later time.
 
 # Licence
 All code contributions and inclusions are to the best of my knowledge, MIT.
