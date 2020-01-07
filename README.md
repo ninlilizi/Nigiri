@@ -19,9 +19,12 @@ Check the [Releases](https://github.com/ninlilizi/Nigiri/releases) section above
 
 You can also click the "Clone or Download" button and select "Download Zip", then extract the contents to "Assets/Plugins/Nigiri" in your project to test out the latest unreleased versions of Nigiri.
 
-Some of the files are store using LFS. For now please checkout using git commandline or github desktop app to ensure git lfs is initiated and can download those files.
+Some of the files are store using LFS and some resources in SubModules. For now please checkout using git commandline or github desktop app to ensure git lfs is initiated and can download those files.
 
-
+#### To clone using Git command line
+```
+git clone --recurse-submodules git@github.com:ninlilizi/Nigiri.git
+```
 * Quick start instructions pending in this space...
 
 
