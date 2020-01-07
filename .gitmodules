@@ -1,0 +1,3 @@
+[submodule "Demo Scenes"]
+	path = Demo Scenes
+	url = git@github.com:ninlilizi/Nigiri-DemoScenes.git
