@@ -504,11 +504,11 @@ public class Nigiri : MonoBehaviour {
         for (int i = 0; i < 8; i++)
         {
             string fileName = "LDR_RGBA_" + i.ToString();
-            Texture2D blueNoiseTexture = Resources.Load("Noise Textures/256_256/" + fileName) as Texture2D;
+            Texture2D blueNoiseTexture = Resources.Load("Textures/Blue Noise/64_64/" + fileName) as Texture2D;
 
             if (blueNoiseTexture == null)
             {
-                Debug.LogWarning("Unable to find noise texture \"Assets/Nigiri/Resources/Noise Textures/" + fileName + "\" for Nigiri!");
+                Debug.LogWarning("Unable to find noise texture \"Assets/Nigiri/Resources/Textures/Blue Noise/64_64/" + fileName + "\" for Nigiri!");
             }
 
             blueNoise[i] = blueNoiseTexture;
