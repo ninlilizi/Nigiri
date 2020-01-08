@@ -2,6 +2,7 @@
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Profiling;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
 
@@ -65,7 +66,7 @@ public class Nigiri : MonoBehaviour {
     public bool matchSunColor = true;
     public bool matchSkyColor = true;
     public Color sunColor;
-    public Color skyColor;    
+    public Color skyColor;
     public Light sunLight;
     [Range(0, 8)]
     private float sunLightInjection = 1.0f;
@@ -236,6 +237,7 @@ public class Nigiri : MonoBehaviour {
         }
         set { _globalQuality = value; }
     }
+
     [HideInInspector]
     public int globalRaymarchSamples;
     [Range(0.0f, 1.0f)]
@@ -257,7 +259,57 @@ public class Nigiri : MonoBehaviour {
     public float NoiseIntensityOffset = 0.3f;
     public Vector2 NoiseVelocity = new Vector2(3.0f, 3.0f);
 
+    // Performance counters
+    [Serializable]
+    public struct FrameRate
+    {
+        public double Average;
+        public double Last;
 
+        [HideInInspector]
+        public double PreciseAverage;
+        [HideInInspector]
+        public double PreciseLast;
+        [HideInInspector]
+        public int frameCount;
+        [HideInInspector]
+        public float dt;
+    }
+    [HideInInspector]
+    public float updateRateSeconds = 4.0F;
+
+
+    [Serializable]
+    public struct RenderTimes
+    {
+        public double Total;
+        public double UpdateTotal;
+        public double UpdatePrimaryVoxelisation;
+        public double UpdateSecondaryVoxelisation;
+        public double UpdateMipMaps;
+        public double RenderTotal;
+        public double RenderTrace;
+        public double RenderVoxelDecay;
+        public double RenderVolumetric;
+        public double RenderToneMapping;
+        public double RenderFXAA;
+
+        public System.Diagnostics.Stopwatch UpdateStopwatch;
+        public System.Diagnostics.Stopwatch RenderStopwatch;
+        public System.Diagnostics.Stopwatch TraceStopwatch;
+        public System.Diagnostics.Stopwatch VoxelDecayStopwatch;
+        public System.Diagnostics.Stopwatch VolumetricStopwatch;
+        public System.Diagnostics.Stopwatch ToneMappingStopwatch;
+        public System.Diagnostics.Stopwatch PrimaryVoxelisationStopwatch;
+        public System.Diagnostics.Stopwatch SecondaryVoxelisationStopwatch;
+        public System.Diagnostics.Stopwatch MipMapStopwatch;
+        public System.Diagnostics.Stopwatch FXAAStopwatch;
+    }
+
+    [Header("Performance Counters")]
+    public FrameRate frameRate;
+    public RenderTimes renderTimes;
+    ///END Performance counters
 
     [Header("Debug Settings")]
     public string vramUsed;
@@ -398,10 +450,24 @@ public class Nigiri : MonoBehaviour {
 
         LoadNoise3dTexture();
         GenerateDitherTexture();
+
+        // Create performance stopwatches.
+        renderTimes.UpdateStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.PrimaryVoxelisationStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.SecondaryVoxelisationStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.MipMapStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.RenderStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.TraceStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.VoxelDecayStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.VolumetricStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.ToneMappingStopwatch = new System.Diagnostics.Stopwatch();
+        renderTimes.FXAAStopwatch = new System.Diagnostics.Stopwatch();
     }
 
     void Update()
     {
+        renderTimes.UpdateStopwatch.Start();
+
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
         {
@@ -451,7 +517,28 @@ public class Nigiri : MonoBehaviour {
         UpdateVoxelGrid();
 
         // This line goes at the end of update or OnRender 
-        vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " MB";
+        vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " M";
+
+        // FPS counter
+        frameRate.frameCount++;
+        frameRate.dt += Time.unscaledDeltaTime;
+        if (frameRate.dt > 1.0 / updateRateSeconds)
+        {
+            frameRate.PreciseAverage = frameRate.frameCount / frameRate.dt;
+            frameRate.Average = System.Math.Round(frameRate.PreciseAverage, 0);
+            frameRate.frameCount = 0;
+            frameRate.dt -= 1.0F / updateRateSeconds;
+        }
+        frameRate.PreciseLast = 1.0 / Time.deltaTime;
+        frameRate.Last = System.Math.Round(frameRate.PreciseLast, 0);
+        ///END FPS counter
+
+        // Performance counters
+        renderTimes.Total = renderTimes.UpdateTotal + renderTimes.RenderTotal;
+        renderTimes.UpdateStopwatch.Stop();
+        renderTimes.UpdateTotal = renderTimes.UpdateStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.UpdateStopwatch.Reset();
+        ///END Performance counters
     }
 
     // Use this for initialization
@@ -515,21 +602,31 @@ public class Nigiri : MonoBehaviour {
 
         }
 
-        if (!emissiveCameraGO)
+        // Destroy stale Emissive Camera objects
+        GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
+        foreach (GameObject obj in allObjects)
         {
-            emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
-            emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
-            //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
-            emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            //emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
-            emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
-            emissiveCamera.CopyFrom(GetComponent<Camera>());
-            emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.enabled = false;
-            emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
-            Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
-            
+            if (obj.transform.name == "NKGI_EMISSIVECAMERA" & obj.transform.parent == gameObject.transform)
+            {
+                DestroyImmediate(obj);
+            }
         }
+        emissiveCameraGO = null;
+        ///END Destroy stale Emissive Camera objects
+
+        // Create new Emissive Camera object
+        emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
+        emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
+        emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
+        //emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
+        emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
+        emissiveCamera.CopyFrom(GetComponent<Camera>());
+        emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
+        emissiveCamera.enabled = false;
+        emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
+        ///END Create new Emissive Camera object
+
         UpdateForceGI();
 
         //Volumetric Lighting
@@ -674,11 +771,17 @@ public class Nigiri : MonoBehaviour {
     {
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
+        // Secondary Voxelisation
+        renderTimes.SecondaryVoxelisationStopwatch.Start();
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
             emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
             Nigiri_EmissiveCameraHelper.DoRender();
         }
+        renderTimes.SecondaryVoxelisationStopwatch.Stop();
+        renderTimes.UpdateSecondaryVoxelisation = renderTimes.SecondaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.SecondaryVoxelisationStopwatch.Reset();
+        ///END Secondary Voxelisation
 
         // These apply to all grids
         Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer);
@@ -707,6 +810,7 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelEntry.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
 
         // Voxelize main cam
+        renderTimes.PrimaryVoxelisationStopwatch.Start();
         if (primaryVoxelization)
         {
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
@@ -718,8 +822,15 @@ public class Nigiri : MonoBehaviour {
             nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
         }
 
-        Graphics.ClearRandomWriteTargets();
+        renderTimes.PrimaryVoxelisationStopwatch.Stop();
+        renderTimes.UpdatePrimaryVoxelisation = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.PrimaryVoxelisationStopwatch.Reset();
 
+        Graphics.ClearRandomWriteTargets();
+        ///END Voxelize main cam
+
+        // Update MipMaps
+        renderTimes.MipMapStopwatch.Start();
         if (mipSwitch == 0)
         {
             int destinationRes = (int)highestVoxelResolution / 2;
@@ -753,13 +864,29 @@ public class Nigiri : MonoBehaviour {
             mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
         }
         mipSwitch = (mipSwitch + 1) % (4);
+
+        renderTimes.MipMapStopwatch.Stop();
+        renderTimes.UpdateMipMaps = renderTimes.MipMapStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.MipMapStopwatch.Reset();
+        ///END Update MipMaps
+
+        //// Experimental Octree Building
+
+        /// Performance counters
+        //  
+
+
+
+
     }
 
 
-	// This is called once per frame after the scene is rendered
+    // This is called once per frame after the scene is rendered
     //[ImageEffectOpaque]
-	void OnRenderImage (RenderTexture source, RenderTexture destination)
+    void OnRenderImage (RenderTexture source, RenderTexture destination)
     {
+        renderTimes.RenderStopwatch.Start();
+
         if (forceImmediateRefresh)
         {
             injectionTextureResolution.x = source.width / subsamplingRatio;
@@ -960,15 +1087,24 @@ public class Nigiri : MonoBehaviour {
 				tracerMaterial.EnableKeyword ("GRID_5");
 			}
 
-			Graphics.Blit (source, destination, tracerMaterial, 1);
+            renderTimes.TraceStopwatch.Start();
+            Graphics.Blit (source, destination, tracerMaterial, 1);
+            renderTimes.TraceStopwatch.Stop();
+            renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
+            renderTimes.TraceStopwatch.Reset();
             return;
 		} else {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
+            renderTimes.TraceStopwatch.Start();
             Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer, true);
             Graphics.Blit (source, gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
+            renderTimes.TraceStopwatch.Stop();
+            renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
+            renderTimes.TraceStopwatch.Reset();
 
             // Clear voxels not updated, but traced through this frame.
+            renderTimes.VoxelDecayStopwatch.Start();
             voxelGrid1.filterMode = FilterMode.Point;
             clearComputeCache.SetTexture(1, "RG0", voxelGrid1);
             clearComputeCache.SetTexture(1, "voxelCasacadeGrid1", voxelGridCascade1);
@@ -978,12 +1114,21 @@ public class Nigiri : MonoBehaviour {
             clearComputeCache.SetFloat("temporalStablityVsRefreshRate", temporalStablityVsRefreshRate);
             clearComputeCache.Dispatch(1, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
             if (gaussianMipFiltering) voxelGrid1.filterMode = FilterMode.Bilinear;
+            renderTimes.VoxelDecayStopwatch.Stop();
+            renderTimes.RenderVoxelDecay = renderTimes.VoxelDecayStopwatch.Elapsed.TotalMilliseconds;
+            renderTimes.VoxelDecayStopwatch.Reset();
             ///
 
+            // FXAA
+            renderTimes.FXAAStopwatch.Start();
             Graphics.Blit(gi, blur, fxaaMaterial, 0);
             Graphics.Blit(blur, gi, fxaaMaterial, 1);
+            renderTimes.FXAAStopwatch.Stop();
+            renderTimes.RenderFXAA = renderTimes.FXAAStopwatch.Elapsed.TotalMilliseconds;
+            renderTimes.FXAAStopwatch.Reset();
+            ///END FXAA
 
-             //Graphics.Blit(gi, destination);
+            //Graphics.Blit(gi, destination);
 
             //Advance the frame counter
             frameSwitch = (frameSwitch + 1) % (64);
@@ -991,6 +1136,7 @@ public class Nigiri : MonoBehaviour {
         }
 
         //Volumetric Lighting
+        renderTimes.VolumetricStopwatch.Start();
         if (renderVolumetricLighting)
         {
             if (Resolution == VolumtericResolution.Quarter)
@@ -1053,7 +1199,9 @@ public class Nigiri : MonoBehaviour {
                 RenderTexture temp = RenderTexture.GetTemporary(_volumeLightTexture.width, _volumeLightTexture.height, 0, RenderTextureFormat.ARGBHalf,
                 RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
                 temp.filterMode = FilterMode.Bilinear;
+                renderTimes.ToneMappingStopwatch.Start();
                 Graphics.Blit(gi, temp, _colorMaterial);
+                renderTimes.ToneMappingStopwatch.Stop();
 
                 _blitAddMaterial.SetTexture("_Source", temp);
                 Graphics.Blit(_volumeLightTexture, destination, _blitAddMaterial, 0);
@@ -1064,10 +1212,20 @@ public class Nigiri : MonoBehaviour {
         }
         else
         {
+            renderTimes.ToneMappingStopwatch.Start();
             Graphics.Blit(gi, destination, _colorMaterial);
+            renderTimes.ToneMappingStopwatch.Stop();
         }
+        renderTimes.RenderToneMapping = renderTimes.ToneMappingStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.ToneMappingStopwatch.Reset();
+        renderTimes.VolumetricStopwatch.Stop();
+        renderTimes.RenderVolumetric = Math.Round(renderTimes.VolumetricStopwatch.Elapsed.TotalMilliseconds - renderTimes.RenderToneMapping, 4);
+        renderTimes.VolumetricStopwatch.Reset();
         ///
 
+        renderTimes.RenderStopwatch.Stop();
+        renderTimes.RenderTotal = renderTimes.RenderStopwatch.Elapsed.TotalMilliseconds;
+        renderTimes.RenderStopwatch.Reset();
     }
 
     private void OnDisable()
@@ -1414,6 +1572,8 @@ public class Nigiri : MonoBehaviour {
         // Rebuild the render commands.
         _renderCommand.Clear();
 
+        _renderCommand.BeginSample("AO_Render");
+
         PushDownsampleCommands(_renderCommand);
 
         _occlusion1.PushAllocationCommand(_renderCommand);
@@ -1438,9 +1598,13 @@ public class Nigiri : MonoBehaviour {
 
         if (_debug > 0) PushDebugBlitCommands(_renderCommand);
 
+        _renderCommand.EndSample("AO_Render");
+
         // Rebuild the composite commands.
         _compositeCommand.Clear();
+        _compositeCommand.BeginSample("AO_Composite");
         PushCompositeCommands(_compositeCommand);
+        _compositeCommand.EndSample("AO_Composite");
 
         RegisterCommandBuffers();
     }
