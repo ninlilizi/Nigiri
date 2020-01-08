@@ -618,24 +618,30 @@ public class Nigiri : MonoBehaviour {
 
         }
 
-        //pathCacheBuffer = new PathCacheBuffer();
-        //pathCacheBuffer.Init(highestVoxelResolution);
-
-        if (!emissiveCameraGO)
+        // Destroy stale Emissive Camera objects
+        GameObject[] allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>();
+        foreach (GameObject obj in allObjects)
         {
-            emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
-            emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
-            //emissiveCameraGO.transform.localEulerAngles = new Vector3(90, 0, 0);
-            emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
-            //emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
-            emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
-            emissiveCamera.CopyFrom(GetComponent<Camera>());
-            emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
-            emissiveCamera.enabled = false;
-            emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
-            Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
-            
+            if (obj.transform.name == "NKGI_EMISSIVECAMERA" & obj.transform.parent == gameObject.transform)
+            {
+                DestroyImmediate(obj);
+            }
         }
+        emissiveCameraGO = null;
+        ///END Destroy stale Emissive Camera objects
+
+        // Create new Emissive Camera object
+        emissiveCameraGO = new GameObject("NKGI_EMISSIVECAMERA");
+        emissiveCameraGO.transform.parent = GetComponent<Camera>().transform;
+        emissiveCameraGO.transform.localEulerAngles = new Vector3(0, 0, 0);
+        //emissiveCameraGO.hideFlags = HideFlags.HideAndDontSave;
+        emissiveCamera = emissiveCameraGO.AddComponent<Camera>();
+        emissiveCamera.CopyFrom(GetComponent<Camera>());
+        emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
+        emissiveCamera.enabled = false;
+        emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
+        Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
+        ///END Create new Emissive Camera object
         UpdateForceGI();
 
         //Volumetric Lighting
