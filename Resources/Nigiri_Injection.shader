@@ -11,7 +11,7 @@
 		_Smoothness("Smoothness", Range(0, 1)) = 0.1
 
 		[NoScaleOffset] _EmissionMap("Emission", 2D) = "black" {}
-		_Emission("Emission", Color) = (0, 0, 0)
+		_EmissionColor("Emission", Color) = (0, 0, 0)
 	}
 
 	SubShader

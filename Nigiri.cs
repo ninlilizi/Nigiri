@@ -606,7 +606,8 @@ public class Nigiri : MonoBehaviour {
         if (depthMaterial == null) depthMaterial = new Material(depthShader);
         if (stereo2MonoMaterial == null) stereo2MonoMaterial = new Material(stereo2MonoShader);
 
-        gridOffset = localCam.transform.position;
+        //gridOffset = localCam.transform.position; -- Removed due to no grid-offsetting.
+        gridOffset = new Vector3(0, 0, 0);
 
         InitializeVoxelGrid();
         createRenderTextures();
@@ -823,6 +824,8 @@ public class Nigiri : MonoBehaviour {
         TempCountBuffer.SetCounterValue(0);
         renderTimes.PrimaryVoxelisationStopwatch.Start();
         Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer);
+        Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
+        Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
         nigiri_VoxelEntry.SetBuffer(kernelHandle, "voxelUpdateBuffer", voxelUpdateBuffer);
         if (localCam.stereoEnabled)
         {
@@ -836,12 +839,12 @@ public class Nigiri : MonoBehaviour {
         }
         
         nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", Nigiri_EmissiveCameraHelper.lightingDepthTexture);
-        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity * 0.01f);
+        nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity);
         nigiri_VoxelEntry.SetFloat("sunLightInjection", sunLightInjection);
         nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
         nigiri_VoxelEntry.SetInt("injectionTextureResolutionX", injectionTextureResolution.x);
-        nigiri_VoxelEntry.SetFloat("shadowStrength", shadowStrength);
+        nigiri_VoxelEntry.SetFloat("_shadowStrength", shadowStrength);
         nigiri_VoxelEntry.SetTexture(kernelHandle, "volumeLightTexture", _volumeLightTexture);
         nigiri_VoxelEntry.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
@@ -1024,7 +1027,6 @@ public class Nigiri : MonoBehaviour {
 		tracerMaterial.SetFloat ("maximumIterations", maximumIterations);
         tracerMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
         tracerMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
-        Shader.SetGlobalFloat("emissiveIntensity", EmissiveIntensity);
         tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
         //tracerMaterial.SetFloat("coneWidth", coneWidth);
         tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);

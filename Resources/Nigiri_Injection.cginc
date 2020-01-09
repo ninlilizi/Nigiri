@@ -9,11 +9,12 @@ sampler2D _MainTex;
 sampler2D _MetallicMap;
 float _Metallic;
 float _Smoothness;
-float3 _Emission;
-float emissiveIntensity;
+float3 _EmissionColor;
+uniform float _emissiveIntensity;
 sampler2D _CameraDepthTexture;
 float worldVolumeBoundary;
 int highestVoxelResolution;
+uniform float					_shadowStrength;
 uniform uint3					gridOffset;
 
 uniform RWTexture2D<uint>	CountTexture : register(u5);
@@ -261,9 +262,9 @@ UnityIndirect CreateIndirectLight(vertOutput i, float3 viewDir) {
 float3 GetEmission(vertOutput i) {
 #if defined(FORWARD_BASE_PASS) || defined(DEFERRED_PASS)
 #if defined(_EMISSION_MAP)
-	return tex2D(_EmissionMap, i.uv.xy) * _Emission;
+	return tex2D(_EmissionMap, i.uv.xy) * _EmissionColor;
 #else
-	return _Emission;
+	return _EmissionColor;
 #endif
 #else
 	return 0;
@@ -344,9 +345,6 @@ struct FragmentOutput {
 
 FragmentOutput frag(vertOutput i)
 {
-	//CountTexture[uint2(0, 0)] = 10000;
-	//InterlockedAdd(CountTexture[uint2(0, 0)], 1);
-
 	float3 color = (0).xxx;
 	float4 newColor = (0).xxxx;
 	//if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
@@ -369,47 +367,49 @@ FragmentOutput frag(vertOutput i)
 
 			InitializeFragmentNormal(i);
 
-			float3 specularTint;
-			float oneMinusReflectivity;
-			float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
-			float3 albedo = DiffuseAndSpecularFromMetallic(
-				GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
-			);
 
-			//Nin - NKGI - Sample shadowmap to pass to GI
-			float3 lightColor1 = _LightColor0.rgb;
-			float3 lightDir = _WorldSpaceLightPos0.xyz;
-			float4 colorTex = tex2D(_MainTex, i.texcoord.xy);
-			UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
-			float3 N = float3(0.0f, 1.0f, 0.0f);
-			float  NL = saturate(dot(N, lightDir));
-			float3 shadowColor = albedo.rgb * lightColor1 * NL * atten;
+
+			float3 shadowColor = float3(0, 0, 0);
+			if (_EmissionColor.r == 0 || _EmissionColor.g == 0 || _EmissionColor.b == 0)
+			{
+				//Nin - NKGI - Sample shadowmap to pass to GI
+				float3 specularTint;
+				float oneMinusReflectivity;
+				//float3 viewDir = normalize(_WorldSpaceCameraPos - i.wPos.xyz);
+				float3 albedo = DiffuseAndSpecularFromMetallic(
+					GetAlbedo(i), GetMetallic(i), specularTint, oneMinusReflectivity
+				);
+
+				float3 lightColor1 = _LightColor0.rgb;
+				if (lightColor1.r == 0 || lightColor1.g == 0 || lightColor1.b == 0) lightColor1 = float3(1, 1, 1);
+				float3 lightDir = _WorldSpaceLightPos0.xyz;
+				//float4 colorTex = tex2D(_MainTex, i.texcoord.xy);
+				UNITY_LIGHT_ATTENUATION(atten, i, _WorldSpaceLightPos0.xyz);
+				float3 N = float3(0.0f, 1.0f, 0.0f);
+				float  NL = saturate(dot(N, lightDir));
+				shadowColor = albedo.rgb * lightColor1 * NL * atten  * (1 - _shadowStrength).xxx;
+			}
+			else
+			{
+				shadowColor = tex2D(_MainTex, i.texcoord.xy);
+			}
+
 			///
 			
 			#if defined(_EMISSION_MAP)
-				newColor = shadowColor + (tex2D(_EmissionMap, i.uv.xy) * float4(_Emission.r * emissiveIntensity,
-					_Emission.g * emissiveIntensity,
-					_Emission.b * emissiveIntensity, 2)));
+				newColor = shadowColor + (tex2D(_EmissionMap, i.uv.xy) * float4(_EmissionColor.r * _emissiveIntensity,
+					_EmissionColor.g * _emissiveIntensity,
+					_EmissionColor.b * _emissiveIntensity, 2)));
 			#else
-				newColor = float4(shadowColor, 0) + (float4(_Emission.r * emissiveIntensity,
-					_Emission.g * emissiveIntensity,
-					_Emission.b * emissiveIntensity, 2));
+				newColor = float4(shadowColor, 0) + (float4(_EmissionColor.r * _emissiveIntensity,
+					_EmissionColor.g * _emissiveIntensity,
+					_EmissionColor.b * _emissiveIntensity, 2));
 			#endif
 
 			uint index1d = threeD2oneD(index3d);
-			if (newColor.r > 0.9 || newColor.g > 0.9 || newColor.b > 0.9) {
-				//lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
+			if (newColor.r > 0 || newColor.g > 0 || newColor.b > 0) {
 				voxelGrid[index3d] = lerp(newColor, voxelGrid[index3d], 0.5);
-				//CountTexture[uint2(0, 0)] = lerp(newColor, voxelGrid[index3d], 0.5);
-				//int count = _SampleCounter.IncrementCounter();
-				//InterlockedAdd(_SampleCounter[0], 1);
-				
-				//uint output;
 				InterlockedAdd(CountTexture[uint2(0, 0)], 1);
-				
-				//uint output;
-				//InterlockedExchange(CountTexture[uint2(0, 0)], 4, output);
-
 			}
 
 			//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);

@@ -22,13 +22,11 @@ cbuffer cbSettings : register(b0)
 	uniform uint					voxelResolution;
 	uniform float3					gridOffset;
 	uniform float 					worldVolumeBoundary;
-	uniform float					shadowStrength;
 	uniform float					sunLightInjection;
 	uniform float					occlusionGain;
-	uniform float					emissiveIntensity;
 	uniform float					temporalStablityVsRefreshRate;
+	uniform float					emissiveIntensity;
 	
-
 	uniform Texture2D<float>			depthTexture;
 	uniform Texture2D<float4>			lightingTexture;
 	uniform Texture2D<float4>			lightingTexture2;
@@ -39,6 +37,9 @@ cbuffer cbSettings : register(b0)
 	//uniform Texture2D<float4>			orthographicPositionTexture;
 	//uniform Texture2D<float4>			depthTexture;
 };
+
+uniform float					_shadowStrength;
+
 
 
 
@@ -259,7 +260,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 			mixedColor /= count;
 
 			newMixedColor =
-				float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - shadowStrength).xxx)),
+				float4((max(lightingTexture[id.xy].rgb * emissiveIntensity, lightingTexture2[id.xy].rgb * (1 - _shadowStrength).xxx)),
 					lightingTexture2[id.xy].a * occlusionGain);
 
 			newMixedColor = lerp(newMixedColor, mixedColor, 0.5);
@@ -272,7 +273,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 			//		lightingTexture2[id.xy].a * occlusionGain);
 
 			newMixedColor =
-				float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - shadowStrength).xxx)),
+				float4((max(lightingTexture[id.xy].rgb * emissiveIntensity, lightingTexture2[id.xy].rgb * (1 - _shadowStrength).xxx)),
 					lightingTexture2[id.xy].a * occlusionGain);
 
 			newMixedColor = lerp(newMixedColor, voxelGrid[voxelPosition.xyz], 0.5);
@@ -328,7 +329,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 		voxelCasacadeGrid1[voxelPosition.xyz] *= temporalStablityVsRefreshRate;
 
 		float4 newMixedColor =
-			float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - shadowStrength).xxx)),
+			float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - _shadowStrength).xxx)),
 				lightingTexture2[id.xy].a * occlusionGain);
 
 		newMixedColor = lerp(newMixedColor, voxelCasacadeGrid1[voxelPosition.xyz], 0.5);
@@ -352,7 +353,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 		voxelCasacadeGrid2[voxelPosition.xyz] *= temporalStablityVsRefreshRate;
 
 		float4 newMixedColor =
-			float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - shadowStrength).xxx)),
+			float4((max(lightingTexture[id.xy].rgb, lightingTexture2[id.xy].rgb * (1 - _shadowStrength).xxx)),
 				lightingTexture2[id.xy].a * occlusionGain);
 
 		newMixedColor = lerp(newMixedColor, voxelCasacadeGrid2[voxelPosition.xyz], 0.5);
