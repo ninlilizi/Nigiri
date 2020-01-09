@@ -11,6 +11,7 @@ uniform RWTexture3D<float4>			voxelCasacadeGrid2;
 
 //uniform Texture3D<float4>			voxelInjectionGrid;
 //uniform RWStructuredBuffer<uint>	lightMapBuffer;
+RWStructuredBuffer<int>				RenderCounter;
 uniform RWStructuredBuffer<uint>	voxelUpdateBuffer : register(u1);
 
 cbuffer cbSettings : register(b0)
@@ -193,6 +194,9 @@ float rnd(uint2 x)
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
+	int count = RenderCounter.IncrementCounter();
+
+
 	float3 offsets[16] =
 	{
 		float3(1, 0, 0),

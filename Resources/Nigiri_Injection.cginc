@@ -16,8 +16,7 @@ float worldVolumeBoundary;
 int highestVoxelResolution;
 uniform uint3					gridOffset;
 
-uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u5);
-//uniform RWStructuredBuffer<float4> positionBuffer : register(u6);
+uniform RWTexture2D<uint>	CountTexture : register(u5);
 uniform RWTexture3D<float4> voxelGrid : register(u6);
 
 float4x4 InverseProjectionMatrix;
@@ -345,6 +344,9 @@ struct FragmentOutput {
 
 FragmentOutput frag(vertOutput i)
 {
+	//CountTexture[uint2(0, 0)] = 10000;
+	//InterlockedAdd(CountTexture[uint2(0, 0)], 1);
+
 	float3 color = (0).xxx;
 	float4 newColor = (0).xxxx;
 	//if (_Emission.r > 0 || _Emission.g > 0 || _Emission.b > 0)
@@ -395,10 +397,19 @@ FragmentOutput frag(vertOutput i)
 			#endif
 
 			uint index1d = threeD2oneD(index3d);
-			if (newColor.r > 0.1 || newColor.g > 0.1 || newColor.b > 0.1) {
+			if (newColor.r > 0.9 || newColor.g > 0.9 || newColor.b > 0.9) {
 				//lightMapBuffer[index1d] = EncodeRGBAuint(newColor);
 				voxelGrid[index3d] = lerp(newColor, voxelGrid[index3d], 0.5);
-				voxelUpdateBuffer[index1d] = 1;
+				//CountTexture[uint2(0, 0)] = lerp(newColor, voxelGrid[index3d], 0.5);
+				//int count = _SampleCounter.IncrementCounter();
+				//InterlockedAdd(_SampleCounter[0], 1);
+				
+				//uint output;
+				InterlockedAdd(CountTexture[uint2(0, 0)], 1);
+				
+				//uint output;
+				//InterlockedExchange(CountTexture[uint2(0, 0)], 4, output);
+
 			}
 
 			//float3 position = float3(i.wPos.x + worldVolumeBoundary, i.wPos.y + worldVolumeBoundary, i.wPos.z + worldVolumeBoundary);
