@@ -195,7 +195,9 @@ float rnd(uint2 x)
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
 	// Get Morton ordered sampling coordinate
-	uint2 orderedCoord = morton2D_sLUT_Decode(RenderCounter.IncrementCounter());
+	uint counter = RenderCounter.IncrementCounter();
+
+	uint2 orderedCoord = morton2D_sLUT_Decode(counter);
 
 	float3 offsets[16] =
 	{

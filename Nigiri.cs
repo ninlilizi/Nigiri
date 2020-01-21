@@ -281,8 +281,8 @@ public class Nigiri : MonoBehaviour {
     {
         public double Total;
         public double UpdateTotal;
-        public double UpdatePrimaryVoxelisation;
-        public double UpdateSecondaryVoxelisation;
+        public double UpdatePrimaryEncode;
+        public double UpdateSecondaryEncode;
         public double UpdateMipMaps;
         public double RenderTotal;
         public double RenderTrace;
@@ -566,6 +566,7 @@ public class Nigiri : MonoBehaviour {
             (Nigiri_EmissiveCameraHelper.sampleCountColour.g << 8) | 
             (Nigiri_EmissiveCameraHelper.sampleCountColour.r << 0));
         renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary] = (int)renderCounts.VoxelisationSamplesSecondary;
+        renderTimes.UpdateSecondaryEncode = Nigiri_EmissiveCameraHelper.stopwatchEncode;
         ///END Render counters
     }
 
@@ -809,20 +810,15 @@ public class Nigiri : MonoBehaviour {
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // Secondary Voxelisation
-        renderTimes.SecondaryVoxelisationStopwatch.Start();
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
             emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
             Nigiri_EmissiveCameraHelper.DoRender();
         }
-        renderTimes.SecondaryVoxelisationStopwatch.Stop();
-        renderTimes.UpdateSecondaryVoxelisation = renderTimes.SecondaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
-        renderTimes.SecondaryVoxelisationStopwatch.Reset();
+        
         ///END Secondary Voxelisation
 
-        // These apply to all grids
-        TempCountBuffer.SetCounterValue(0);
-        renderTimes.PrimaryVoxelisationStopwatch.Start();
+        // These apply to all grids        
         Graphics.SetRandomWriteTarget(1, voxelUpdateBuffer);
         Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
         Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
@@ -854,19 +850,26 @@ public class Nigiri : MonoBehaviour {
         // Voxelize main cam
         if (primaryVoxelization)
         {
+            
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGridCascade1);
             nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGridCascade2);
             nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
             nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
             nigiri_VoxelEntry.SetInt("useDepth", 0);
+
+            TempCountBuffer.SetCounterValue(0);
+            renderTimes.PrimaryVoxelisationStopwatch.Start();
             nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+            renderTimes.PrimaryVoxelisationStopwatch.Stop();
+            renderTimes.UpdatePrimaryEncode = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
+            renderTimes.PrimaryVoxelisationStopwatch.Reset();
+
             ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary);
         }
 
-        renderTimes.PrimaryVoxelisationStopwatch.Stop();
-        renderTimes.UpdatePrimaryVoxelisation = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
-        renderTimes.PrimaryVoxelisationStopwatch.Reset();
+        
+
 
         Graphics.ClearRandomWriteTargets();
         ///END Voxelize main cam

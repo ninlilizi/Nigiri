@@ -39,6 +39,9 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     static Queue<AsyncGPUReadbackRequest> _requests = new Queue<AsyncGPUReadbackRequest>();
 
+    public static System.Diagnostics.Stopwatch encodeStopwatch;
+    public static double stopwatchEncode;
+
 
     private void OnEnable()
     {
@@ -100,6 +103,8 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         CountTexture2D = new Texture2D(1, 1, TextureFormat.ARGB32, false);
         rectReadPicture = new Rect(0, 0, 1, 1);
         ///END Sample counter
+
+        encodeStopwatch = new System.Diagnostics.Stopwatch();
     }
 
     private void OnDisable()
@@ -154,7 +159,13 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
             Graphics.SetRandomWriteTarget(5, CountRenderTexture);
             Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
+
+            encodeStopwatch.Start();
             cam.RenderWithShader(emissiveShader, "");
+            encodeStopwatch.Stop();
+            stopwatchEncode = encodeStopwatch.Elapsed.TotalMilliseconds;
+            encodeStopwatch.Reset();
+
             Graphics.ClearRandomWriteTargets();
 
             // Sample counter
