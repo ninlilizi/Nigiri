@@ -119,7 +119,7 @@ cbuffer mortonOrder2D
 };
 
 /// Morton 2D LUT Encode
-// Usage: Morton = morton2D_sLUT_Encode(Input X, Input Y)
+// Usage: uint = morton2D_sLUT_Encode(uint X, uint Y)
 inline uint morton2D_sLUT_Encode(uint x, uint y)
 {
 	uint mortonIndex = 0;
@@ -135,8 +135,8 @@ inline uint morton2D_sLUT_Encode(uint x, uint y)
 };
 
 /// Morton 2D LUT Decode
-// Usage: morton2D_sLUT_Decode(Input Morton, Output X, Output Y)
-inline uint morton2D_DecodeCoord_LUT256(const uint morton, const uint LUT[256], const uint startshift) {
+// Usage: uint2 = morton2D_sLUT_Decode(uint MortonIndex)
+inline uint morton2D_DecodeCoord_LUT256(uint morton, uint LUT[256], uint startshift) {
 	uint mortonIndex = 0;
 	uint loops = 4;
 	for (uint i = 0; i < loops; ++i) {

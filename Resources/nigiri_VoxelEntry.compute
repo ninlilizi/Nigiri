@@ -16,8 +16,8 @@ uniform RWTexture3D<float4>			voxelCasacadeGrid2;
 RWStructuredBuffer<int>				RenderCounter;
 uniform RWStructuredBuffer<uint>	voxelUpdateBuffer : register(u1);
 
-cbuffer cbSettings : register(b0)
-{
+//cbuffer cbSettings : register(b0)
+//{
 	uniform int						useDepth;
 	uniform int						injectionTextureResolutionX;
 	uniform int						nearestNeighbourPropagation;
@@ -38,7 +38,7 @@ cbuffer cbSettings : register(b0)
 	uniform Texture2D<float4>			positionTexture;
 	//uniform Texture2D<float4>			orthographicPositionTexture;
 	//uniform Texture2D<float4>			depthTexture;
-};
+//};
 
 uniform float					_shadowStrength;
 
