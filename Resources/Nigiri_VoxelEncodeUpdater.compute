@@ -26,22 +26,21 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 	uint3 index3D = morton3D_sLUT_Decode(counter);
 
 	uint output;
-
 	float4 newColour = SampleBuffer[counter];
 
-	if (SampleCountBuffer[counter] > 1)
+	if (SampleCountBuffer[counter] > 0)
 	{
-		voxelGrid[index3D] = newColour / (SampleCountBuffer[counter] - 1) / 255;
+		voxelGrid[index3D] = newColour / (SampleCountBuffer[counter]) / 255;
 		InterlockedExchange(SampleCountBuffer[counter], 0, output);
 		InterlockedExchange(SampleBuffer[counter].r, 0, output);
 		InterlockedExchange(SampleBuffer[counter].g, 0, output);
 		InterlockedExchange(SampleBuffer[counter].b, 0, output);
 		InterlockedExchange(SampleBuffer[counter].a, 0, output);
 	}
-	else if (SampleCountBuffer[counter] = 1)
+	else// if (SampleCountBuffer[counter].y > 0)
 	{
 		// Decay currently visible, but empty voxels.
-		InterlockedExchange(SampleCountBuffer[counter], 0, output);
+		//InterlockedExchange(SampleCountBuffer[counter], 0, output);
 		voxelGrid[index3D] *= 0.25;
 	}	
 }

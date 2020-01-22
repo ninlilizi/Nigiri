@@ -15,15 +15,9 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public static RenderTexture lightingTexture;
     public static RenderTexture lightingDepthTexture;
     public RenderTexture lightingTextureDebug;
-    public RenderTexture lightingDepthTextureDebug;
 
     public static RenderTexture positionTexture;
     public RenderTexture positionTextureDebug;
-
-    //public static ComputeBuffer lightMapBuffer;
-    //public static ComputeBuffer positionBuffer;
-
-    //public ComputeShader clearComputeCache;
 
     public static Vector2Int injectionResolution;
 
@@ -47,22 +41,14 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
     private void OnEnable()
     {
-        //StartCoroutine(DoEnable());
         DoEnable();
     }
 
     private void DoEnable()
     {
-        /*while (injectionResolution.x == 0)
-        {
-            yield return 0;
-        }*/
-
         emissiveShader = Shader.Find("Hidden/Nigiri_Injection");
 
         emissiveShaderDebug = emissiveShader;
-
-        //clearComputeCache = Resources.Load("SEGIClear_Cache") as ComputeShader;
 
         cam = GetComponent<Camera>();
 
@@ -77,15 +63,11 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
         positionTextureDebug = positionTexture;
         lightingTextureDebug = lightingTexture;
-        lightingDepthTextureDebug = lightingDepthTexture;
         
 
         _rb = new RenderBuffer[2];
         _rb[0] = lightingTexture.colorBuffer;
         _rb[1] = positionTexture.colorBuffer;
-
-        //lightMapBuffer = new ComputeBuffer(256 * 256 * 256, sizeof(uint), ComputeBufferType.Default);
-        //positionBuffer = new ComputeBuffer(1024 * 1024, sizeof(float) * 4, ComputeBufferType.Default);
 
         cam.depthTextureMode = DepthTextureMode.Depth;
         cam.clearFlags = CameraClearFlags.Color;
@@ -117,7 +99,6 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
 
         if (positionTextureDebug != null) positionTextureDebug.Release();
         if (lightingTextureDebug != null) lightingTextureDebug.Release();
-        if (lightingDepthTextureDebug != null) lightingDepthTextureDebug.Release();
 
         if (CountRenderTexture != null) DestroyImmediate(CountRenderTexture);
         if (CountTexture2D != null) DestroyImmediate(CountTexture2D);

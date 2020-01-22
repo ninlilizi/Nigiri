@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
@@ -307,18 +308,26 @@ public class Nigiri : MonoBehaviour {
     [Serializable]
     public struct RenderCounts
     {
-        public int VoxelSamplesPrimary;
+        public uint VoxelSamplesPrimary0;
+        public uint VoxelSamplesPrimary1;
+        public uint VoxelSamplesPrimary2;
         public uint VoxelSamplesSecondary;
+        public uint VoxelNeedDecay;
 
         public int[] CounterData;
         public enum Counter
         {
-            VoxelisationSamplesPrimary = 0,
-            VoxelisationSamplesSecondary = 1
+            VoxelisationSamplesPrimary0 = 0,
+            VoxelisationSamplesPrimary1 = 1,
+            VoxelisationSamplesPrimary2 = 2,
+            VoxelisationSamplesSecondary = 3,
+            VoxelisationNeedDecay = 4
         }
     }
-    private readonly int RenderCounterMax = 2;
+    private readonly int RenderCounterMax = 5;
     public static ComputeBuffer TempCountBuffer;
+    public static ComputeBuffer MaskCountBuffer;
+    public static ComputeBuffer DecayCountBuffer;
     public static ComputeBuffer RenderCountBuffer;
 
     [Header("Performance Counters")]
@@ -349,6 +358,7 @@ public class Nigiri : MonoBehaviour {
     private Shader fxaaShader;
     private Shader depthShader;
     private Shader stereo2MonoShader;
+    private ComputeShader nigiri_VoxelMask;
     private ComputeShader nigiri_VoxelEntry;
     private ComputeShader nigiri_InjectionCompute;
     private ComputeShader clearComputeCache;
@@ -375,6 +385,9 @@ public class Nigiri : MonoBehaviour {
     public static RenderTexture voxelGridCascade1;
     public static RenderTexture voxelGridCascade2;
 
+    //public RenderTexture voxelUpdateMaskCascade0Texture;
+    //public RenderTexture voxelUpdateMaskCascade1Texture;
+    //public RenderTexture voxelUpdateMaskCascade2Texture;
     public RenderTexture lightingTexture;
     public RenderTexture lightingTexture2;
     public RenderTexture lightingTextureMono;
@@ -387,6 +400,7 @@ public class Nigiri : MonoBehaviour {
 
     private ComputeBuffer voxelUpdateSampleCount;
     private static ComputeBuffer voxelUpdaterCounter;
+    private static ComputeBuffer voxelUpdateMaskBuffer;
     private static ComputeBuffer voxelUpdateSampleBuffer;
     private static ComputeBuffer voxelUpdateSampleCountBuffer;
 
@@ -399,9 +413,9 @@ public class Nigiri : MonoBehaviour {
     int voxelizationSliceOffset;
     int voxelizationSliceDispatch;
 
-    int cascadeSwitch = 0;
-    int frameSwitch = 0;
-    int mipSwitch = 0;
+    private int cascadeSwitch = 0;
+    private int frameSwitch = 0;
+    private int mipSwitch = 0;
     int emissiveCameraLocationSwitch;
 
     private Vector3 prevPosition;
@@ -413,8 +427,11 @@ public class Nigiri : MonoBehaviour {
     Camera emissiveCamera;
     Camera localCam;
 
+    private Queue<AsyncGPUReadbackRequest> gPU_Requests_RenderCounterData = new Queue<AsyncGPUReadbackRequest>();
+
     void Start()
     {
+        Application.targetFrameRate = 60;
         Debug.Log("<Nigiri> Global Illumination System: (Development release!)");
         UpdateForceGI();
     }
@@ -495,14 +512,48 @@ public class Nigiri : MonoBehaviour {
         renderTimes.RenderVolumetric = 0;
         renderTimes.RenderToneMapping = 0;
         renderTimes.RenderFXAA = 0;
-        renderCounts.VoxelSamplesPrimary = 0;
+        renderCounts.VoxelSamplesPrimary0 = 0;
+        renderCounts.VoxelSamplesPrimary1 = 0;
+        renderCounts.VoxelSamplesPrimary2 = 0;
         renderCounts.VoxelSamplesSecondary = 0;
+        renderCounts.VoxelNeedDecay = 0;
 
     }
 
     void Update()
     {
         renderTimes.UpdateStopwatch.Start();
+
+        // Handle completed async read-back for GPU Render Counters
+        while (gPU_Requests_RenderCounterData.Count > 0)
+        {
+            var req = gPU_Requests_RenderCounterData.Peek();
+
+            if (req.hasError)
+            {
+                Debug.Log("GPU readback error detected.");
+                gPU_Requests_RenderCounterData.Dequeue();
+            }
+            else if (req.done)
+            {
+                var buffer = req.GetData<int>();
+                buffer.CopyTo(renderCounts.CounterData);
+
+                renderCounts.VoxelSamplesPrimary0 = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0];
+                renderCounts.VoxelSamplesPrimary1 = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary1];
+                renderCounts.VoxelSamplesPrimary2 = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary2];
+                renderCounts.VoxelSamplesSecondary = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary];
+                renderCounts.VoxelNeedDecay = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationNeedDecay];
+
+                gPU_Requests_RenderCounterData.Dequeue();
+            }
+            else
+            {
+                break;
+            }
+        }
+        ///END Handle completed async read-back
+
 
         //#if UNITY_EDITOR
         if (_currentResolution != Resolution)
@@ -581,8 +632,6 @@ public class Nigiri : MonoBehaviour {
         Nigiri_EmissiveCameraHelper.expensiveGPUCounters = expensiveGPUCounters;
         if (expensiveGPUCounters)
         {
-            RenderCountBuffer.GetData(renderCounts.CounterData);
-            renderCounts.VoxelSamplesPrimary = renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary];
             renderCounts.VoxelSamplesSecondary = (uint)(
                 (Nigiri_EmissiveCameraHelper.sampleCountColour.a << 24) |
                 (Nigiri_EmissiveCameraHelper.sampleCountColour.b << 16) |
@@ -620,6 +669,7 @@ public class Nigiri : MonoBehaviour {
         _upsampleCompute = Resources.Load("Nigiri_AO_Upsample") as ComputeShader; ;
         _blitShader = Shader.Find("Hidden/Nigiri_AO_Blit");
 
+        nigiri_VoxelMask = Resources.Load("Nigiri_VoxelMask") as ComputeShader;
         nigiri_VoxelEntry = Resources.Load("Nigiri_VoxelEntry") as ComputeShader;
         nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
@@ -709,6 +759,9 @@ public class Nigiri : MonoBehaviour {
     {
         if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
 
+        //if (voxelUpdateMaskCascade0Texture != null) voxelUpdateMaskCascade0Texture.Release();
+        //if (voxelUpdateMaskCascade1Texture != null) voxelUpdateMaskCascade1Texture.Release();
+        //if (voxelUpdateMaskCascade2Texture != null) voxelUpdateMaskCascade2Texture.Release();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (depthTexture != null) depthTexture.Release();
@@ -717,6 +770,9 @@ public class Nigiri : MonoBehaviour {
 
         //if (lightingCurveLUT != null) lightingCurveLUT.Release();
 
+        //voxelUpdateMaskCascade0Texture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+        //voxelUpdateMaskCascade1Texture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+        //voxelUpdateMaskCascade2Texture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
         if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
@@ -725,12 +781,19 @@ public class Nigiri : MonoBehaviour {
         else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
         gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
         blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+        //voxelUpdateMaskCascade0Texture.filterMode = FilterMode.Point;
+        //voxelUpdateMaskCascade1Texture.filterMode = FilterMode.Point;
+        //voxelUpdateMaskCascade2Texture.filterMode = FilterMode.Point;
         lightingTexture.filterMode = FilterMode.Bilinear;
         lightingTexture2.filterMode = FilterMode.Bilinear;
 
         depthTexture.filterMode = FilterMode.Bilinear;
         blur.filterMode = FilterMode.Bilinear;
         gi.filterMode = FilterMode.Bilinear;
+
+        //voxelUpdateMaskCascade0Texture.enableRandomWrite = true;
+        //voxelUpdateMaskCascade1Texture.enableRandomWrite = true;
+        //voxelUpdateMaskCascade2Texture.enableRandomWrite = true;
 
         if (localCam.stereoEnabled)
         {
@@ -749,6 +812,10 @@ public class Nigiri : MonoBehaviour {
             lightingTextureMono.Create();
             lightingTexture2Mono.Create();
         }
+
+        //voxelUpdateMaskCascade0Texture.Create();
+        //voxelUpdateMaskCascade1Texture.Create();
+        //voxelUpdateMaskCascade2Texture.Create();
 
         lightingTexture.Create();
         lightingTexture2.Create();
@@ -770,6 +837,9 @@ public class Nigiri : MonoBehaviour {
         if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
         voxelUpdateSampleCount = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, 4, ComputeBufferType.Default);
 
+        if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
+        voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint) * 2, ComputeBufferType.Append);
+
         if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
         voxelUpdateSampleBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(float) * 4, ComputeBufferType.Default);
 
@@ -781,8 +851,14 @@ public class Nigiri : MonoBehaviour {
         if (TempCountBuffer != null) TempCountBuffer.Release();
         TempCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Counter);
 
+        if (DecayCountBuffer != null) DecayCountBuffer.Release();
+        DecayCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.Counter);
+
         if (RenderCountBuffer != null) RenderCountBuffer.Release();
         RenderCountBuffer = new ComputeBuffer(RenderCounterMax, sizeof(int), ComputeBufferType.IndirectArguments);
+
+        if (MaskCountBuffer != null) MaskCountBuffer.Release();
+        MaskCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.IndirectArguments);
         ///END Counters
     }
 
@@ -855,73 +931,114 @@ public class Nigiri : MonoBehaviour {
             emissiveCamera.cullingMask = dynamicPlusEmissiveLayer;
             Nigiri_EmissiveCameraHelper.DoRender();
         }
-        
         ///END Secondary Voxelisation
-        ///
+
 
         // Voxelize main cam
         if (primaryVoxelization)
         {
-            renderTimes.PrimaryVoxelisationStopwatch.Start();
+            
             TempCountBuffer.SetCounterValue(0);
+            DecayCountBuffer.SetCounterValue(0);
+            voxelUpdateMaskBuffer.SetCounterValue(0);
 
+            // Update Mask
+            uint maskcount = 0;
+            nigiri_VoxelMask.SetTexture(0, "positionTexture", positionTexture);
+            nigiri_VoxelMask.SetInt("cascade", cascadeSwitch);
+            nigiri_VoxelMask.SetInt("voxelResolution", highestVoxelResolution);
+            nigiri_VoxelMask.SetFloat("worldVolumeBoundary", GIAreaSize);
+            nigiri_VoxelMask.SetBuffer(0, "MaskCount", TempCountBuffer);
+            nigiri_VoxelMask.SetBuffer(0, "DecayCount", DecayCountBuffer);
+            nigiri_VoxelMask.SetBuffer(0, "MaskBuffer", voxelUpdateMaskBuffer);
+            nigiri_VoxelMask.Dispatch(0, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+            Graphics.ClearRandomWriteTargets();
 
-            if (localCam.stereoEnabled)
+            ComputeBuffer.CopyCount(DecayCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationNeedDecay);
+            switch (cascadeSwitch)
             {
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTextureMono);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2Mono);
+                case 0:
+                    ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary0);
+                    maskcount = renderCounts.VoxelSamplesPrimary0;
+                    break;
+                case 1:
+                    ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary1);
+                    maskcount = renderCounts.VoxelSamplesPrimary1;
+                    break;
+                case 2:
+                    ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary2);
+                    maskcount = renderCounts.VoxelSamplesPrimary2;
+                    break;
+                default:
+                    break;
             }
-            else
+            ///END Update Mask
+
+
+            TempCountBuffer.SetCounterValue(0);
+            if (maskcount > 0)
             {
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+                renderTimes.PrimaryVoxelisationStopwatch.Start();
+                switch (cascadeSwitch)
+                {
+                    case 0:
+                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
+                        nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGrid1);
+                        break;
+                    case 1:
+                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGridCascade1);
+                        nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGridCascade1);
+                        break;
+                    case 2:
+                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGridCascade2);
+                        nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGridCascade2);
+                        break;
+                    default:
+                        break;
+                }
+                               
+                if (localCam.stereoEnabled)
+                {
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTextureMono);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2Mono);
+                }
+                else
+                {
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+                }
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
+
+                nigiri_VoxelEntry.SetFloat("_shadowStrength", shadowStrength);
+                nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
+                nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
+                nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity);
+
+                nigiri_VoxelEntry.SetInt("cascade", cascadeSwitch);
+                nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
+                nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
+
+                nigiri_VoxelEntry.SetBuffer(kernelHandle, "MaskBuffer", voxelUpdateMaskBuffer);
+                nigiri_VoxelEntry.SetBuffer(kernelHandle, "SampleBuffer", voxelUpdateSampleBuffer);
+                nigiri_VoxelEntry.SetBuffer(kernelHandle, "SampleCountBuffer", voxelUpdateSampleCountBuffer);
+                nigiri_VoxelEntry.SetBuffer(kernelHandle, "RenderCounter", TempCountBuffer);
+
+                nigiri_VoxelEntry.Dispatch(kernelHandle, (int)maskcount / 16, 1, 1);
+                renderTimes.PrimaryVoxelisationStopwatch.Stop();
+                renderTimes.UpdatePrimaryEncode = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
+                renderTimes.PrimaryVoxelisationStopwatch.Reset();
+
+                renderTimes.VoxelUpdateStopwatch.Start();
+                voxelUpdaterCounter.SetCounterValue(0);
+                nigiri_VoxelEncodeUpdater.SetInt("Resolution", highestVoxelResolution);
+                nigiri_VoxelEncodeUpdater.SetBuffer(0, "UpdateCounter", voxelUpdaterCounter);
+                nigiri_VoxelEncodeUpdater.SetBuffer(0, "SampleBuffer", voxelUpdateSampleBuffer);
+                nigiri_VoxelEncodeUpdater.SetBuffer(0, "SampleCountBuffer", voxelUpdateSampleCountBuffer);
+                nigiri_VoxelEncodeUpdater.Dispatch(0, highestVoxelResolution / 8, highestVoxelResolution / 8, highestVoxelResolution / 8);
+                renderTimes.VoxelUpdateStopwatch.Stop();
+                renderTimes.RenderVoxelUpdate = renderTimes.VoxelUpdateStopwatch.Elapsed.TotalMilliseconds;
+                renderTimes.VoxelUpdateStopwatch.Reset();
             }
-            nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
-            nigiri_VoxelEntry.SetTexture(kernelHandle, "depthTexture", Nigiri_EmissiveCameraHelper.lightingDepthTexture);
-            if (cascadeSwitch == 0) nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGrid1);
-            else if (cascadeSwitch == 1) nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGridCascade1);
-            else if (cascadeSwitch == 2) nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", voxelGridCascade2);
-            //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid1", voxelGridCascade1);
-            //nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelCasacadeGrid2", voxelGridCascade2);
-
-            nigiri_VoxelEntry.SetFloat("_shadowStrength", shadowStrength);
-            nigiri_VoxelEntry.SetFloat("occlusionGain", occlusionGain);
-            nigiri_VoxelEntry.SetFloat("worldVolumeBoundary", GIAreaSize);
-            nigiri_VoxelEntry.SetFloat("emissiveIntensity", EmissiveIntensity);
-
-            nigiri_VoxelEntry.SetInt("useDepth", 0);
-            nigiri_VoxelEntry.SetInt("cascade", cascadeSwitch);
-            nigiri_VoxelEntry.SetInt("voxelResolution", highestVoxelResolution);
-            nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
-
-            nigiri_VoxelEntry.SetBuffer(kernelHandle, "SampleBuffer", voxelUpdateSampleBuffer);
-            nigiri_VoxelEntry.SetBuffer(kernelHandle, "SampleCountBuffer", voxelUpdateSampleCountBuffer);
-            nigiri_VoxelEntry.SetBuffer(kernelHandle, "RenderCounter", TempCountBuffer);
-
-            nigiri_VoxelEntry.Dispatch(kernelHandle, lightingTexture.width / 16, lightingTexture.height / 16, 1);
-            renderTimes.PrimaryVoxelisationStopwatch.Stop();
-            renderTimes.UpdatePrimaryEncode = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
-            renderTimes.PrimaryVoxelisationStopwatch.Reset();
-
-            if (expensiveGPUCounters)
-            {
-                ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary);
-            }
-
-            // Transfer encoded voxels to dataset
-            renderTimes.VoxelUpdateStopwatch.Start();
-            voxelUpdaterCounter.SetCounterValue(0);
-            if (cascadeSwitch == 0) nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGrid1);
-            if (cascadeSwitch == 1) nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGridCascade1);
-            if (cascadeSwitch == 2) nigiri_VoxelEncodeUpdater.SetTexture(0, "voxelGrid", voxelGridCascade2);
-            nigiri_VoxelEncodeUpdater.SetInt("Resolution", highestVoxelResolution);
-            nigiri_VoxelEncodeUpdater.SetBuffer(0, "UpdateCounter", voxelUpdaterCounter);
-            nigiri_VoxelEncodeUpdater.SetBuffer(0, "SampleBuffer", voxelUpdateSampleBuffer);
-            nigiri_VoxelEncodeUpdater.SetBuffer(0, "SampleCountBuffer", voxelUpdateSampleCountBuffer);
-            nigiri_VoxelEncodeUpdater.Dispatch(0, highestVoxelResolution / 8, highestVoxelResolution / 8, highestVoxelResolution / 8);
-            renderTimes.VoxelUpdateStopwatch.Stop();
-            renderTimes.RenderVoxelUpdate = renderTimes.VoxelUpdateStopwatch.Elapsed.TotalMilliseconds;
-            renderTimes.VoxelUpdateStopwatch.Reset();
 
             cascadeSwitch = (cascadeSwitch + 1) % (3);
         }
@@ -930,37 +1047,39 @@ public class Nigiri : MonoBehaviour {
 
         // Update MipMaps
         renderTimes.MipMapStopwatch.Start();
-        if (mipSwitch == 0)
+        int destinationRes;
+        switch (mipSwitch)
         {
-            int destinationRes = (int)highestVoxelResolution / 2;
-            mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }
-        else if (mipSwitch == 1)
-        {
-            int destinationRes = (int)highestVoxelResolution / 4;
-            mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid2);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid3);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }
-        else if (mipSwitch == 2)
-        {
-            int destinationRes = (int)highestVoxelResolution / 8;
-            mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid3);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid4);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
-        }
-        else if (mipSwitch == 3)
-        {
-            int destinationRes = (int)highestVoxelResolution / 16;
-            mipFilterCompute.SetInt("destinationRes", destinationRes);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid4);
-            mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid5);
-            mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+            case 0:
+                destinationRes = (int)highestVoxelResolution / 2;
+                mipFilterCompute.SetInt("destinationRes", destinationRes);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid1);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid2);
+                mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+                break;
+            case 1:
+                destinationRes = (int)highestVoxelResolution / 4;
+                mipFilterCompute.SetInt("destinationRes", destinationRes);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid2);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid3);
+                mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+                break;
+            case 2:
+                destinationRes = (int)highestVoxelResolution / 8;
+                mipFilterCompute.SetInt("destinationRes", destinationRes);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid3);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid4);
+                mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+                break;
+            case 3:
+                destinationRes = (int)highestVoxelResolution / 16;
+                mipFilterCompute.SetInt("destinationRes", destinationRes);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Source", voxelGrid4);
+                mipFilterCompute.SetTexture(gaussianMipFiltering ? 1 : 0, "Destination", voxelGrid5);
+                mipFilterCompute.Dispatch(gaussianMipFiltering ? 1 : 0, destinationRes / 8, destinationRes / 8, 1);
+                break;
+            default:
+                break;
         }
         mipSwitch = (mipSwitch + 1) % (4);
 
@@ -1326,6 +1445,9 @@ public class Nigiri : MonoBehaviour {
     {
         if (_renderCommand != null) UnregisterCommandBuffers();
 
+        //if (voxelUpdateMaskCascade0Texture != null) voxelUpdateMaskCascade0Texture.Release();
+        //if (voxelUpdateMaskCascade1Texture != null) voxelUpdateMaskCascade1Texture.Release();
+        //if (voxelUpdateMaskCascade2Texture != null) voxelUpdateMaskCascade2Texture.Release();
         if (lightingTexture != null) lightingTexture.Release();
         if (lightingTexture2 != null) lightingTexture2.Release();
         if (lightingTextureMono != null) lightingTextureMono.Release();
@@ -1347,10 +1469,13 @@ public class Nigiri : MonoBehaviour {
         if (voxelGrid5 != null) voxelGrid5.Release();
 
         if (voxelUpdaterCounter != null) voxelUpdaterCounter.Release();
+        if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
         if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
         if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
 
         if (TempCountBuffer != null) TempCountBuffer.Release();
+        if (DecayCountBuffer != null) DecayCountBuffer.Release();
+        if (MaskCountBuffer != null) MaskCountBuffer.Release();
         if (RenderCountBuffer != null) RenderCountBuffer.Release();
 
         //Volumetric Lighting
@@ -2320,6 +2445,9 @@ public class Nigiri : MonoBehaviour {
 
         _drawCountPerFrame = 0;
         ///
+
+        // Queue up Aync GPU Readbacks
+        if (gPU_Requests_RenderCounterData.Count < 5) gPU_Requests_RenderCounterData.Enqueue(AsyncGPUReadback.Request(RenderCountBuffer));
     }
 
     void OnPreRender()
