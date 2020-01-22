@@ -120,12 +120,16 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 
 	uint4 voxelPosition = GetVoxelPosition(positionTexture[id.xy]);
 
+	uint samplecountIndex = morton3D_sLUT_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
+	
+	uint voxelUpdated = 0;
 	if ((voxelPosition.w == cascade) && (fmod(counter, 4)))
 	{
-		uint samplecountIndex = morton3D_sLUT_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
+		voxelUpdated = 1;
 		uint index = threeD2oneD(voxelPosition.xyz);
 		uint cascadeBoundary0 = voxelResolution * 0.25;
 		uint cascadeBoundary1 = voxelResolution * 0.66;
+		
 
 		float depth = 0;
 		if (useDepth)
@@ -177,8 +181,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 		InterlockedAdd(SampleBuffer[samplecountIndex].g, uint(newMixedColor.g));
 		InterlockedAdd(SampleBuffer[samplecountIndex].b, uint(newMixedColor.b));
 		InterlockedAdd(SampleBuffer[samplecountIndex].a, uint(newMixedColor.a));
-		InterlockedAdd(SampleCountBuffer[samplecountIndex], 1);
 	}
+
+	// SampleCountBuffer is set to one in the case of visible + empty voxels and will be decayed by the voxel update Compute.
+	if (voxelUpdated) InterlockedAdd(SampleCountBuffer[samplecountIndex], 2);
+	else InterlockedAdd(SampleCountBuffer[samplecountIndex], 1);
 }
 
 	

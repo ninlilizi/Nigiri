@@ -29,17 +29,19 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 
 	float4 newColour = SampleBuffer[counter];
 
-	if (SampleCountBuffer[counter] > 0)
+	if (SampleCountBuffer[counter] > 1)
 	{
-		voxelGrid[index3D] = newColour / SampleCountBuffer[counter] / 255;
+		voxelGrid[index3D] = newColour / (SampleCountBuffer[counter] - 1) / 255;
 		InterlockedExchange(SampleCountBuffer[counter], 0, output);
 		InterlockedExchange(SampleBuffer[counter].r, 0, output);
 		InterlockedExchange(SampleBuffer[counter].g, 0, output);
 		InterlockedExchange(SampleBuffer[counter].b, 0, output);
 		InterlockedExchange(SampleBuffer[counter].a, 0, output);
 	}
-	else
+	else if (SampleCountBuffer[counter] = 1)
 	{
-		voxelGrid[index3D] *= 0.5;
-	}
+		// Decay currently visible, but empty voxels.
+		InterlockedExchange(SampleCountBuffer[counter], 0, output);
+		voxelGrid[index3D] *= 0.25;
+	}	
 }

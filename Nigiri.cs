@@ -322,7 +322,7 @@ public class Nigiri : MonoBehaviour {
     public static ComputeBuffer RenderCountBuffer;
 
     [Header("Performance Counters")]
-    public bool expensiveGPUCounters_INCOMPLETE = true;
+    public bool expensiveGPUCounters = false;
     public FrameRate frameRate;
     public RenderTimes renderTimes;
     public RenderCounts renderCounts;
@@ -578,8 +578,8 @@ public class Nigiri : MonoBehaviour {
         ///END Performance counters
 
         // Render counters
-        Nigiri_EmissiveCameraHelper.expensiveGPUCounters = expensiveGPUCounters_INCOMPLETE;
-        if (expensiveGPUCounters_INCOMPLETE)
+        Nigiri_EmissiveCameraHelper.expensiveGPUCounters = expensiveGPUCounters;
+        if (expensiveGPUCounters)
         {
             RenderCountBuffer.GetData(renderCounts.CounterData);
             renderCounts.VoxelSamplesPrimary = renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary];
@@ -903,7 +903,7 @@ public class Nigiri : MonoBehaviour {
             renderTimes.UpdatePrimaryEncode = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
             renderTimes.PrimaryVoxelisationStopwatch.Reset();
 
-            if (expensiveGPUCounters_INCOMPLETE)
+            if (expensiveGPUCounters)
             {
                 ComputeBuffer.CopyCount(TempCountBuffer, RenderCountBuffer, 4 * (int)RenderCounts.Counter.VoxelisationSamplesPrimary);
             }
