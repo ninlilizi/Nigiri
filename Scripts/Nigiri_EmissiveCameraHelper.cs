@@ -42,6 +42,8 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     public static System.Diagnostics.Stopwatch encodeStopwatch;
     public static double stopwatchEncode;
 
+    public static bool expensiveGPUCounters = false;
+
 
     private void OnEnable()
     {
@@ -125,37 +127,6 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
     {
         if (lightingTexture != null)
         {
-            // Handle completed async read-back
-            while (_requests.Count > 0)
-            {
-                var req = _requests.Peek();
-
-                if (req.hasError)
-                {
-                    Debug.Log("GPU readback error detected.");
-                    _requests.Dequeue();
-                }
-                else if (req.done)
-                {
-                    var buffer = req.GetData<Color32>();
-
-                    CountTexture2D.SetPixels32(buffer.ToArray());
-                    CountTexture2D.Apply();
-
-                    sampleCountColour = CountTexture2D.GetPixel(0, 0);
-
-                    RenderTexture.active = CountRenderTexture;
-                    GL.Clear(true, true, Color.clear);
-                    
-                    _requests.Dequeue();
-                }
-                else
-                {
-                    break;
-                }
-            }
-            ///END Handle completed async read-back
-
             Graphics.SetRandomWriteTarget(5, CountRenderTexture);
             Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
@@ -169,8 +140,42 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
             Graphics.ClearRandomWriteTargets();
 
             // Sample counter
-            RenderTexture.active = CountRenderTexture;
-            if (_requests.Count == 0) _requests.Enqueue(AsyncGPUReadback.Request(CountRenderTexture));
+            if (expensiveGPUCounters)
+            {
+                // Handle completed async read-back
+                while (_requests.Count > 0)
+                {
+                    var req = _requests.Peek();
+
+                    if (req.hasError)
+                    {
+                        Debug.Log("GPU readback error detected.");
+                        _requests.Dequeue();
+                    }
+                    else if (req.done)
+                    {
+                        var buffer = req.GetData<Color32>();
+
+                        CountTexture2D.SetPixels32(buffer.ToArray());
+                        CountTexture2D.Apply();
+
+                        sampleCountColour = CountTexture2D.GetPixel(0, 0);
+
+                        RenderTexture.active = CountRenderTexture;
+                        GL.Clear(true, true, Color.clear);
+
+                        _requests.Dequeue();
+                    }
+                    else
+                    {
+                        break;
+                    }
+                }
+                ///END Handle completed async read-back
+
+                RenderTexture.active = CountRenderTexture;
+                if (_requests.Count == 0) _requests.Enqueue(AsyncGPUReadback.Request(CountRenderTexture));
+            }
             ///END Sample counter
         }
     }

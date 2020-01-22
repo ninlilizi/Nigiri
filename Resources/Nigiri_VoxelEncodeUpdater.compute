@@ -1,0 +1,45 @@
+#pragma kernel CSMain0
+#include "Nigiri_MortonOrder3D.cginc"
+
+RWTexture3D<float4> voxelGrid;
+
+// Unique Index for computing access coordinates
+uniform RWStructuredBuffer<uint>	UpdateCounter;
+// Output samples from voxelizer
+uniform RWStructuredBuffer<uint4>	SampleBuffer;
+// Output sample counts from voxelizer
+uniform RWStructuredBuffer<uint>	SampleCountBuffer;
+
+cbuffer cbSettings : register(b0)
+{
+	uint Resolution;
+};
+
+// 0 - Masks alpha
+[numthreads(8, 8, 8)]
+void CSMain0(uint3 id : SV_DispatchThreadID)
+{
+	// Update Unique index
+	uint counter = UpdateCounter.IncrementCounter();
+
+	// Get Morton coordinate
+	uint3 index3D = morton3D_sLUT_Decode(counter);
+
+	uint output;
+
+	float4 newColour = SampleBuffer[counter];
+
+	if (SampleCountBuffer[counter] > 0)
+	{
+		voxelGrid[index3D] = newColour / SampleCountBuffer[counter] / 255;
+		InterlockedExchange(SampleCountBuffer[counter], 0, output);
+		InterlockedExchange(SampleBuffer[counter].r, 0, output);
+		InterlockedExchange(SampleBuffer[counter].g, 0, output);
+		InterlockedExchange(SampleBuffer[counter].b, 0, output);
+		InterlockedExchange(SampleBuffer[counter].a, 0, output);
+	}
+	else
+	{
+		voxelGrid[index3D] *= 0.5;
+	}
+}
