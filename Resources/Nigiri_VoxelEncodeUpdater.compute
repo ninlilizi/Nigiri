@@ -4,15 +4,16 @@
 RWTexture3D<float4> voxelGrid;
 
 // Unique Index for computing access coordinates
-uniform RWStructuredBuffer<uint>	UpdateCounter;
+//uniform RWStructuredBuffer<uint>	UpdateCounter;
+uniform RWStructuredBuffer<uint>	_renderCountBuffer;
 // Output samples from voxelizer
-uniform RWStructuredBuffer<uint4>	SampleBuffer;
+uniform RWStructuredBuffer<uint4>	_sampleBuffer;
 // Output sample counts from voxelizer
-uniform RWStructuredBuffer<uint>	SampleCountBuffer;
+uniform RWStructuredBuffer<uint>	_sampleCountBuffer;
 
 cbuffer cbSettings : register(b0)
 {
-	uint Resolution;
+	uniform const uint				CountIndex;
 };
 
 // 0 - Masks alpha
@@ -20,22 +21,23 @@ cbuffer cbSettings : register(b0)
 void CSMain0(uint3 id : SV_DispatchThreadID)
 {
 	// Update Unique index
-	uint counter = UpdateCounter.IncrementCounter();
+	uint counter;
+	InterlockedAdd(_renderCountBuffer[CountIndex], 1, counter);
 
 	// Get Morton coordinate
 	uint3 index3D = morton3D_sLUT_Decode(counter);
 
 	uint output;
-	float4 newColour = SampleBuffer[counter];
+	float4 newColour = _sampleBuffer[counter];
 
-	if (SampleCountBuffer[counter] > 0)
+	if (_sampleCountBuffer[counter] > 0)
 	{
-		voxelGrid[index3D] = newColour / (SampleCountBuffer[counter]) / 255;
-		InterlockedExchange(SampleCountBuffer[counter], 0, output);
-		InterlockedExchange(SampleBuffer[counter].r, 0, output);
-		InterlockedExchange(SampleBuffer[counter].g, 0, output);
-		InterlockedExchange(SampleBuffer[counter].b, 0, output);
-		InterlockedExchange(SampleBuffer[counter].a, 0, output);
+		voxelGrid[index3D] = newColour / (_sampleCountBuffer[counter]) / 255;
+		InterlockedExchange(_sampleCountBuffer[counter], 0, output);
+		InterlockedExchange(_sampleBuffer[counter].r, 0, output);
+		InterlockedExchange(_sampleBuffer[counter].g, 0, output);
+		InterlockedExchange(_sampleBuffer[counter].b, 0, output);
+		InterlockedExchange(_sampleBuffer[counter].a, 0, output);
 	}
 	else// if (SampleCountBuffer[counter].y > 0)
 	{

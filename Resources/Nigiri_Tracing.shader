@@ -47,7 +47,7 @@
 
 		uniform float4					_MainTex_TexelSize;
 
-		uniform float					worldVolumeBoundary;
+		uniform float					_giAreaSize;
 		uniform float					indirectLightingStrength;
 		uniform float					EmissiveStrength;
 		uniform float					EmissiveAttribution;
@@ -360,10 +360,10 @@ inline float4 GetVoxelPosition(float3 worldPosition)
 	float cascade1 = 0.33;
 	float cascade2 = 0.66;
 	float cascade3 = 1.00;
-	int cascadeBoundary = worldVolumeBoundary;
-	int cascadeBoundary1 = worldVolumeBoundary * cascade1;
-	int cascadeBoundary2 = worldVolumeBoundary * cascade2;
-	int cascadeBoundary3 = worldVolumeBoundary * cascade3;
+	int cascadeBoundary = _giAreaSize;
+	int cascadeBoundary1 = _giAreaSize * cascade1;
+	int cascadeBoundary2 = _giAreaSize * cascade2;
+	int cascadeBoundary3 = _giAreaSize * cascade3;
 
 	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
 	{
@@ -616,10 +616,10 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 	float cascade1 = 0.33;
 	float cascade2 = 0.66;
 	float cascade3 = 1.00;
-	int cascadeBoundary = worldVolumeBoundary;
-	int cascadeBoundary1 = worldVolumeBoundary * cascade1;
-	int cascadeBoundary2 = worldVolumeBoundary * cascade2;
-	int cascadeBoundary3 = worldVolumeBoundary * cascade3;
+	int cascadeBoundary = _giAreaSize;
+	int cascadeBoundary1 = _giAreaSize * cascade1;
+	int cascadeBoundary2 = _giAreaSize * cascade2;
+	int cascadeBoundary3 = _giAreaSize * cascade3;
 
 	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
 	{

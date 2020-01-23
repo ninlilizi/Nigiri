@@ -4,17 +4,19 @@
 #include "Nigiri_MortonOrder2D.cginc"
 
 //uniform RWTexture2D<half>				voxelMask	 : register(u1);
-uniform AppendStructuredBuffer<uint2>	MaskBuffer	 : register(u1);
-RWStructuredBuffer<uint>				DecayCount;
-RWStructuredBuffer<uint>				MaskCount;
+uniform AppendStructuredBuffer<uint2>	_maskBuffer	 : register(u1);
+//RWStructuredBuffer<uint>				DecayCount;
+RWStructuredBuffer<uint>				_renderCountBuffer;
 
 
 cbuffer cbSettings : register(b0)
 {
-	uniform uint					cascade;
-	uniform const uint				voxelResolution;
-	uniform const float3			gridOffset;
-	uniform const float				worldVolumeBoundary;
+	uniform const uint				CountIndex;
+
+	uniform const uint					_cascade;
+	//uniform const uint			_voxelResolution;
+	//uniform const float3			gridOffset;
+	uniform const float				_giAreaSize;
 
 	uniform Texture2D<float4>		positionTexture;
 };
@@ -22,10 +24,10 @@ cbuffer cbSettings : register(b0)
 // Function to get position of voxel in the grid
 inline uint GetVoxelCascade(float4 worldPosition)
 {
-	int cascadeBoundary = worldVolumeBoundary;
-	int cascadeBoundary1 = worldVolumeBoundary * 0.33;
-	int cascadeBoundary2 = worldVolumeBoundary * 0.66;
-	int cascadeBoundary3 = worldVolumeBoundary * 1.00;
+	int cascadeBoundary = _giAreaSize;
+	int cascadeBoundary1 = _giAreaSize * 0.33;
+	int cascadeBoundary2 = _giAreaSize * 0.66;
+	int cascadeBoundary3 = _giAreaSize * 1.00;
 
 	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
 	{
@@ -49,15 +51,16 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	uint2 orderedCoord = id.xy;
 	uint counter = morton2D_sLUT_Encode(id.x, id.y);
 
-	if ((GetVoxelCascade(positionTexture[id.xy]) == cascade) && (fmod(counter, 1) == 0))
+	if ((GetVoxelCascade(positionTexture[id.xy]) == _cascade) && (fmod(counter, 1) == 0))
 	{
-		MaskCount.IncrementCounter();
-		MaskBuffer.Append(id.xy);
+		InterlockedAdd(_renderCountBuffer[CountIndex], 1);
+		//MaskCount.IncrementCounter();
+		_maskBuffer.Append(id.xy);
 		
 	}
 	else
 	{
-		DecayCount.IncrementCounter();
+		//DecayCount.IncrementCounter();
 	}
 }
 

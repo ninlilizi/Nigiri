@@ -4,22 +4,23 @@
 #include "Nigiri_MortonOrder2D.cginc"
 #include "Nigiri_MortonOrder3D.cginc"
 
-uniform RWTexture3D<float4>			voxelGrid;
+uniform RWTexture3D<float4>			voxelGrid : register(u1);
 
 //RWStructuredBuffer<int>					RenderCounter;
-uniform ConsumeStructuredBuffer<uint2>	MaskBuffer;
-uniform RWStructuredBuffer<uint4>		SampleBuffer	: register(u2);
-uniform RWStructuredBuffer<uint>		SampleCountBuffer : register(u3);
+uniform ConsumeStructuredBuffer<uint2>	_maskBuffer;
+uniform RWStructuredBuffer<uint4>		_sampleBuffer	: register(u2);
+uniform RWStructuredBuffer<uint>		_sampleCountBuffer : register(u3);
 
 cbuffer cbSettings : register(b0)
 {
-uniform uint							cascade;
+uniform uint							_cascade;
 	uniform const uint					nearestNeighbourPropagation;
-	uniform const uint					voxelResolution;
+	uniform const uint					_voxelResolution;
 	uniform const float3				gridOffset;
-	uniform const float					worldVolumeBoundary;
-	uniform const float					occlusionGain;
-	uniform const float					emissiveIntensity;
+	uniform const float					_giAreaSize;
+	uniform const float					_occlusionGain;
+	uniform const float					_shadowStrength;
+	uniform const float					_emissiveIntensity;
 	
 	uniform Texture2D<float4>			lightingTexture;
 	uniform Texture2D<float4>			lightingTexture2;
@@ -47,7 +48,7 @@ uniform uint							cascade;
 	};
 };
 
-uniform float					_shadowStrength;
+
 
 // Function to get position of voxel in the grid
 inline uint4 GetVoxelPosition(float4 worldPosition)
@@ -63,11 +64,11 @@ inline uint4 GetVoxelPosition(float4 worldPosition)
 	float cascade1 = 0.33;
 	float cascade2 = 0.66;
 	float cascade3 = 1.00;
-	uint cachedResolution = voxelResolution;
-	int cascadeBoundary = worldVolumeBoundary;
-	int cascadeBoundary1 = worldVolumeBoundary * cascade1;
-	int cascadeBoundary2 = worldVolumeBoundary * cascade2;
-	int cascadeBoundary3 = worldVolumeBoundary * cascade3;
+	uint cachedResolution = _voxelResolution;
+	int cascadeBoundary = _giAreaSize;
+	int cascadeBoundary1 = _giAreaSize * cascade1;
+	int cascadeBoundary2 = _giAreaSize * cascade2;
+	int cascadeBoundary3 = _giAreaSize * cascade3;
 
 	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
 	{
@@ -101,14 +102,14 @@ inline uint4 GetVoxelPosition(float4 worldPosition)
 
 uint threeD2oneD(float3 coord)
 {
-	return coord.z * (voxelResolution * voxelResolution) + (coord.y * voxelResolution) + coord.x;
+	return coord.z * (_voxelResolution * _voxelResolution) + (coord.y * _voxelResolution) + coord.x;
 }
 
 // 0
 [numthreads(16, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
-	uint2 orderedCoord = MaskBuffer.Consume();
+	uint2 orderedCoord = _maskBuffer.Consume();
 	//uint2 orderedCoord = id.xy;
 
 	if ((orderedCoord.x > 0) || (orderedCoord.y > 0))
@@ -119,12 +120,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 		uint samplecountIndex = morton3D_sLUT_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
 
 		uint voxelUpdated = 0;
-		if (voxelPosition.w == cascade)
+		if (voxelPosition.w == _cascade)
 		{
 			voxelUpdated = 1;
 			uint index = threeD2oneD(voxelPosition.xyz);
-			//uint cascadeBoundary0 = voxelResolution * 0.25;
-			//uint cascadeBoundary1 = voxelResolution * 0.66;
+			//uint cascadeBoundary0 = _voxelResolution * 0.25;
+			//uint cascadeBoundary1 = _voxelResolution * 0.66;
 
 			float4 newMixedColor = (0).xxxx;
 			if (nearestNeighbourPropagation == 1)
@@ -145,27 +146,24 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 				mixedColor /= count;
 
 				newMixedColor =
-					float4((max(lightingTexture[orderedCoord].rgb * emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
-						lightingTexture2[orderedCoord].a * occlusionGain);
+					float4((max(lightingTexture[orderedCoord].rgb * _emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
+						lightingTexture2[orderedCoord].a * _occlusionGain);
 
 				newMixedColor = lerp(newMixedColor, mixedColor, 0.5);
 			}
 			else
 			{
 				newMixedColor =
-					float4((max(lightingTexture[orderedCoord].rgb * emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
-						lightingTexture2[orderedCoord].a * occlusionGain);
-
-				//newMixedColor = lerp(newMixedColor, voxelGrid[voxelPosition.xyz], 0.5);
-				//newMixedColor = max(newMixedColor, voxelGrid[voxelPosition.xyz]);
+					float4((max(lightingTexture[orderedCoord].rgb * _emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
+						lightingTexture2[orderedCoord].a * _occlusionGain);
 			}
 
 			newMixedColor *= 255;
-			InterlockedAdd(SampleBuffer[samplecountIndex].r, uint(newMixedColor.r));
-			InterlockedAdd(SampleBuffer[samplecountIndex].g, uint(newMixedColor.g));
-			InterlockedAdd(SampleBuffer[samplecountIndex].b, uint(newMixedColor.b));
-			InterlockedAdd(SampleBuffer[samplecountIndex].a, uint(newMixedColor.a));
-			InterlockedAdd(SampleCountBuffer[samplecountIndex].x, 1);
+			InterlockedAdd(_sampleBuffer[samplecountIndex].r, uint(newMixedColor.r));
+			InterlockedAdd(_sampleBuffer[samplecountIndex].g, uint(newMixedColor.g));
+			InterlockedAdd(_sampleBuffer[samplecountIndex].b, uint(newMixedColor.b));
+			InterlockedAdd(_sampleBuffer[samplecountIndex].a, uint(newMixedColor.a));
+			InterlockedAdd(_sampleCountBuffer[samplecountIndex].x, 1);
 		}
 
 		// SampleCountBuffer is set to one in the case of visible + empty voxels and will be decayed by the voxel update Compute.
