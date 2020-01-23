@@ -322,10 +322,11 @@ public class Nigiri : MonoBehaviour {
             VoxelisationSamplesPrimary1 = 1,
             VoxelisationSamplesPrimary2 = 2,
             VoxelisationSamplesSecondary = 3,
-            VoxelisationEncodeUpdater = 4
+            VoxelisationEncodeUpdater = 4,
+            voxelisationMaskUpdate = 5
         }
     }
-    private readonly int RenderCounterMax = 5;
+    private readonly int RenderCounterMax = 6;
     public static ComputeBuffer RenderCountBuffer;
 
     [Header("Performance Counters")]
@@ -588,6 +589,7 @@ public class Nigiri : MonoBehaviour {
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary2] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationEncodeUpdater] = 0;
+                renderCounts.CounterData[(int)RenderCounts.Counter.voxelisationMaskUpdate] = 0;
                 RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
 
                 gPU_Requests_RenderCounterData.Dequeue();
@@ -862,7 +864,7 @@ public class Nigiri : MonoBehaviour {
         voxelUpdateSampleCount = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, 4, ComputeBufferType.Default);
 
         if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
-        voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint) * 2, ComputeBufferType.Append);
+        voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
 
         if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
         voxelUpdateSampleBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(float) * 4, ComputeBufferType.Default);
@@ -983,6 +985,7 @@ public class Nigiri : MonoBehaviour {
                 default:
                     break;
             }
+            nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
             nigiri_VoxelMask.SetTexture(0, "positionTexture", positionTexture);
             nigiri_VoxelMask.Dispatch(0, lightingTexture.width / 16, lightingTexture.height / 16, 1);
             Graphics.ClearRandomWriteTargets();

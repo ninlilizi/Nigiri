@@ -7,7 +7,7 @@
 uniform RWTexture3D<float4>			voxelGrid : register(u1);
 
 //RWStructuredBuffer<int>					RenderCounter;
-uniform ConsumeStructuredBuffer<uint2>	_maskBuffer;
+uniform ConsumeStructuredBuffer<uint>	_maskBuffer;
 uniform RWStructuredBuffer<uint4>		_sampleBuffer	: register(u2);
 uniform RWStructuredBuffer<uint>		_sampleCountBuffer : register(u3);
 
@@ -105,11 +105,23 @@ uint threeD2oneD(float3 coord)
 	return coord.z * (_voxelResolution * _voxelResolution) + (coord.y * _voxelResolution) + coord.x;
 }
 
+inline uint twoD2oneD(uint x, uint y, uint width)
+{
+	return x + (y * width);
+}
+
+inline uint2 oneD2twoD(uint index, uint width)
+{
+	return uint2(index % width, index / width);
+}
+
 // 0
 [numthreads(16, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
-	uint2 orderedCoord = _maskBuffer.Consume();
+	uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
+
+
 	//uint2 orderedCoord = id.xy;
 
 	if ((orderedCoord.x > 0) || (orderedCoord.y > 0))
@@ -117,13 +129,13 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 
 		uint4 voxelPosition = GetVoxelPosition(positionTexture[orderedCoord]);
 
-		uint samplecountIndex = morton3D_sLUT_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
+		uint samplecountIndex = morton3D_Magicbits_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
 
 		uint voxelUpdated = 0;
 		if (voxelPosition.w == _cascade)
 		{
 			voxelUpdated = 1;
-			uint index = threeD2oneD(voxelPosition.xyz);
+			//uint index = threeD2oneD(voxelPosition.xyz);
 			//uint cascadeBoundary0 = _voxelResolution * 0.25;
 			//uint cascadeBoundary1 = _voxelResolution * 0.66;
 

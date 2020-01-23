@@ -1,10 +1,11 @@
 // Morder Order codec functions. 
+// Upgrade NOTE: excluded shader from DX11, OpenGL ES 2.0 because it uses unsized arrays
+//#pragma exclude_renderers d3d11 gles
 // Derived from https://github.com/Forceflow/libmorton/
 
-cbuffer mortonOrder2D
-{
+/*
 	// LUT for Morton2D encode X
-	static const uint Morton2D_encode_x_256[256] =
+groupshared  const uint Morton2D_encode_x_256[256] =
 	{
 	0, 1, 4, 5, 16, 17, 20, 21,
 	64, 65, 68, 69, 80, 81, 84, 85,
@@ -41,7 +42,7 @@ cbuffer mortonOrder2D
 	};
 
 	// LUT for Morton2D encode Y
-	static const uint Morton2D_encode_y_256[256] =
+groupshared  const uint Morton2D_encode_y_256[256] =
 	{
 	0, 2, 8, 10, 32, 34, 40, 42,
 	128, 130, 136, 138, 160, 162, 168, 170,
@@ -78,7 +79,7 @@ cbuffer mortonOrder2D
 	};
 
 	// LUT for Morton2D decode X
-	static const uint Morton2D_decode_x_256[256] = {
+groupshared  const uint Morton2D_decode_x_256[256] = {
 	0,1,0,1,2,3,2,3,0,1,0,1,2,3,2,3,
 	4,5,4,5,6,7,6,7,4,5,4,5,6,7,6,7,
 	0,1,0,1,2,3,2,3,0,1,0,1,2,3,2,3,
@@ -98,7 +99,7 @@ cbuffer mortonOrder2D
 	};
 
 	// LUT for Morton2D decode Y
-	static const uint Morton2D_decode_y_256[256] = {
+groupshared  const uint Morton2D_decode_y_256[256] = {
 	0,0,1,1,0,0,1,1,2,2,3,3,2,2,3,3,
 	0,0,1,1,0,0,1,1,2,2,3,3,2,2,3,3,
 	4,4,5,5,4,4,5,5,6,6,7,7,6,6,7,7,
@@ -116,7 +117,7 @@ cbuffer mortonOrder2D
 	12,12,13,13,12,12,13,13,14,14,15,15,14,14,15,15,
 	12,12,13,13,12,12,13,13,14,14,15,15,14,14,15,15
 	};
-};
+
 
 /// Morton 2D LUT Encode
 // Usage: uint = morton2D_sLUT_Encode(uint X, uint Y)
@@ -136,7 +137,8 @@ inline uint morton2D_sLUT_Encode(uint x, uint y)
 
 /// Morton 2D LUT Decode
 // Usage: uint2 = morton2D_sLUT_Decode(uint MortonIndex)
-inline uint morton2D_DecodeCoord_LUT256(uint morton, uint LUT[256], uint startshift) {
+inline uint morton2D_DecodeCoord_LUT256(uint morton, uint LUT[256], uint startshift) 
+{
 	uint mortonIndex = 0;
 	uint loops = 4;
 	for (uint i = 0; i < loops; ++i) {
@@ -144,8 +146,41 @@ inline uint morton2D_DecodeCoord_LUT256(uint morton, uint LUT[256], uint startsh
 	}
 	return mortonIndex;
 }
-inline uint2 morton2D_sLUT_Decode(uint morton) {
+inline uint2 morton2D_sLUT_Decode(uint morton) 
+{
 	return uint2(
 		morton2D_DecodeCoord_LUT256(morton, Morton2D_decode_x_256, 0),
 		morton2D_DecodeCoord_LUT256(morton, Morton2D_decode_y_256, 0));
+}
+*/
+
+/// Morton 2D Magicbit Encode
+// Usage: uint = morton2D_MagicBits_Encode(uint X, uint Y)
+inline uint morton2D_SplitBy2Bits(uint x) 
+{
+	x = (x | x << 16) & 0x0000FFFF;
+	x = (x | x << 8) & 0x00FF00FF;
+	x = (x | x << 4) & 0x0F0F0F0F;
+	x = (x | x << 2) & 0x33333333;
+	x = (x | x << 1) & 0x55555555;
+	return x;
+}
+inline uint morton2D_MagicBits_Encode(uint x, uint y) 
+{
+	return morton2D_SplitBy2Bits(x) | (morton2D_SplitBy2Bits(y) << 1);
+}
+
+/// Morton 2D Magicbit Decode
+// Usage: uint2 = morton2D_MagicBits_Decode(uint MortonIndex)
+static inline uint morton2D_GetSecondBits(uint morton) {
+	uint x = morton & 0x55555555;
+	x = (x ^ (x >> 1)) & 0x33333333;
+	x = (x ^ (x >> 2)) & 0x0F0F0F0F;
+	x = (x ^ (x >> 4)) & 0x00FF00FF;
+	x = (x ^ (x >> 8)) & 0x0000FFFF;
+	return x;
+}
+inline uint2 morton2D_MagicBits_Decode(uint morton)
+{
+	return uint2(morton2D_GetSecondBits(morton), morton2D_GetSecondBits(morton >> 1));
 }

@@ -3,23 +3,31 @@
 
 #include "Nigiri_MortonOrder2D.cginc"
 
-//uniform RWTexture2D<half>				voxelMask	 : register(u1);
-uniform AppendStructuredBuffer<uint2>	_maskBuffer	 : register(u1);
-//RWStructuredBuffer<uint>				DecayCount;
-RWStructuredBuffer<uint>				_renderCountBuffer;
-
+// Unique Index for computing access coordinates
+uniform RWStructuredBuffer<uint>	_renderCountBuffer;
+// Output to voxelisation queue
+uniform AppendStructuredBuffer<uint>	_maskBuffer	 : register(u1);
 
 cbuffer cbSettings : register(b0)
 {
+	uniform const uint				MaskIndex;
 	uniform const uint				CountIndex;
 
 	uniform const uint					_cascade;
-	//uniform const uint			_voxelResolution;
-	//uniform const float3			gridOffset;
 	uniform const float				_giAreaSize;
 
 	uniform Texture2D<float4>		positionTexture;
 };
+
+inline uint twoD2oneD(uint x, uint y, uint width)
+{
+	return x + (y * width);
+}
+
+inline uint2 oneD2twoD(uint index, uint width)
+{
+	return uint2(index % width, index / width);
+}
 
 // Function to get position of voxel in the grid
 inline uint GetVoxelCascade(float4 worldPosition)
@@ -48,20 +56,22 @@ inline uint GetVoxelCascade(float4 worldPosition)
 [numthreads(16, 16, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
-	uint2 orderedCoord = id.xy;
-	uint counter = morton2D_sLUT_Encode(id.x, id.y);
+	// Update Unique index
+	uint counter;
+	InterlockedAdd(_renderCountBuffer[MaskIndex], 1, counter);
+	uint2 orderedCoord = morton2D_MagicBits_Decode(counter);
 
-	if ((GetVoxelCascade(positionTexture[id.xy]) == _cascade) && (fmod(counter, 1) == 0))
+
+	if ((GetVoxelCascade(positionTexture[orderedCoord]) == _cascade) && (fmod(counter, 2) == 0))
 	{
 		InterlockedAdd(_renderCountBuffer[CountIndex], 1);
-		//MaskCount.IncrementCounter();
-		_maskBuffer.Append(id.xy);
+		_maskBuffer.Append(counter);
 		
 	}
-	else
+	/*else
 	{
 		//DecayCount.IncrementCounter();
-	}
+	}*/
 }
 
 	

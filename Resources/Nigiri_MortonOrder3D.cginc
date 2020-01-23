@@ -1,6 +1,7 @@
 // Morder Order codec functions. 
 // Derived from https://github.com/Forceflow/libmorton/
 
+/*
 cbuffer mortonOrder3D
 {
 	// LUT for Morton3D encode X
@@ -251,9 +252,43 @@ inline uint morton3D_DecodeCoord_LUT256(uint morton, const uint LUT[512], uint s
 	return mortonIndex;
 }
 
-inline uint3 morton3D_sLUT_Decode(uint morton) {
+inline uint3 morton3D_sLUT_Decode(uint morton) 
+{
 	return uint3(
 		morton3D_DecodeCoord_LUT256(morton, Morton3D_decode_x_512, 0),
 		morton3D_DecodeCoord_LUT256(morton, Morton3D_decode_y_512, 0),
 		morton3D_DecodeCoord_LUT256(morton, Morton3D_decode_z_512, 0));
+}*/
+
+/// Morton 3D Magicbits Encode
+// Usage: uint = morton3D_Magicbits_Encode(uint X, uint Y, uint Z)
+inline uint morton3D_SplitBy3bits(uint a) 
+{
+	uint x = (a) & 0x000003ff;
+	x = (x | x << 16) & 0x30000ff;
+	x = (x | x << 8)  & 0x0300f00f;
+	x = (x | x << 4)  & 0x30c30c3;
+	x = (x | x << 2)  & 0x9249249;
+	return x;
+}
+inline uint morton3D_Magicbits_Encode(uint x, uint y, uint z) {
+	return morton3D_SplitBy3bits(x) | (morton3D_SplitBy3bits(y) << 1) | (morton3D_SplitBy3bits(z) << 2);
+}
+
+
+
+/// Morton 3D Magicbits Decode
+// Usage: uint3 = morton3D_Magicbits_Decode(uint MortonIndex)
+inline uint morton3D_GetThirdBits(uint m)
+{
+	uint x = m & 0x9249249;
+	x = (x ^ (x >> 2)) & 0x30c30c3;
+	x = (x ^ (x >> 4)) & 0x0300f00f;
+	x = (x ^ (x >> 8)) & 0x30000ff;
+	x = (x ^ (x >> 16)) & 0x000003ff;
+	return x;
+}
+inline uint3 morton3D_Magicbits_Decode(uint morton)
+{
+	return uint3(morton3D_GetThirdBits(morton), morton3D_GetThirdBits(morton >> 1), morton3D_GetThirdBits(morton >> 2));
 }

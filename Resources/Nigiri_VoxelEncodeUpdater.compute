@@ -4,7 +4,6 @@
 RWTexture3D<float4> voxelGrid;
 
 // Unique Index for computing access coordinates
-//uniform RWStructuredBuffer<uint>	UpdateCounter;
 uniform RWStructuredBuffer<uint>	_renderCountBuffer;
 // Output samples from voxelizer
 uniform RWStructuredBuffer<uint4>	_sampleBuffer;
@@ -25,7 +24,7 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 	InterlockedAdd(_renderCountBuffer[CountIndex], 1, counter);
 
 	// Get Morton coordinate
-	uint3 index3D = morton3D_sLUT_Decode(counter);
+	uint3 index3D = morton3D_Magicbits_Decode(counter);
 
 	uint output;
 	float4 newColour = _sampleBuffer[counter];
