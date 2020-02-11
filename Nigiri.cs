@@ -312,6 +312,7 @@ public class Nigiri : MonoBehaviour {
         public uint VoxelSamplesPrimary1;
         public uint VoxelSamplesPrimary2;
         public uint VoxelSamplesSecondary;
+        public uint OccupiedVoxels;
         //public uint VoxelNeedDecay;
 
         public int[] CounterData;
@@ -323,10 +324,11 @@ public class Nigiri : MonoBehaviour {
             VoxelisationSamplesPrimary2 = 2,
             VoxelisationSamplesSecondary = 3,
             VoxelisationEncodeUpdater = 4,
-            voxelisationMaskUpdate = 5
+            voxelisationMaskUpdate = 5,
+            occupiedVoxels = 6
         }
     }
-    private readonly int RenderCounterMax = 6;
+    private readonly int RenderCounterMax = 7;
     public static ComputeBuffer RenderCountBuffer;
 
     [Header("Performance Counters")]
@@ -513,6 +515,7 @@ public class Nigiri : MonoBehaviour {
         renderCounts.VoxelSamplesPrimary1 = 0;
         renderCounts.VoxelSamplesPrimary2 = 0;
         renderCounts.VoxelSamplesSecondary = 0;
+        renderCounts.OccupiedVoxels = 0;
         //renderCounts.VoxelNeedDecay = 0;
 
     }
@@ -580,6 +583,7 @@ public class Nigiri : MonoBehaviour {
                     renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationSamplesSecondary]--;
                 }
 
+                renderCounts.OccupiedVoxels = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.occupiedVoxels];
                 renderCounts.VoxelSamplesSecondary = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary];
                 //renderCounts.VoxelNeedDecay = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationNeedDecay];
 
@@ -590,6 +594,7 @@ public class Nigiri : MonoBehaviour {
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationEncodeUpdater] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.voxelisationMaskUpdate] = 0;
+                renderCounts.CounterData[(int)RenderCounts.Counter.occupiedVoxels] = 0;
                 RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
 
                 gPU_Requests_RenderCounterData.Dequeue();
@@ -935,7 +940,7 @@ public class Nigiri : MonoBehaviour {
 	}
 
 	// Function to update data in the voxel grid
-	private void UpdateVoxelGrid ()
+	private void UpdateVoxelGrid()
     {
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
@@ -1038,7 +1043,7 @@ public class Nigiri : MonoBehaviour {
                 renderTimes.VoxelUpdateStopwatch.Reset();
             }
 
-            cascadeSwitch = (cascadeSwitch + 1) % (3);
+            // cascadeSwitch = (cascadeSwitch + 1) % (3); // Disable cascdes as will become supurflous
         }
 
         ///END Voxelize main cam

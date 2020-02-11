@@ -37,11 +37,24 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 		InterlockedExchange(_sampleBuffer[counter].g, 0, output);
 		InterlockedExchange(_sampleBuffer[counter].b, 0, output);
 		InterlockedExchange(_sampleBuffer[counter].a, 0, output);
+
+		// Update Occupied voxel Count
+		uint occupiedCounter;
+		InterlockedAdd(_renderCountBuffer[6], 1, occupiedCounter);
 	}
 	else// if (SampleCountBuffer[counter].y > 0)
 	{
 		// Decay currently visible, but empty voxels.
 		//InterlockedExchange(SampleCountBuffer[counter], 0, output);
 		voxelGrid[index3D] *= 0.25;
+
+		// Consider updating Occupied voxel Count
+		if ((voxelGrid[index3D].r > 0.1) ||
+			(voxelGrid[index3D].g > 0.1) ||
+			(voxelGrid[index3D].b > 0.1) ||
+			(voxelGrid[index3D].a > 0.1))
+		{
+			uint occupiedCounter;  InterlockedAdd(_renderCountBuffer[6], 1, occupiedCounter);
+		}
 	}	
 }
