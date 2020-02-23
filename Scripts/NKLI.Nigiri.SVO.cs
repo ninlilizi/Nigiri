@@ -17,63 +17,6 @@ namespace NKLI.Nigiri.SVO
 
         ComputeShader shader_SVOBuilder;
 
-        // Octree Node struct
-        struct SVONode
-        {
-            // Linked reference offset or coordinate
-            // (isRoot)  Morton coordinate, 32b
-            // (!isRoot) BufferOffset, 32b
-            public uint referenceOffset;
-
-            // Packed payload
-            public uint packedBitfield;
-
-            // When used in shader, pad to fit 128 byte cache alignment
-            //readonly uint pad0;
-            //readonly uint pad1;
-            // In cases of 64 byte payloads, this is unnecesary
-
-            // Constructor - Packed
-            public SVONode(uint _referenceOffset, uint _packedBitfield)
-            {
-                packedBitfield = _packedBitfield;
-                referenceOffset = _referenceOffset;
-            }
-
-            // Constructor - UnPacked
-            public SVONode(uint _referenceOffset, uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
-            {
-                packedBitfield = 0;
-                referenceOffset = _referenceOffset;
-                PackStruct(bitFieldOccupancy, runLength, depth, isRoot);
-            }
-
-            // Pack 32 bits
-            // BO = Bitfield occupancy, 8b
-            // RL = Sparse runlength, 4b
-            // OD = Octree depth of this node, 4b
-            // IR = Is this a root node, 1b
-            // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
-            //            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
-            //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
-            //            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
-            public void PackStruct(uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
-            {
-                packedBitfield = (bitFieldOccupancy << 32) | (runLength << 24) | (depth << 20) | (Convert.ToUInt32(isRoot) << 16);
-            }
-
-            // Unpack 64 bits
-            public void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _depth, out bool isRoot)
-            {
-                //ulong padding = (packedBitfield & 0x7FFF);
-                isRoot = Convert.ToBoolean((packedBitfield >> 15) & 1);
-                _depth = (uint)(packedBitfield >> 16) & 0xF;
-                _runLength = (uint)(packedBitfield >> 20) & 0xF;
-                _bifFieldOccupancy = (uint)(packedBitfield >> 24) & 0xFF;
-            }
-        }
-        //
-
         // Constructor
         public SVOBuilder(ComputeBuffer mortonBuffer, int _voxelCount, int gridWidth)
         {
@@ -94,7 +37,7 @@ namespace NKLI.Nigiri.SVO
             ComputeBuffer buffer_PTR = new ComputeBuffer(VoxelCount, sizeof(UInt32), ComputeBufferType.Default);
 
             // Output buffer to contain final SVO
-            Buffer_SVO = new ComputeBuffer(threadCount, 128, ComputeBufferType.Raw);
+            Buffer_SVO = new ComputeBuffer(threadCount, 64, ComputeBufferType.Raw);
 
             // Assign to compute
             shader_SVOBuilder.SetBuffer(0, "buffer_Counters", buffer_Counters);
@@ -116,7 +59,7 @@ namespace NKLI.Nigiri.SVO
         public int GetThreadCount(int gridWidth, out int[] boundaries)
         {
             // Local variable assignment
-            int cycles = 0;
+            int cycles = 0;  // Likely unneded, but here for now
             int threadCount = 0;
 
             // Get depth of tree
@@ -130,7 +73,7 @@ namespace NKLI.Nigiri.SVO
                 threadCount += VoxelCount;
                 boundaries[cycles] = threadCount;  // Likely unneded, but here for now
                 VoxelCount = Math.Max(VoxelCount / 8, 1);
-                cycles++;
+                cycles++;  // Likely unneded, but here for now
                 depth--;
             }
             return threadCount;
@@ -154,6 +97,67 @@ namespace NKLI.Nigiri.SVO
             // We try to explicity dispose these objects as not doing can result
             //  in leaks or uneven performance further down the pipeline.
             Buffer_SVO.Dispose();
+        }
+    }
+    #endregion
+    //
+
+    /// <summary>
+    /// Packed octree node data format
+    /// </summary>
+    #region Octree Node struct
+    public struct SVONode
+    {
+        // Linked reference offset or coordinate
+        // (isRoot)  Morton/Buffer, target coordinate/Offset, 32b
+        // (!isRoot) This buffer offset, 32b
+        public uint referenceOffset;
+
+        // Packed payload
+        public uint packedBitfield;
+
+        // When used in shader, pad to fit 128 bit cache alignment
+        //readonly uint pad0;
+        //readonly uint pad1;
+        // In cases of 64 bit payloads, this is unnecesary
+
+        // Constructor - Packed
+        public SVONode(uint _referenceOffset, uint _packedBitfield)
+        {
+            packedBitfield = _packedBitfield;
+            referenceOffset = _referenceOffset;
+        }
+
+        // Constructor - UnPacked
+        public SVONode(uint _referenceOffset, uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
+        {
+            packedBitfield = 0;
+            referenceOffset = _referenceOffset;
+            PackStruct(bitFieldOccupancy, runLength, depth, isRoot);
+        }
+
+        // Pack 32 bits
+        // BO = Bitfield occupancy, 8b
+        // RL = Sparse runlength, 4b
+        // OD = Octree depth of this node, 4b
+        // IR = Is this a root node, 1b
+        // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
+        //            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
+        //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
+        //            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
+        public void PackStruct(uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
+        {
+            packedBitfield = (bitFieldOccupancy << 32) | (runLength << 24) | (depth << 20) | (Convert.ToUInt32(isRoot) << 16);
+        }
+
+        // Unpack 32 bits
+        public void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _depth, out bool isRoot)
+        {
+            //ulong padding = (packedBitfield & 0x7FFF);
+            isRoot = Convert.ToBoolean((packedBitfield >> 15) & 1);
+            _depth = (uint)(packedBitfield >> 16) & 0xF;
+            _runLength = (uint)(packedBitfield >> 20) & 0xF;
+            _bifFieldOccupancy = (uint)(packedBitfield >> 24) & 0xFF;
         }
     }
     #endregion
