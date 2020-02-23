@@ -7,11 +7,13 @@ namespace NKLI.Nigiri.SVO
     /// Builds static sparse voxel octree from Morton ordered buffer
     /// </summary>
     #region Spase voxel builder
-    class SVOBuilder
+    class SVOBuilder : MonoBehaviour
     {
         // Read-only properties
         public int VoxelCount { get; private set; }
         public int TreeDepth { get; private set; }
+
+        public ComputeBuffer Buffer_SVO { get; private set; }
 
         ComputeShader shader_SVOBuilder;
 
@@ -73,7 +75,7 @@ namespace NKLI.Nigiri.SVO
         //
 
         // Constructor
-        public SVOBuilder(ComputeBuffer mortonBuffer, int _voxelCount, int gridWidth, out ComputeBuffer buffer_SVO)
+        public SVOBuilder(ComputeBuffer mortonBuffer, int _voxelCount, int gridWidth)
         {
             // Assign instance variable
             VoxelCount = _voxelCount;
@@ -92,12 +94,12 @@ namespace NKLI.Nigiri.SVO
             ComputeBuffer buffer_PTR = new ComputeBuffer(VoxelCount, sizeof(UInt32), ComputeBufferType.Default);
 
             // Output buffer to contain final SVO
-            buffer_SVO = new ComputeBuffer(threadCount, 128, ComputeBufferType.Raw);
+            Buffer_SVO = new ComputeBuffer(threadCount, 128, ComputeBufferType.Raw);
 
             // Assign to compute
             shader_SVOBuilder.SetBuffer(0, "buffer_Counters", buffer_Counters);
             shader_SVOBuilder.SetBuffer(0, "buffer_PTR", buffer_PTR);
-            shader_SVOBuilder.SetBuffer(0, "buffer_SVO", buffer_SVO);
+            shader_SVOBuilder.SetBuffer(0, "buffer_SVO", Buffer_SVO);
             shader_SVOBuilder.SetInts("boundaries", boundaries); // Likely unneded, but here for now
             shader_SVOBuilder.SetInt("threadCount", threadCount);
             shader_SVOBuilder.SetInt("voxelCount", VoxelCount);
@@ -105,6 +107,9 @@ namespace NKLI.Nigiri.SVO
             // Dispatch compute
             shader_SVOBuilder.Dispatch(0, dispatchCount, dispatchCount, 1);
 
+            // Cleanup
+            buffer_Counters.Dispose();
+            buffer_PTR.Dispose();
         }
 
         // Calculate thread count
@@ -141,6 +146,14 @@ namespace NKLI.Nigiri.SVO
                 gridWidth /= 8;
             }
             return depth;
+        }
+
+        // Cleanup
+        private void OnDestroy()
+        {
+            // We try to explicity dispose these objects as not doing can result
+            //  in leaks or uneven performance further down the pipeline.
+            Buffer_SVO.Dispose();
         }
     }
     #endregion
