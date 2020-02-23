@@ -7,7 +7,7 @@ namespace NKLI.Nigiri.SVO
     /// Builds static sparse voxel octree from Morton ordered buffer
     /// </summary>
     #region Spase voxel builder
-    class SVOBuilder : MonoBehaviour
+    public class SVOBuilder : MonoBehaviour
     {
         // Read-only properties
         public int VoxelCount { get; private set; }
@@ -170,4 +170,24 @@ namespace NKLI.Nigiri.SVO
     #endregion
     //
 
+    /// <summary>
+    /// Helper functions
+    /// </summary>
+    public class SVOHelper
+    {
+        // Calculates occupancy bitmap from int[8] array
+        public static uint getOccupancyBitmap(uint[] values)
+        {
+            return
+                (Math.Min(values[0], 1) << 7) |
+                (Math.Min(values[1], 1) << 6) |
+                (Math.Min(values[2], 1) << 5) |
+                (Math.Min(values[3], 1) << 4) |
+                (Math.Min(values[4], 1) << 3) |
+                (Math.Min(values[5], 1) << 2) |
+                (Math.Min(values[6], 1) << 1) |
+                (Math.Min(values[7], 1));
+
+        }
+    }
 }
