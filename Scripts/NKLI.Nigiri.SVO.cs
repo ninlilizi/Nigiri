@@ -11,6 +11,7 @@ namespace NKLI.Nigiri.SVO
     {
         // Read-only properties
         public int VoxelCount { get; private set; }
+        public int NodeCount { get; private set; }
         public int TreeDepth { get; private set; }
 
         public ComputeBuffer Buffer_SVO { get; private set; }
@@ -18,7 +19,7 @@ namespace NKLI.Nigiri.SVO
         ComputeShader shader_SVOBuilder;
 
         // Constructor
-        public SVOBuilder(ComputeBuffer mortonBuffer, int _voxelCount, int gridWidth)
+        public SVOBuilder(ComputeBuffer buffer_Morton, int _voxelCount, int gridWidth)
         {
             // Assign instance variable
             VoxelCount = _voxelCount;
@@ -27,7 +28,7 @@ namespace NKLI.Nigiri.SVO
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
 
             // Calculate threadcount and depth index boundaries
-            int threadCount = GetThreadCount(gridWidth, out int[] boundaries);
+            int threadCount = GetThreadCount(VoxelCount, gridWidth, out int[] boundaries);
             int dispatchCount = (int)Math.Sqrt(threadCount) / 16;
 
             // Synchronisation counter buffer
@@ -41,11 +42,13 @@ namespace NKLI.Nigiri.SVO
 
             // Assign to compute
             shader_SVOBuilder.SetBuffer(0, "buffer_Counters", buffer_Counters);
+            shader_SVOBuilder.SetBuffer(0, "buffer_Morton", buffer_Morton);
             shader_SVOBuilder.SetBuffer(0, "buffer_PTR", buffer_PTR);
             shader_SVOBuilder.SetBuffer(0, "buffer_SVO", Buffer_SVO);
             shader_SVOBuilder.SetInts("boundaries", boundaries); // Likely unneded, but here for now
             shader_SVOBuilder.SetInt("threadCount", threadCount);
             shader_SVOBuilder.SetInt("voxelCount", VoxelCount);
+            shader_SVOBuilder.SetInt("treeDepth", TreeDepth);
 
             // Dispatch compute
             shader_SVOBuilder.Dispatch(0, dispatchCount, dispatchCount, 1);
@@ -56,11 +59,14 @@ namespace NKLI.Nigiri.SVO
         }
 
         // Calculate thread count
-        public int GetThreadCount(int gridWidth, out int[] boundaries)
+        public int GetThreadCount(int _voxelCount, int gridWidth, out int[] boundaries)
         {
             // Local variable assignment
             int cycles = 0;  // Likely unneded, but here for now
             int threadCount = 0;
+
+            // Root depth only gathered from so less threads needed
+            _voxelCount /= 8;
 
             // Get depth of tree
             TreeDepth = GetDepth(gridWidth);           
@@ -70,12 +76,13 @@ namespace NKLI.Nigiri.SVO
             int depth = TreeDepth;
             while (depth > 0)
             {
-                threadCount += VoxelCount;
+                threadCount += _voxelCount;
                 boundaries[cycles] = threadCount;  // Likely unneded, but here for now
-                VoxelCount = Math.Max(VoxelCount / 8, 1);
+                _voxelCount = Math.Max(_voxelCount / 8, 1);
                 cycles++;  // Likely unneded, but here for now
                 depth--;
             }
+            NodeCount = threadCount;
             return threadCount;
         }
 
@@ -109,8 +116,8 @@ namespace NKLI.Nigiri.SVO
     public struct SVONode
     {
         // Linked reference offset or coordinate
-        // (isRoot)  Morton/Buffer, target coordinate/Offset, 32b
-        // (!isRoot) This buffer offset, 32b
+        // (isLeaf)  Morton/Buffer, target coordinate/Offset, 32b
+        // (!isLeaf) This buffer offset, 32b
         public uint referenceOffset;
 
         // Packed payload
@@ -129,11 +136,11 @@ namespace NKLI.Nigiri.SVO
         }
 
         // Constructor - UnPacked
-        public SVONode(uint _referenceOffset, uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
+        public SVONode(uint _referenceOffset, uint bitFieldOccupancy, uint runLength, uint depth, bool isLeaf)
         {
             packedBitfield = 0;
             referenceOffset = _referenceOffset;
-            PackStruct(bitFieldOccupancy, runLength, depth, isRoot);
+            PackStruct(bitFieldOccupancy, runLength, depth, isLeaf);
         }
 
         // Pack 32 bits
@@ -145,16 +152,16 @@ namespace NKLI.Nigiri.SVO
         //            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
         //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
         //            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
-        public void PackStruct(uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
+        public void PackStruct(uint bitFieldOccupancy, uint runLength, uint depth, bool isLeaf)
         {
-            packedBitfield = (bitFieldOccupancy << 32) | (runLength << 24) | (depth << 20) | (Convert.ToUInt32(isRoot) << 16);
+            packedBitfield = (bitFieldOccupancy << 24) | (runLength << 20) | (depth << 16) | (Convert.ToUInt32(isLeaf) << 15);
         }
 
         // Unpack 32 bits
-        public void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _depth, out bool isRoot)
+        public void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _depth, out bool isLeaf)
         {
             //ulong padding = (packedBitfield & 0x7FFF);
-            isRoot = Convert.ToBoolean((packedBitfield >> 15) & 1);
+            isLeaf = Convert.ToBoolean((packedBitfield >> 15) & 1);
             _depth = (uint)(packedBitfield >> 16) & 0xF;
             _runLength = (uint)(packedBitfield >> 20) & 0xF;
             _bifFieldOccupancy = (uint)(packedBitfield >> 24) & 0xFF;
