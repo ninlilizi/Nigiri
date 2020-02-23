@@ -13,7 +13,7 @@ namespace Tests.Nigiri.SVO
     {
         [Test]
         // Test occupancy bitmap calculation - position 0
-        public void GetOccupancyBitmap_Position()
+        public void GetOccupancyBitmap()
         {
             // Position 0
             uint[] testValues = new uint[8];
@@ -89,7 +89,69 @@ namespace Tests.Nigiri.SVO
         }
 
         [Test]
-        // Test depth calculation from boundary array
+        // Test calculation of current depth from boundary index
+        public void GetDepthFromBoundaries()
+        {
+            // Calculate control data
+            int gridWidth = 256;
+            int voxelCount = gridWidth * gridWidth * gridWidth;
+            int treeDepth = SVOHelper.GetDepth(gridWidth);
+            int threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out int[] boundaries);
+
+            // Generate random index
+            uint index = Convert.ToUInt32(UnityEngine.Random.Range(boundaries[5], threadCount));
+
+            Debug.Log("<Unit Test> (GetDepthFromBoundaries) threadCount:" + threadCount + ", index:" + index);
+
+            // Calculate control
+            uint controlDepth = 99;
+            if (index > 0 && index <= boundaries[0])
+            {
+                controlDepth = 0;
+            }
+            else if (index > boundaries[0] && index <= boundaries[1])
+            {
+                controlDepth = 1;
+            }
+            else if (index > boundaries[1] && index <= boundaries[2])
+            {
+                controlDepth = 2;
+            }
+            else if (index > boundaries[2] && index <= boundaries[3])
+            {
+                controlDepth = 3;
+            }
+            else if (index > boundaries[3] && index <= boundaries[4])
+            {
+                controlDepth = 4;
+            }
+            else if (index > boundaries[4] && index <= boundaries[5])
+            {
+                controlDepth = 5;
+            }
+            else if (index > boundaries[5] && index <= boundaries[6])
+            {
+                controlDepth = 6;
+            }
+            else if (index > boundaries[6] && index <= boundaries[7])
+            {
+                controlDepth = 7;
+            }
+            else if (index == threadCount)
+            {
+                controlDepth = 8;
+            }
+
+            // Get sample
+            uint sampleDepth = SVOHelper.GetDepthFromBoundaries(index, boundaries);
+
+
+            Debug.Log("<Unit Test> (GetDepthFromBoundaries) index:" + index + ", controlDepth:" + controlDepth + ", sampleDepth " + sampleDepth);
+            Assert.AreEqual(controlDepth, sampleDepth);
+        }
+
+        [Test]
+        // Test calculation of thread count and boundary offsets
         public void GetThreadCount()
         {
             // Calculate control data
@@ -99,9 +161,7 @@ namespace Tests.Nigiri.SVO
             int threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out int[] boundaries);
 
             Assert.AreEqual(treeDepth, 8);
-            Debug.Log("<Unit Test> (GetDepthFromBoundaries) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
-
-            int index = UnityEngine.Random.Range(0, threadCount);
+            Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
 
             // Control data
             int[] control = new int[8];
@@ -117,7 +177,7 @@ namespace Tests.Nigiri.SVO
             for (uint i = 0; i < treeDepth; i++)
             {
                 // Test the boundary array
-                Debug.Log("<Unit Test> (GetDepthFromBoundaries) Control " + i + ":" + control[i] + ", Boundary " + i + ":" + boundaries[i]);
+                Debug.Log("<Unit Test> (GetThreadCount) Control " + i + ":" + control[i] + ", Boundary " + i + ":" + boundaries[i]);
                 Assert.AreEqual(control[i], boundaries[i]);
             }
         }

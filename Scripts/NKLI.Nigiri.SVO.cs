@@ -155,7 +155,7 @@ namespace NKLI.Nigiri.SVO
         }
 
         // Finds current depth from boundary array
-        public static uint GetDepthFromBounaries(uint index, int[] boundaries)
+        public static uint GetDepthFromBoundaries(uint index, int[] boundaries)
         {
             // TODO - Make this efficient (LUT, etc)
             return 0;
