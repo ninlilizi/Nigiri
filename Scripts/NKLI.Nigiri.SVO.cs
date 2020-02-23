@@ -21,16 +21,20 @@ namespace NKLI.Nigiri.SVO
         // Constructor
         public SVOBuilder(ComputeBuffer buffer_Morton, int _voxelCount, int gridWidth)
         {
-            // Assign instance variable
-            VoxelCount = _voxelCount;
-
             // Load shader
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
 
+            // Calculate depth
+            TreeDepth = SVOHelper.GetDepth(gridWidth);
+
             // Calculate threadcount and depth index boundaries
-            int threadCount = GetThreadCount(VoxelCount, gridWidth, out int[] boundaries);
+            int threadCount = SVOHelper.GetThreadCount(gridWidth, TreeDepth, out int[] boundaries);
             int dispatchCount = (int)Math.Sqrt(threadCount) / 16;
 
+            // Assign instance variables
+            VoxelCount = _voxelCount;
+            NodeCount = threadCount;
+            
             // Synchronisation counter buffer
             ComputeBuffer buffer_Counters = new ComputeBuffer(4, sizeof(UInt32), ComputeBufferType.Default);
 
@@ -56,46 +60,6 @@ namespace NKLI.Nigiri.SVO
             // Cleanup
             buffer_Counters.Dispose();
             buffer_PTR.Dispose();
-        }
-
-        // Calculate thread count
-        public int GetThreadCount(int _voxelCount, int gridWidth, out int[] boundaries)
-        {
-            // Local variable assignment
-            int cycles = 0;  // Likely unneded, but here for now
-            int threadCount = 0;
-
-            // Root depth only gathered from so less threads needed
-            _voxelCount /= 8;
-
-            // Get depth of tree
-            TreeDepth = GetDepth(gridWidth);           
-            boundaries = new int[TreeDepth];  // Likely unneded, but here for now
-
-            // Do the work
-            int depth = TreeDepth;
-            while (depth > 0)
-            {
-                threadCount += _voxelCount;
-                boundaries[cycles] = threadCount;  // Likely unneded, but here for now
-                _voxelCount = Math.Max(_voxelCount / 8, 1);
-                cycles++;  // Likely unneded, but here for now
-                depth--;
-            }
-            NodeCount = threadCount;
-            return threadCount;
-        }
-
-        // Calculate depth of tree
-        public int GetDepth(int gridWidth)
-        {
-            int depth = 0;
-            while (gridWidth > 1)
-            {
-                depth++;
-                gridWidth /= 8;
-            }
-            return depth;
         }
 
         // Cleanup
@@ -176,7 +140,7 @@ namespace NKLI.Nigiri.SVO
     public class SVOHelper
     {
         // Calculates occupancy bitmap from int[8] array
-        public static uint getOccupancyBitmap(uint[] values)
+        public static uint GetOccupancyBitmap(uint[] values)
         {
             return
                 (Math.Min(values[0], 1) << 7) |
@@ -188,6 +152,56 @@ namespace NKLI.Nigiri.SVO
                 (Math.Min(values[6], 1) << 1) |
                 (Math.Min(values[7], 1));
 
+        }
+
+        // Finds current depth from boundary array
+        public static uint GetDepthFromBounaries(uint index, int[] boundaries)
+        {
+            // TODO - Make this efficient (LUT, etc)
+            return 0;
+        }
+
+        // Calculate thread count
+        public static int GetThreadCount(int gridWidth, int treeDepth, out int[] boundaries)
+        {
+            // Local variable assignment
+            int cycles = 0;
+            int threadCount = 0;
+
+            // Root depth only gathered from so less threads needed
+            int voxelCount = gridWidth * gridWidth * gridWidth;
+
+            // Get depth of tree
+            boundaries = new int[treeDepth];
+
+            // Do the work
+            while (treeDepth > cycles)
+            {
+                // Divide by 8 to get the thread count
+                voxelCount /= 8;
+
+                // Tabulate the sum
+                threadCount += voxelCount;
+                
+                // Add depth boundary index to array
+                boundaries[cycles] = threadCount;
+                
+                // Increment counter
+                cycles++;          
+            }
+            return threadCount;
+        }
+
+        // Calculate depth of tree
+        public static int GetDepth(int gridWidth)
+        {
+            int depth = 0;
+            while (gridWidth > 1)
+            {
+                depth++;
+                gridWidth /= 2;
+            }
+            return depth;
         }
     }
 }
