@@ -1,8 +1,6 @@
-*Please, note. This project is considered a work in progress and is still evolving over time.*
-<p align="center" style="display: inline-block;">
-  <img height="225px" width="900px" src="https://nkli.net/Files/Nigiri/Images/Promotional/Nigiri%20cover%20header%20-%20Github.png">
-</p>
-An almost-dynamic voxel-based global illumination system for Unity.  
+<p align="center" style="display: inline-block;"><img height="225px" width="900px" src="https://nkli.net/Files/Nigiri/Images/Promotional/Nigiri%20cover%20header%20-%20Github.png"></p>
+
+### A dynamic, voxel-based global illumination system for Unity.
 
 # Features.
 * 2D, Single Pass Stereo Rendering
