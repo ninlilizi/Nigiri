@@ -18,8 +18,8 @@ namespace NKLI.Nigiri.SVO
         public uint TreeDepth { get; private set; }
 
         // Offset into counters buffer that boundary offsets begin
-        public static readonly int boundariesOffset = 8;
-        public static readonly uint boundariesOffsetU = 8;
+        public static readonly int boundariesOffset = 9;
+        public static readonly uint boundariesOffsetU = 9;
 
         // Read-only buffer properties
         public ComputeBuffer Buffer_SVO { get; private set; }
@@ -58,9 +58,10 @@ namespace NKLI.Nigiri.SVO
             Buffer_SVO = new ComputeBuffer(Convert.ToInt32(NodeCount), 8, ComputeBufferType.Default);
 
             // Set buffer variables
-            Counters_boundaries[2] = (uint)((Math.Ceiling(buffer_PTR.count / 8.0d) * 8) / 8) - 8;
-            Counters_boundaries[5] = ThreadCount;
-            Counters_boundaries[6] = TreeDepth;
+            Counters_boundaries[0] = boundariesOffsetU;
+            Counters_boundaries[3] = (uint)((Math.Ceiling(buffer_PTR.count / 8.0d) * 8) / 8) - 8;
+            Counters_boundaries[6] = ThreadCount;
+            Counters_boundaries[7] = TreeDepth;
 
             // Send buffer to GPU
             Buffer_Counters.SetData(Counters_boundaries);
@@ -182,11 +183,10 @@ namespace NKLI.Nigiri.SVO
         }
 
         // Finds current depth from boundary array
-        public static uint GetDepthFromBoundaries(uint index, uint threadCount, uint[] boundaries)
+        public static uint GetDepthFromBoundaries(uint index, uint treeDepth, uint[] boundaries)
         {
             // TODO - Make this efficient (LUT, etc)
-
-            for (uint j = SVOBuilder.boundariesOffsetU; j < (threadCount + SVOBuilder.boundariesOffset); j++)
+            for (uint j = SVOBuilder.boundariesOffsetU; j < (treeDepth + SVOBuilder.boundariesOffsetU); j++)
             {
                 if (index < boundaries[j])
                     return j - SVOBuilder.boundariesOffsetU;
@@ -203,7 +203,9 @@ namespace NKLI.Nigiri.SVO
             counter_Boundaries = new uint[SVOBuilder.boundariesOffset + treeDepth];
 
             // Start at max depth -1
-            uint cycles = 1;
+            int cycles = SVOBuilder.boundariesOffset + 1;
+            // max cycles to run
+            int maxCycles = Convert.ToInt32(SVOBuilder.boundariesOffset + treeDepth);
             // Starting value is thick buffer size for leaf nodes
             uint threadCount = (gridWidth * gridWidth * gridWidth) / 8;
 
@@ -217,7 +219,7 @@ namespace NKLI.Nigiri.SVO
             counter_Boundaries[SVOBuilder.boundariesOffset] = threadCount;
 
             // Do the work
-            while (treeDepth > cycles)
+            while (maxCycles > cycles)
             {
                 // Divide by 8 to get the thread count
                 nodeCount = Math.Max(nodeCount / 8, 1);
@@ -226,7 +228,7 @@ namespace NKLI.Nigiri.SVO
                 threadCount += nodeCount;
 
                 // Add depth boundary index to array
-                counter_Boundaries[SVOBuilder.boundariesOffset + cycles] = threadCount;
+                counter_Boundaries[cycles] = threadCount;
                 
                 // Increment counter
                 cycles++;          
