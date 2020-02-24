@@ -16,11 +16,73 @@ namespace Tests.Nigiri.SVO
         [Test]
         public void SVOBuilder()
         {
+            // Load test buffer from disk
+            // Test buffer is a Morton ordered 256^3 grid of stored RGBA (values * 256)
             string fileNameWithoutExtension = Path.GetFileNameWithoutExtension("Test_Unit-MortonBuffer");
             TextAsset textAsset = Resources.Load(fileNameWithoutExtension) as TextAsset;
-            byte[] test_MortonBuffer = textAsset.bytes;
+            Debug.Log("<Unit Test> Loaded Buffer, size:" + textAsset.bytes.Length);
 
-            Debug.Log("<Unit Test> Uncompressed size:" + test_MortonBuffer.Length);
+            // Decompress test buffer
+            byte[] test_MortonBuffer = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(textAsset.bytes);
+            Debug.Log("<Unit Test> Decompressed Buffer, size:" + test_MortonBuffer.Length + Environment.NewLine);
+
+            // Check decompressed buffer is expected size
+            Assert.AreEqual(268435456, test_MortonBuffer.Length);
+
+            // Write buffer to GPU
+            ComputeBuffer buffer_Morton = new ComputeBuffer(256 * 256 * 256, sizeof(float) * 4, ComputeBufferType.Default);
+            buffer_Morton.SetData(test_MortonBuffer);
+            Debug.Log("<Unit Test> Buffer copied to GPU");
+
+            int gridWidth = 256;
+            int occupiedVoxels = 20003;
+
+            // Attempt to instantiate SVO
+            SVOBuilder svo = new SVOBuilder(buffer_Morton, occupiedVoxels, gridWidth);
+            Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
+            
+
+            // Readback octree to CPU
+            int sizeOctree = svo.NodeCount * 64;
+            byte[] test_Buffer_SVO = new byte[sizeOctree];
+            svo.Buffer_SVO.GetData(test_Buffer_SVO);
+
+            // Readback counters to CPU
+            int sizeCounters = sizeof(UInt32) * 4;
+            byte[] test_Buffer_Counters = new byte[sizeCounters];
+            svo.Buffer_Counters.GetData(test_Buffer_Counters);
+
+            // Manually flush pipeline to be sure we have everything
+            Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
+            GL.Flush();
+
+            // Log counter values
+            Debug.Log("<Unit Test> Read counter:" + Convert.ToInt32(test_Buffer_Counters[0]));
+            Debug.Log("<Unit Test> Write counter:" + Convert.ToInt32(test_Buffer_Counters[1]));
+            Debug.Log("<Unit Test> Depth counter:" + Convert.ToInt32(test_Buffer_Counters[2]) + Environment.NewLine);
+
+            // Attempt to verify number of output nodes
+            int detectedCount = 0;
+            for (int i = 0; i < (test_Buffer_SVO.Length / 2); i++)
+            {
+                if (((test_Buffer_SVO[(i * 2)]) != 0) ||
+                        ((test_Buffer_SVO[(i * 2) + 1]) != 0))
+                {
+                    detectedCount++;
+                }
+            }
+            Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
+
+            // Dump file to disk
+            string file = Application.dataPath + "/Tests_SVO.bytes";
+            Debug.Log("Writing to:" + file);
+            FileStream fs = System.IO.File.Create(file);
+            fs.Write(test_Buffer_SVO, 0, sizeOctree);
+            fs.Close();
+
+            // Cleanup
+            svo.Dispose();
+            buffer_Morton.Dispose();
         }
     }
     #endregion
@@ -63,6 +125,19 @@ namespace Tests.Nigiri.SVO
             Debug.Log("<Unit Test> Sample size:" + controlArray.Length);
 
             Assert.True(ByteArrayCompare(controlArray, decompressed));
+
+            int occupiedCount = 0;
+            for (int i = 0; i < (decompressed.Length / 4); i++)
+            {
+                if (((decompressed[(i * 4)]) != 0) ||
+                        ((decompressed[(i * 4) + 1]) != 0) ||
+                        ((decompressed[(i * 4) + 2]) != 0) ||
+                        ((decompressed[(i * 4) + 3]) != 0))
+                {
+                    occupiedCount++;
+                }
+            }
+            Debug.Log("<Unit Test> Occupied voxels detected:" + occupiedCount);
         }*/
 
         [Test]
@@ -150,7 +225,7 @@ namespace Tests.Nigiri.SVO
             int gridWidth = 256;
             int voxelCount = gridWidth * gridWidth * gridWidth;
             int treeDepth = SVOHelper.GetDepth(gridWidth);
-            int threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out int[] boundaries);
+            int threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out int[] boundaries);
 
             // Generate random index
             uint index = Convert.ToUInt32(UnityEngine.Random.Range(boundaries[5], threadCount));
@@ -212,7 +287,7 @@ namespace Tests.Nigiri.SVO
             int gridWidth = 256;
             int voxelCount = gridWidth * gridWidth * gridWidth;
             int treeDepth = SVOHelper.GetDepth(gridWidth);
-            int threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out int[] boundaries);
+            int threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out int[] boundaries);
 
             Assert.AreEqual(treeDepth, 8);
             Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
