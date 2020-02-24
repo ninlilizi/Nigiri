@@ -52,26 +52,24 @@ struct SVONode
 //
 
 // Synchronisation counter buffer
-uniform RWStructuredBuffer<uint>	buffer_Counters;
+uniform RWStructuredBuffer<uint> buffer_Counters;
 // [0] Read counter
 // [1] Write counter
 // [2] Depth counter
-
+//
 // Input morton buffer
-uniform RWStructuredBuffer<uint4>	buffer_Morton;
-
+uniform RWStructuredBuffer<uint4> buffer_Morton;
 // Temporary PTR storage buffer
-uniform RWStructuredBuffer<uint>	buffer_PTR;
-
+uniform RWStructuredBuffer<uint> buffer_PTR;
 // Output buffer to contain final SVO
-uniform RWStructuredBuffer<SVONode>	buffer_SVO;
+uniform RWStructuredBuffer<SVONode> buffer_SVO;
 
 uint isLeaf = 0;
 
 // Determine if branch or leaf node
 void IsLeaf(uint counter)
 {
-    if ((uint) boundaries[0] < counter) isLeaf = 1;
+    if (counter < (uint)boundaries[0]) isLeaf = 1;
     else isLeaf = 0;
 }
 
@@ -81,6 +79,7 @@ uint getOccupancyBitmap(uint counter)
 	switch (isLeaf)
 	{
 	case 1:
+        counter *= 8;
 		uint r =
 			(min(buffer_Morton[counter].r, 1) << 7) |
 			(min(buffer_Morton[counter + 1].r, 1) << 6) |
@@ -140,18 +139,18 @@ uint GetDepthFromBoundaries(uint index)
 
 
 
-[numthreads(8,1,1)]
+[numthreads(1,1,1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	// Update Unique index
-	uint counter_Read;
+	uint counter_Read = 1;
     InterlockedAdd(buffer_Counters[0], 1, counter_Read);
-    
+  
     // Test if leaf node
     IsLeaf(counter_Read);
 
     // Get occupancyBitmap
-	uint occupancyBitmap = getOccupancyBitmap(counter_Read * 8);
+	uint occupancyBitmap = getOccupancyBitmap(counter_Read);
 
 	if (occupancyBitmap != 0)
 	{
@@ -168,18 +167,20 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         InterlockedAdd(buffer_Counters[1], 1, counter_Write);
 
 		// Write to sparse buffer
-        SVONode exchangeOutput;
         buffer_SVO[counter_Write] = indexedNode;
     }
 	else
 	{
 		// Write to PTR buffer
-		buffer_PTR[counter_Read] = 0;
+		//buffer_PTR[counter_Read] = 0;
 	}
 
 	// Incrment depth counter if boundary index
-	if (counter_Read == (uint)boundaries[buffer_Counters[2]])
-	{
+    //if (buffer_Counters[2] < treeDepth)
+    //{
+    if (counter_Read == boundaries[buffer_Counters[2]])
+    {
         InterlockedAdd(buffer_Counters[2], 1);
     }
+    //}
 }

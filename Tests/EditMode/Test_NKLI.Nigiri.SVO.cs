@@ -26,7 +26,7 @@ namespace Tests.Nigiri.SVO
             byte[] test_MortonBuffer = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(textAsset.bytes);
             Debug.Log("<Unit Test> Decompressed Buffer, size:" + test_MortonBuffer.Length + Environment.NewLine);
 
-            // Check decompressed buffer is expected size
+            // Test decompressed buffer is expected size
             Assert.AreEqual(268435456, test_MortonBuffer.Length);
 
             // Write buffer to GPU
@@ -40,38 +40,65 @@ namespace Tests.Nigiri.SVO
             // Attempt to instantiate SVO
             SVOBuilder svo = new SVOBuilder(buffer_Morton, occupiedVoxels, gridWidth);
             Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
+
+            // Intiate syncronous 'async' readback
+            svo.SyncGPUReadback(out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters, out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO);
             
+            // Readback counters to CPU
+            uint[] test_Buffer_Counters = new uint[4];
+            if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
+            else
+            {
+                var buffer = req_Counters.GetData<uint>();
+                buffer.CopyTo(test_Buffer_Counters);
+
+            }
 
             // Readback octree to CPU
-            int sizeOctree = svo.NodeCount * 64;
+            int sizeOctree = svo.NodeCount * 8;
             byte[] test_Buffer_SVO = new byte[sizeOctree];
-            svo.Buffer_SVO.GetData(test_Buffer_SVO);
+            if (req_SVO.hasError) Debug.Log("GPU readback error detected.");
+            else
+            {
+                var buffer = req_SVO.GetData<byte>();
+                buffer.CopyTo(test_Buffer_SVO);
 
-            // Readback counters to CPU
-            int sizeCounters = sizeof(UInt32) * 4;
-            byte[] test_Buffer_Counters = new byte[sizeCounters];
-            svo.Buffer_Counters.GetData(test_Buffer_Counters);
+            }
 
             // Manually flush pipeline to be sure we have everything
             Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
             GL.Flush();
 
+            for (uint i = 0; i < svo.TreeDepth; i++)
+            {
+                Debug.Log("<Unit Test> Boundary " + i + ":" + svo.Boundaries[i]);
+            }
+
             // Log counter values
-            Debug.Log("<Unit Test> Read counter:" + Convert.ToInt32(test_Buffer_Counters[0]));
-            Debug.Log("<Unit Test> Write counter:" + Convert.ToInt32(test_Buffer_Counters[1]));
-            Debug.Log("<Unit Test> Depth counter:" + Convert.ToInt32(test_Buffer_Counters[2]) + Environment.NewLine);
+            Debug.Log(Environment.NewLine + "<Unit Test> Read counter:" + test_Buffer_Counters[0]);
+            Debug.Log("<Unit Test> Write counter:" + test_Buffer_Counters[1]);
+            Debug.Log("<Unit Test> Depth counter:" + test_Buffer_Counters[2] + Environment.NewLine);
 
             // Attempt to verify number of output nodes
             int detectedCount = 0;
-            for (int i = 0; i < (test_Buffer_SVO.Length / 2); i++)
+            for (int i = 0; i < (test_Buffer_SVO.Length / 8); i++)
             {
-                if (((test_Buffer_SVO[(i * 2)]) != 0) ||
-                        ((test_Buffer_SVO[(i * 2) + 1]) != 0))
+                if (((test_Buffer_SVO[(i * 8)]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 1]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 2]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 3]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 4]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 5]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 6]) != 0) ||
+                    ((test_Buffer_SVO[(i * 8) + 7]) != 0))
                 {
                     detectedCount++;
                 }
             }
             Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
+
+            // Test that write counter matches detected node
+            Assert.AreEqual(test_Buffer_Counters[1], detectedCount);
 
             // Dump file to disk
             string file = Application.dataPath + "/Tests_SVO.bytes";

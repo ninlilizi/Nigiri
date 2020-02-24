@@ -16,6 +16,7 @@ namespace NKLI.Nigiri.SVO
         public int VoxelCount { get; private set; }
         public int NodeCount { get; private set; }
         public int TreeDepth { get; private set; }
+        public int[] Boundaries { get; private set; }
 
         // Read-only buffer properties
         public ComputeBuffer Buffer_SVO { get; private set; }
@@ -23,9 +24,6 @@ namespace NKLI.Nigiri.SVO
 
         // Compute
         ComputeShader shader_SVOBuilder;
-
-        // Async queue
-        //private Queue<AsyncGPUReadbackRequest> gPU_Requests_Buffer_Counters = new Queue<AsyncGPUReadbackRequest>();
 
         // Constructor
         public SVOBuilder(ComputeBuffer buffer_Morton, int occupiedVoxels, int gridWidth)
@@ -39,22 +37,26 @@ namespace NKLI.Nigiri.SVO
             // Calculate threadcount and depth index boundaries
             ThreadCount = SVOHelper.GetThreadCount(occupiedVoxels, gridWidth, TreeDepth, out int[] boundaries);
             NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
-            int dispatchCount = ThreadCount / 8;
+            Boundaries = boundaries;
+            int dispatchCount = ThreadCount;
             int maxVoxels = gridWidth * gridWidth * gridWidth;
 
             // Assign instance variables
             VoxelCount = occupiedVoxels;
             NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
 
+
             // Temporary PTR storage buffer
-            ComputeBuffer buffer_PTR = new ComputeBuffer(maxVoxels, sizeof(UInt32), ComputeBufferType.Default);
+            ComputeBuffer buffer_PTR = new ComputeBuffer(maxVoxels, sizeof(uint), ComputeBufferType.Default);
 
             // Synchronisation counter buffer
-            Buffer_Counters = new ComputeBuffer(4, sizeof(UInt32), ComputeBufferType.Default);
+            Buffer_Counters = new ComputeBuffer(4, sizeof(uint), ComputeBufferType.Default);
 
-
+            // Zero counters, we don't know why. Just that we must
+            Buffer_Counters.SetData(new int[4]);
+                 
             // Output buffer to contain final SVO
-            Buffer_SVO = new ComputeBuffer(NodeCount, 64, ComputeBufferType.Raw);
+            Buffer_SVO = new ComputeBuffer(NodeCount, 8, ComputeBufferType.Default);
 
             // Assign to compute
             shader_SVOBuilder.SetBuffer(0, "buffer_Counters", Buffer_Counters);
@@ -69,11 +71,18 @@ namespace NKLI.Nigiri.SVO
             // Dispatch compute
             shader_SVOBuilder.Dispatch(0, dispatchCount, 1, 1);
 
-            // Queue up Aync GPU Readbacks
-            //if (gPU_Requests_Buffer_Counters.Count < 2) gPU_Requests_Buffer_Counters.Enqueue(AsyncGPUReadback.Request(Buffer_Counters));
-
             // Cleanup
             buffer_PTR.Dispose();
+        }
+
+        // Syncronous 'async' readback for Unit Testing.
+        public void SyncGPUReadback(out AsyncGPUReadbackRequest req_Counters, out AsyncGPUReadbackRequest req_SVO)
+        {
+            req_Counters = AsyncGPUReadback.Request(Buffer_Counters);
+            req_SVO = AsyncGPUReadback.Request(Buffer_SVO);
+
+            req_Counters.WaitForCompletion();
+            req_SVO.WaitForCompletion();
         }
 
         // Cleanup
