@@ -178,7 +178,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
 	// Incrment depth counter if boundary index
     //if (buffer_Counters[2] < treeDepth)
     //{
-    if (counter_Read == boundaries[buffer_Counters[2]])
+    if (counter_Read == (int)boundaries[buffer_Counters[2]])
     {
         InterlockedAdd(buffer_Counters[2], 1);
     }

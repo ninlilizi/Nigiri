@@ -37,11 +37,11 @@ namespace NKLI.Nigiri.SVO
             // Calculate threadcount and depth index boundaries
             ThreadCount = SVOHelper.GetThreadCount(occupiedVoxels, gridWidth, TreeDepth, out int[] boundaries);
             NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
-            Boundaries = boundaries;
             int dispatchCount = ThreadCount;
             int maxVoxels = gridWidth * gridWidth * gridWidth;
 
             // Assign instance variables
+            Boundaries = boundaries;
             VoxelCount = occupiedVoxels;
             NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
 
@@ -209,7 +209,7 @@ namespace NKLI.Nigiri.SVO
             while (treeDepth > cycles)
             {
                 // Divide by 8 to get the thread count
-                nodeCount /= 8;
+                nodeCount = Math.Max(nodeCount / 8, 1);
 
                 // Tabulate the sum
                 threadCount += nodeCount;
@@ -237,7 +237,7 @@ namespace NKLI.Nigiri.SVO
             while (treeDepth > cycles)
             {
                 // Divide by 8 to get the thread count
-                nodeCount /= 8;
+                nodeCount = Math.Max(nodeCount / 8, 1);
 
                 // Tabulate the sum
                 finalNodeCount += nodeCount;
