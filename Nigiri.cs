@@ -1,7 +1,9 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Windows;
 using UnityEngine.XR;
 
 [ExecuteInEditMode]
@@ -1035,6 +1037,27 @@ public class Nigiri : MonoBehaviour {
                 renderTimes.UpdatePrimaryEncode = renderTimes.PrimaryVoxelisationStopwatch.Elapsed.TotalMilliseconds;
                 renderTimes.PrimaryVoxelisationStopwatch.Reset();
 
+                // Save MortonBuffer to file for Test units
+                /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+                {
+                    string file = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
+                    if (!System.IO.File.Exists(file))
+                    {
+                        // Capture Morton buffer test data
+                        int size = (256 * 256 * 256) * sizeof(uint) * 4;
+                        byte[] test_MortonBuffer = new byte[size];
+
+                        voxelUpdateSampleBuffer.GetData(test_MortonBuffer);
+                        GL.Flush();
+
+                        Debug.Log("Writing to:" + file);
+
+                        FileStream fs = System.IO.File.Create(file);
+                        fs.Write(test_MortonBuffer, 0, size);
+                        fs.Close();
+                    }
+                }*/
+
                 renderTimes.VoxelUpdateStopwatch.Start();
                 nigiri_VoxelEncodeUpdater.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationEncodeUpdater);
                 nigiri_VoxelEncodeUpdater.Dispatch(0, highestVoxelResolution / 8, highestVoxelResolution / 8, highestVoxelResolution / 8);
@@ -1045,7 +1068,6 @@ public class Nigiri : MonoBehaviour {
 
             // cascadeSwitch = (cascadeSwitch + 1) % (3); // Disable cascdes as will become supurflous
         }
-
         ///END Voxelize main cam
 
         // Update MipMaps

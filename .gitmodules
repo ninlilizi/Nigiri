@@ -4,3 +4,6 @@
 [submodule "Resources/Textures"]
 	path = Resources/Textures
 	url = https://github.com/ninlilizi/Nigiri-TextureResources
+[submodule "Tests/EditMode/Resources"]
+	path = Tests/EditMode/Resources
+	url = git@github.com:ninlilizi/Nigiri-TestUnitResources.git

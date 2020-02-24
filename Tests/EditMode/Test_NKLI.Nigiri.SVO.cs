@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.IO;
+using System.Runtime.InteropServices;
 using NKLI.Nigiri.SVO;
 using NUnit.Framework;
 using UnityEngine;
@@ -11,6 +13,43 @@ namespace Tests.Nigiri.SVO
     #region Test_SVOHelper
     public class Test_SVOHelper
     {
+        // Functions for compressing and verifying Morton test buffer file
+        /*[Test]
+        public void CompressTestBuffer()
+        {
+            string file = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
+            byte[] array = File.ReadAllBytes(file);
+
+            Debug.Log("<Unit Test> Uncompressed size:" + array.Length);
+
+            byte[] compressed = NKLI.Nigiri.Tools.LZMAtools.CompressByteArrayToLZMAByteArray(array);
+
+            Debug.Log("<Unit Test>   Compressed size:" + compressed.Length);
+
+            FileStream fs = System.IO.File.Create(file + ".lzma");
+            fs.Write(compressed, 0, compressed.Length);
+            fs.Close();
+        }
+
+        [Test]
+        public void VerifyTestBuffer()
+        {
+            string controlFile = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
+            byte[] controlArray = File.ReadAllBytes(controlFile);
+
+            Debug.Log("<Unit Test> Control size:" + controlArray.Length);
+
+            string sampleFile = Application.dataPath + "/Test_Unit-MortonBuffer.dat" + ".lzma";
+            byte[] sampleArray = File.ReadAllBytes(sampleFile);
+
+            Debug.Log("<Unit Test>   Compressed size:" + sampleArray.Length);
+            byte[] decompressed = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(sampleArray);
+
+            Debug.Log("<Unit Test> Sample size:" + controlArray.Length);
+
+            Assert.True(ByteArrayCompare(controlArray, decompressed));
+        }*/
+
         [Test]
         // Test occupancy bitmap calculation - position 0
         public void GetOccupancyBitmap()
@@ -200,8 +239,19 @@ namespace Tests.Nigiri.SVO
             Assert.AreEqual(SVOHelper.GetDepth(32768), 15);
             Assert.AreEqual(SVOHelper.GetDepth(65536), 16);
         }
+
+        [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
+        static extern int memcmp(byte[] b1, byte[] b2, long count);
+
+        static bool ByteArrayCompare(byte[] b1, byte[] b2)
+        {
+            // Validate buffers are the same length.
+            // This also ensures that the count does not exceed the length of either buffer.  
+            return b1.Length == b2.Length && memcmp(b1, b2, b1.Length) == 0;
+        }
     }
     #endregion
+
 
     #region Test_SVONode
     public class Test_SVONode

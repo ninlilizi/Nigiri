@@ -1,14 +1,10 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
-// Create a RenderTexture with enableRandomWrite flag and set it
-// with cs.SetTexture
-//RWTexture2D<float4> Result;
-
 // Depth of tree
 uniform int treeDepth;
 // Array of depth boundaries
-uniform int boundaries[32];
+uniform int boundaries[64];
 
 
 /// <summary>
@@ -28,21 +24,6 @@ struct SVONode
 	//readonly uint pad0;
 	//readonly uint pad1;
 	// In cases of 64 bit payloads, this is unnecesary
-
-	// Constructor - Packed
-	void SVONode(uint _referenceOffset, uint _packedBitfield)
-	{
-		packedBitfield = _packedBitfield;
-		referenceOffset = _referenceOffset;
-	}
-
-	// Constructor - UnPacked
-	void SVONode(uint _referenceOffset, uint bitFieldOccupancy, uint runLength, uint depth, bool isRoot)
-	{
-		packedBitfield = 0;
-		referenceOffset = _referenceOffset;
-		PackStruct(bitFieldOccupancy, runLength, depth, isRoot);
-	}
 
 	// Pack 32 bits
 	// BO = Bitfield occupancy, 8b
@@ -74,26 +55,30 @@ struct SVONode
 uniform RWStructuredBuffer<uint>	buffer_Counters;
 // [0] Read counter
 // [1] Write counter
+// [2] Depth counter
 
-// Temporary PTR storage buffer
+// Input morton buffer
 uniform RWStructuredBuffer<uint4>	buffer_Morton;
 
 // Temporary PTR storage buffer
 uniform RWStructuredBuffer<uint>	buffer_PTR;
+
 // Output buffer to contain final SVO
 uniform RWStructuredBuffer<SVONode>	buffer_SVO;
 
+uint isLeaf = 0;
+
 // Determine if branch or leaf node
-uint isLeaf(uint counter)
+void IsLeaf(uint counter)
 {
-	if ((uint)boundaries[0] < counter) return 1;
-	else return 0;
+    if ((uint) boundaries[0] < counter) isLeaf = 1;
+    else isLeaf = 0;
 }
 
 // Calculates occupancy bitmap
 uint getOccupancyBitmap(uint counter)
 {
-	switch (isLeaf(counter))
+	switch (isLeaf)
 	{
 	case 1:
 		return
@@ -118,36 +103,55 @@ uint getOccupancyBitmap(uint counter)
 	}
 }
 
+// Finds current depth from boundary array
+uint GetDepthFromBoundaries(uint index)
+{
+	// TODO - Make this efficient (LUT, etc)
+	return 0;
+}
 
-[numthreads(8,8,1)]
-void CSMain (uint3 id : SV_DispatchThreadID)
+
+
+[numthreads(16,16,1)]
+void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	// Update Unique index
 	uint counter_Read;
 	InterlockedAdd(buffer_Counters[0], 1, counter_Read);
+    
+    // Test if leaf node
+    IsLeaf(counter_Read);
 
+    // Get occupancyBitmap
 	uint occupancyBitmap = getOccupancyBitmap(counter_Read);
-
-	//uint a = table[uint(clamp(b, 0, treeDepth) / 2)];
-
-	SVONode indexedNode;
-	//indexNode.PackStruct(occupancyBitmap, 0, )
 
 	if (occupancyBitmap != 0)
 	{
+		// Write to PTR buffer
 		buffer_PTR[counter_Read] = counter_Read;
 
-		// Update Unique index
+		// Pack SVO node data
+        SVONode indexedNode;
+        indexedNode.referenceOffset = counter_Read;
+        indexedNode.PackStruct(occupancyBitmap, 0, buffer_Counters[2], isLeaf);
+
+		// Update sparse index
 		uint counter_Write;
 		InterlockedAdd(buffer_Counters[1], 1, counter_Write);
-	}
+
+		// Write to sparse buffer
+        SVONode exchangeOutput;
+        buffer_SVO[counter_Write] = indexedNode;
+    }
 	else
 	{
+		// Write to PTR buffer
 		buffer_PTR[counter_Read] = 0;
 	}
 
-	SVONode derp = buffer_SVO[0];
-	derp.SVONode(0, 0);
-
-	//buffer_SVO[0].PackStruct(0, 0, 0, 0);
+	// Incrment depth counter if boundary index
+	if (counter_Read == (uint)boundaries[buffer_Counters[2]])
+	{
+		InterlockedAdd(buffer_Counters[2], 1);
+	}
 }
