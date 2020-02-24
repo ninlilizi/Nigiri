@@ -34,8 +34,8 @@ namespace Tests.Nigiri.SVO
             buffer_Morton.SetData(test_MortonBuffer);
             Debug.Log("<Unit Test> Buffer copied to GPU");
 
-            int gridWidth = 256;
-            int occupiedVoxels = 20003;
+            uint gridWidth = 256;
+            uint occupiedVoxels = 20003;
 
             // Attempt to instantiate SVO
             SVOBuilder svo = new SVOBuilder(buffer_Morton, occupiedVoxels, gridWidth);
@@ -45,7 +45,7 @@ namespace Tests.Nigiri.SVO
             svo.SyncGPUReadback(out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters, out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO);
             
             // Readback counters to CPU
-            uint[] test_Buffer_Counters = new uint[4];
+            uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + svo.TreeDepth];
             if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
             else
             {
@@ -55,7 +55,7 @@ namespace Tests.Nigiri.SVO
             }
 
             // Readback octree to CPU
-            int sizeOctree = svo.NodeCount * 8;
+            uint sizeOctree = svo.NodeCount * 8;
             byte[] test_Buffer_SVO = new byte[sizeOctree];
             if (req_SVO.hasError) Debug.Log("GPU readback error detected.");
             else
@@ -69,15 +69,17 @@ namespace Tests.Nigiri.SVO
             Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
             GL.Flush();
 
-            for (uint i = 0; i < svo.TreeDepth; i++)
+            for (uint i = 0; i < (test_Buffer_Counters.Length - NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset); i++)
             {
-                Debug.Log("<Unit Test> Boundary " + i + ":" + svo.Boundaries[i]);
+                Debug.Log("<Unit Test> Boundary " + (i) + ":" + test_Buffer_Counters[i + NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset]);
             }
 
             // Log counter values
-            Debug.Log(Environment.NewLine + "<Unit Test> Read counter:" + test_Buffer_Counters[0]);
-            Debug.Log("<Unit Test> Write counter:" + test_Buffer_Counters[1]);
-            Debug.Log("<Unit Test> Depth counter:" + test_Buffer_Counters[2] + Environment.NewLine);
+            Debug.Log(Environment.NewLine + "<Unit Test> SVO Read counter:" + test_Buffer_Counters[0]);
+            Debug.Log("<Unit Test> SVO Write counter:" + test_Buffer_Counters[1]);
+            Debug.Log("<Unit Test> PTR Read counter:" + test_Buffer_Counters[3]);
+            Debug.Log("<Unit Test> PTR Write counter:" + test_Buffer_Counters[4]);
+            Debug.Log("<Unit Test> Depth counter:" + test_Buffer_Counters[7] + Environment.NewLine);
 
             // Attempt to verify number of output nodes
             int detectedCount = 0;
@@ -104,7 +106,7 @@ namespace Tests.Nigiri.SVO
             string file = Application.dataPath + "/Tests_SVO.bytes";
             Debug.Log("Writing to:" + file);
             FileStream fs = System.IO.File.Create(file);
-            fs.Write(test_Buffer_SVO, 0, sizeOctree);
+            fs.Write(test_Buffer_SVO, 0, Convert.ToInt32(sizeOctree));
             fs.Close();
 
             // Cleanup
@@ -249,61 +251,66 @@ namespace Tests.Nigiri.SVO
         public void GetDepthFromBoundaries()
         {
             // Calculate control data
-            int gridWidth = 256;
-            int voxelCount = gridWidth * gridWidth * gridWidth;
-            int treeDepth = SVOHelper.GetDepth(gridWidth);
-            int threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out int[] boundaries);
+            uint gridWidth = 256;
+            uint voxelCount = gridWidth * gridWidth * gridWidth;
+            uint treeDepth = SVOHelper.GetDepth(gridWidth);
+            uint threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out uint[] boundaries);
 
-            // Generate random index
-            uint index = Convert.ToUInt32(UnityEngine.Random.Range(boundaries[5], threadCount));
+            uint testInterval = Convert.ToUInt32(Math.Floor(Convert.ToDouble(threadCount / 50000)));
+            Debug.Log("<Unit Test> Total threads:" + threadCount);
+            Debug.Log("<Unit Test> Sample interval:" + testInterval);
+            Debug.Log("<Unit Test> Testing 50,000 indices...");
 
-            Debug.Log("<Unit Test> (GetDepthFromBoundaries) threadCount:" + threadCount + ", index:" + index);
+            for (uint i = 0; i < 50000; i++)
+            {
+                // Calculate test index
+                uint sampleIndex = i * testInterval;
 
-            // Calculate control
-            uint controlDepth = 99;
-            if (index > 0 && index <= boundaries[0])
-            {
-                controlDepth = 0;
-            }
-            else if (index > boundaries[0] && index <= boundaries[1])
-            {
-                controlDepth = 1;
-            }
-            else if (index > boundaries[1] && index <= boundaries[2])
-            {
-                controlDepth = 2;
-            }
-            else if (index > boundaries[2] && index <= boundaries[3])
-            {
-                controlDepth = 3;
-            }
-            else if (index > boundaries[3] && index <= boundaries[4])
-            {
-                controlDepth = 4;
-            }
-            else if (index > boundaries[4] && index <= boundaries[5])
-            {
-                controlDepth = 5;
-            }
-            else if (index > boundaries[5] && index <= boundaries[6])
-            {
-                controlDepth = 6;
-            }
-            else if (index > boundaries[6] && index <= boundaries[7])
-            {
-                controlDepth = 7;
-            }
-            else if (index == threadCount)
-            {
-                controlDepth = 8;
-            }
+                // Calculate control
+                uint controlDepth = 99;
+                if (sampleIndex >= 0 && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset])
+                {
+                    controlDepth = 0;
+                }
+                else if (sampleIndex > boundaries[0] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 1])
+                {
+                    controlDepth = 1;
+                }
+                else if (sampleIndex > boundaries[1] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 2])
+                {
+                    controlDepth = 2;
+                }
+                else if (sampleIndex > boundaries[2] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 3])
+                {
+                    controlDepth = 3;
+                }
+                else if (sampleIndex > boundaries[3] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 4])
+                {
+                    controlDepth = 4;
+                }
+                else if (sampleIndex > boundaries[4] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 5])
+                {
+                    controlDepth = 5;
+                }
+                else if (sampleIndex > boundaries[5] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 6])
+                {
+                    controlDepth = 6;
+                }
+                else if ((sampleIndex > boundaries[6]) && sampleIndex <= boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + 7])
+                {
+                    controlDepth = 7;
+                }
+                else if (sampleIndex == threadCount)
+                {
+                    controlDepth = 8;
+                }
 
-            // Get sample
-            uint sampleDepth = SVOHelper.GetDepthFromBoundaries(index, boundaries);
+                // Get sample
+                uint sampleDepth = SVOHelper.GetDepthFromBoundaries(sampleIndex, threadCount, boundaries);
 
-
-            Debug.Log("<Unit Test> (GetDepthFromBoundaries) index:" + index + ", controlDepth:" + controlDepth + ", sampleDepth " + sampleDepth);
-            Assert.AreEqual(controlDepth, sampleDepth);
+                // Test result
+                Assert.AreEqual(controlDepth, sampleDepth);
+            }
         }
 
         [Test]
@@ -311,16 +318,16 @@ namespace Tests.Nigiri.SVO
         public void GetThreadCount()
         {
             // Calculate control data
-            int gridWidth = 256;
-            int voxelCount = gridWidth * gridWidth * gridWidth;
-            int treeDepth = SVOHelper.GetDepth(gridWidth);
-            int threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out int[] boundaries);
+            uint gridWidth = 256;
+            uint voxelCount = Convert.ToUInt32(gridWidth * gridWidth * gridWidth);
+            uint treeDepth = SVOHelper.GetDepth(gridWidth);
+            uint threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out uint[] boundaries);
 
             Assert.AreEqual(treeDepth, 8);
             Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
 
             // Control data
-            int[] control = new int[8];
+            uint[] control = new uint[8];
             control[0] = voxelCount / 8;
             control[1] = control[0] + (voxelCount / 8 / 8);
             control[2] = control[1] + (voxelCount / 8 / 8 / 8);
@@ -333,8 +340,8 @@ namespace Tests.Nigiri.SVO
             for (uint i = 0; i < treeDepth; i++)
             {
                 // Test the boundary array
-                Debug.Log("<Unit Test> (GetThreadCount) Control " + i + ":" + control[i] + ", Boundary " + i + ":" + boundaries[i]);
-                Assert.AreEqual(control[i], boundaries[i]);
+                Debug.Log("<Unit Test> (GetThreadCount) Control " + i + ":" + control[i] + ", Boundary " + i + ":" + boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + i]);
+                Assert.AreEqual(control[i], boundaries[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + i]);
             }
         }
 

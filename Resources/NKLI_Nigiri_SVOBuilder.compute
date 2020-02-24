@@ -1,10 +1,10 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
+const uint boundariesOffset = 8;
+
 // Depth of tree
-uniform int treeDepth;
-// Array of depth boundaries
-uniform int boundaries[64];
+//uniform int buffer_PTR_Length;
 
 
 /// <summary>
@@ -55,7 +55,12 @@ struct SVONode
 uniform RWStructuredBuffer<uint> buffer_Counters;
 // [0] Read counter
 // [1] Write counter
-// [2] Depth counter
+// [2] BufferPTR length
+// [3] PTR Read counter
+// [4] PTR Write counter
+// [5] Total threads
+// [6] Tree depth
+// [7] Depth counter
 //
 // Input morton buffer
 uniform RWStructuredBuffer<uint4> buffer_Morton;
@@ -69,7 +74,7 @@ uint isLeaf = 0;
 // Determine if branch or leaf node
 void IsLeaf(uint counter)
 {
-    if (counter < (uint)boundaries[0]) isLeaf = 1;
+    if (counter < buffer_Counters[5]) isLeaf = 1;
     else isLeaf = 0;
 }
 
@@ -130,57 +135,121 @@ uint getOccupancyBitmap(uint counter)
 	}
 }
 
-// Finds current depth from boundary array
+// Returns current depth from boundary array
 uint GetDepthFromBoundaries(uint index)
 {
 	// TODO - Make this efficient (LUT, etc)
-	return 0;
+	
+    for (uint j = boundariesOffset; j < (buffer_Counters[6] + boundariesOffset); j++)
+    {
+        if (index < buffer_Counters[j])
+            return j - boundariesOffset;
+
+    }
+    // Return of 999 designates error
+    return 999;
 }
 
+// Returns length of current depth
+uint GetLengthOfDepth(uint depth)
+{
+    if (depth < buffer_Counters[6])
+        return buffer_Counters[depth + boundariesOffset + 1] - buffer_Counters[depth + boundariesOffset];
+    else
+        return buffer_Counters[5] - buffer_Counters[depth + boundariesOffset];
+}
 
 
 [numthreads(1,1,1)]
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	// Update Unique index
-	uint counter_Read = 1;
+	uint counter_Read;
     InterlockedAdd(buffer_Counters[0], 1, counter_Read);
   
     // Test if leaf node
     IsLeaf(counter_Read);
-
-    // Get occupancyBitmap
-	uint occupancyBitmap = getOccupancyBitmap(counter_Read);
-
-	if (occupancyBitmap != 0)
-	{
-		// Write to PTR buffer
-		buffer_PTR[counter_Read] = counter_Read;
-
-		// Pack SVO node data
-        SVONode indexedNode;
+    
+    uint actualDepth = GetDepthFromBoundaries(counter_Read);
+    uint occupancyBitmap;
+    uint counter_WritePTR;
+    
+    // Pack SVONode data depending on node type
+    SVONode indexedNode;
+    if (isLeaf)
+    {
+        // Get occupancyBitmap
+        occupancyBitmap = getOccupancyBitmap(counter_Read);
+        
+        // Set reference offset
         indexedNode.referenceOffset = counter_Read;
-        indexedNode.PackStruct(occupancyBitmap, 0, buffer_Counters[2], isLeaf);
+    }
+    else
+    {       
+        // Update PTR ring buffer counter
+        uint counter_ReadPTR;
+        InterlockedAdd(buffer_Counters[3], 8, counter_ReadPTR);
+        
+        // Get occupancyBitmap
+        occupancyBitmap = getOccupancyBitmap(counter_ReadPTR);
+        
+        // Set reference offset
+        indexedNode.referenceOffset = counter_ReadPTR;
+        
+        // It end of PTR Buffer reached, then wrap about to the start
+        if (counter_ReadPTR >= buffer_Counters[2])
+        {
+            uint exchange;
+            InterlockedExchange(buffer_Counters[3], 0, exchange);
+        }
+    }
+    indexedNode.PackStruct(occupancyBitmap, 0, actualDepth, isLeaf);
 
+    if (occupancyBitmap != 0)
+    {
 		// Update sparse index
-		uint counter_Write;
+        uint counter_Write;
         InterlockedAdd(buffer_Counters[1], 1, counter_Write);
 
 		// Write to sparse buffer
         buffer_SVO[counter_Write] = indexedNode;
+        
+        // Update PTR ring buffer
+        InterlockedAdd(buffer_Counters[4], 1, counter_WritePTR);
+        
+        // Write to PTR buffer
+        buffer_PTR[counter_WritePTR] = counter_Read;
     }
-	else
-	{
+    else
+    {
+        // Update PTR ring buffer
+        InterlockedAdd(buffer_Counters[4], 1, counter_WritePTR);
+        
 		// Write to PTR buffer
-		//buffer_PTR[counter_Read] = 0;
-	}
+        buffer_PTR[counter_WritePTR] = 0;
+        
+    }
 
+    // It end of PTR Buffer reached, then wrap about to the start
+    if (counter_WritePTR >= buffer_Counters[2])
+    {
+        uint exchange = 0;
+        InterlockedExchange(buffer_Counters[4], 0, exchange);
+    }
+        
+    //if (actualDepth > buffer_Counters[7])
+    //{
+    if (actualDepth != 0)
+    {
+        uint exchange;
+        InterlockedExchange(buffer_Counters[7], actualDepth, exchange);
+    }
 	// Incrment depth counter if boundary index
     //if (buffer_Counters[2] < treeDepth)
     //{
-    if (counter_Read == (int)boundaries[buffer_Counters[2]])
-    {
-        InterlockedAdd(buffer_Counters[2], 1);
-    }
+    //if ((int) counter_Read == (int) boundaries[buffer_Counters[2]])
+    //{
+    //    InterlockedAdd(buffer_Counters[2], 1);
     //}
-}
+    //}
+    }
