@@ -10,6 +10,21 @@ using UnityEngine.TestTools;
 
 namespace Tests.Nigiri.SVO
 {
+    #region Test_SVOBuilder
+    public class Test_SVOBuilder
+    {
+        [Test]
+        public void SVOBuilder()
+        {
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension("Test_Unit-MortonBuffer");
+            TextAsset textAsset = Resources.Load(fileNameWithoutExtension) as TextAsset;
+            byte[] test_MortonBuffer = textAsset.bytes;
+
+            Debug.Log("<Unit Test> Uncompressed size:" + test_MortonBuffer.Length);
+        }
+    }
+    #endregion
+
     #region Test_SVOHelper
     public class Test_SVOHelper
     {
