@@ -102,11 +102,42 @@ namespace Tests.Nigiri.SVO
             }
             Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
 
+            // Out nodes in human readable format
+            string filenameReadable = Application.dataPath + "/Test_Unit-SVO-HumanReadable.txt";
+            Debug.Log("Writing to:" + filenameReadable);
+            using (System.IO.StreamWriter fileOutput = new System.IO.StreamWriter(filenameReadable))
+            {
+
+                //int verifiedCount = 0;
+                for (int i = 0; i < (test_Buffer_SVO.Length / 8); i++)
+                {
+                    byte[] nodeBytes = new byte[8];
+                    byte[] nodeBytes0 = new byte[4];
+                    byte[] nodeBytes1 = new byte[4];
+
+                    Buffer.BlockCopy(test_Buffer_SVO, (i * 8), nodeBytes, 0, 8);
+                    Buffer.BlockCopy(nodeBytes, 0, nodeBytes0, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 4, nodeBytes1, 0, 4);
+
+                    SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytes0, 0), BitConverter.ToUInt32(nodeBytes1, 0));
+                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _depth, out bool isLeaf);
+
+                    string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
+                        " [RL:" + _runlength + "] [Depth:" + _depth + "] [isLeaf:" + isLeaf + "]";
+
+                    fileOutput.WriteLine(line);
+
+                    //Debug.Log(node.referenceOffset);
+                }
+            }
+            //Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
+
+
             // Test that write counter matches detected node
             Assert.AreEqual(test_Buffer_Counters[2], detectedCount);
 
             // Dump file to disk
-            string file = Application.dataPath + "/Tests_SVO.bytes";
+            string file = Application.dataPath + "/Test_Unit-SVO.bytes";
             Debug.Log("Writing to:" + file);
             FileStream fs = System.IO.File.Create(file);
             fs.Write(test_Buffer_SVO, 0, Convert.ToInt32(sizeOctree));
@@ -255,9 +286,8 @@ namespace Tests.Nigiri.SVO
         {
             // Calculate control data
             uint gridWidth = 256;
-            uint voxelCount = gridWidth * gridWidth * gridWidth;
             uint treeDepth = SVOHelper.GetDepth(gridWidth);
-            uint threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out uint[] boundaries);
+            uint threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
 
             uint testInterval = Convert.ToUInt32(Math.Floor(Convert.ToDouble(threadCount / 50000)));
             Debug.Log("<Unit Test> Total threads:" + threadCount);
@@ -324,7 +354,7 @@ namespace Tests.Nigiri.SVO
             uint gridWidth = 256;
             uint voxelCount = Convert.ToUInt32(gridWidth * gridWidth * gridWidth);
             uint treeDepth = SVOHelper.GetDepth(gridWidth);
-            uint threadCount = SVOHelper.GetThreadCount(voxelCount, gridWidth, treeDepth, out uint[] boundaries);
+            uint threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
 
             Assert.AreEqual(treeDepth, 8);
             Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);

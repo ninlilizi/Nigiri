@@ -48,7 +48,7 @@ struct SVONode
 // Synchronisation counter buffer
 uniform RWStructuredBuffer<uint> buffer_Counters;
 // [1] Read counter
-// [2] Write counter
+// [2] Write SVO counter
 // [3] BufferPTR length
 // [4] PTR Read counter
 // [5] PTR Write counter
@@ -78,6 +78,8 @@ uint getOccupancyBitmap(uint counter)
 	switch (isLeaf)
 	{
 	case 1:
+        // We multiple the counter numeber to account for reading
+        //  8 offsets for each write thread
         counter *= 8;
 		uint r =
 			(min(buffer_Morton[counter].r, 1) << 7) |
@@ -143,6 +145,32 @@ uint GetDepthFromBoundaries(uint index, uint bOffset)
     return 999;
 }
 
+// Get run length and reference
+uint GetFirstReference(uint index)
+{
+    uint reference;
+    //if ((occupancy & (1 << 0)) != 0);
+    
+    for (uint j = 0; j < 8; j++)
+    {
+        if (buffer_PTR[index + j] != 0)
+        {
+            if (reference == 0)
+                reference = buffer_PTR[index + j];
+            else
+                reference = min(reference, buffer_PTR[index + j]);
+        }
+    }
+    return reference;
+}
+
+uint GetNumberOfSetBits(uint i)
+{
+    i = i - ((i >> 1) & 0x55555555);
+    i = (i & 0x33333333) + ((i >> 2) & 0x33333333);
+    return (((i + (i >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24;
+}
+
 // Returns length of current depth
 uint GetLengthOfDepth(uint depth)
 {
@@ -157,28 +185,33 @@ uint GetLengthOfDepth(uint depth)
 void CSMain(uint3 id : SV_DispatchThreadID)
 {
 	// Update Unique index
-	uint counter_Read;
+    uint counter_Read;
     InterlockedAdd(buffer_Counters[1], 1, counter_Read);
   
     // Test if leaf node
     IsLeaf(counter_Read);
     
+    // Bucket for InterlockExchange operations
+    uint exchangeOutput = 0;
+    
     uint actualDepth = GetDepthFromBoundaries(counter_Read, buffer_Counters[0]);
     uint occupancyBitmap;
-    uint counter_WritePTR;
     
-    // Pack SVONode data depending on node type
-    SVONode indexedNode;
+    // Output reference to PTR buffer
+    uint outputReference = 0;
+    
+
+            
     if (isLeaf)
     {
         // Get occupancyBitmap
         occupancyBitmap = getOccupancyBitmap(counter_Read);
         
-        // Set reference offset
-        indexedNode.referenceOffset = counter_Read;
+        // Set reference to Morton  offset
+        outputReference = counter_Read;
     }
     else
-    {       
+    {
         // Update PTR ring buffer counter
         uint counter_ReadPTR;
         InterlockedAdd(buffer_Counters[4], 8, counter_ReadPTR);
@@ -186,63 +219,75 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         // Get occupancyBitmap
         occupancyBitmap = getOccupancyBitmap(counter_ReadPTR);
         
-        // Set reference offset
-        indexedNode.referenceOffset = counter_ReadPTR;
-        
+        // Set reference to read offset
+        outputReference = GetFirstReference(counter_ReadPTR);
+
         // It end of PTR Buffer reached, then wrap about to the start
         if (counter_ReadPTR >= buffer_Counters[3])
         {
-            uint exchange;
-            InterlockedExchange(buffer_Counters[4], 0, exchange);
+            InterlockedExchange(buffer_Counters[4], 0, exchangeOutput);
         }
     }
-    indexedNode.PackStruct(occupancyBitmap, 0, actualDepth, isLeaf);
+     
+
 
     if (occupancyBitmap != 0)
     {
+        //Get run length
+        uint runLength = GetNumberOfSetBits(occupancyBitmap);
+        
+        SVONode indexedNode;
+        indexedNode.referenceOffset = outputReference;
+        
+        // Pack data
+        indexedNode.PackStruct(occupancyBitmap, runLength, actualDepth, isLeaf);
+        
 		// Update sparse index
-        uint counter_Write;
-        InterlockedAdd(buffer_Counters[2], 1, counter_Write);
+        uint counter_WriteSVO;
+        InterlockedAdd(buffer_Counters[2], 1, counter_WriteSVO);
 
 		// Write to sparse buffer
-        buffer_SVO[counter_Write] = indexedNode;
+        buffer_SVO[counter_WriteSVO] = indexedNode;
         
-        // Update PTR ring buffer
-        InterlockedAdd(buffer_Counters[5], 1, counter_WritePTR);
+        //SVONode exchangeNode;
+        //InterlockedExchange(buffer_SVO[counter_WriteSVO], indexedNode, exchangeNode);
         
-        // Write to PTR buffer
-        buffer_PTR[counter_WritePTR] = counter_Read;
+        // Set reference to output index
+        outputReference = counter_WriteSVO;
     }
     else
+        outputReference = 0;
+
+    // Update PTR buffer - write
+    uint counter_WritePTR;
+    InterlockedAdd(buffer_Counters[5], 1, counter_WritePTR);
+        
+	// Write to PTR buffer  
+    InterlockedExchange(buffer_PTR[counter_WritePTR], outputReference, exchangeOutput);
+
+
+    uint shorfall = 8 - max(GetLengthOfDepth(actualDepth), 8);
+    if (shorfall != 0)
     {
         // Update PTR ring buffer
-        InterlockedAdd(buffer_Counters[5], 1, counter_WritePTR);
+        //InterlockedAdd(buffer_Counters[5], shorfall, counter_WritePTR);
         
-		// Write to PTR buffer
-        buffer_PTR[counter_WritePTR] = 0;
-        
+        for (uint j = 0; j < shorfall; j++)
+        {
+		    // Write to PTR buffer
+            //buffer_PTR[counter_WritePTR + j] = 0;
+        }
     }
 
     // It end of PTR Buffer reached, then wrap about to the start
-    if (counter_WritePTR >= buffer_Counters[3])
+    if (counter_WritePTR >= buffer_Counters[3] && fmod(counter_WritePTR, 8))
     {
-        uint exchange = 0;
-        InterlockedExchange(buffer_Counters[5], 0, exchange);
+        InterlockedExchange(buffer_Counters[5], 0, exchangeOutput);
     }
         
-    //if (actualDepth > buffer_Counters[7])
-    //{
-    if (actualDepth != 0)
+    // Depth reached is stored for use by test unit
+    if (actualDepth > buffer_Counters[8])
     {
-        uint exchange;
-        InterlockedExchange(buffer_Counters[8], actualDepth, exchange);
+        InterlockedExchange(buffer_Counters[8], actualDepth, exchangeOutput);
     }
-	// Incrment depth counter if boundary index
-    //if (buffer_Counters[2] < treeDepth)
-    //{
-    //if ((int) counter_Read == (int) boundaries[buffer_Counters[2]])
-    //{
-    //    InterlockedAdd(buffer_Counters[2], 1);
-    //}
-    //}
-    }
+}
