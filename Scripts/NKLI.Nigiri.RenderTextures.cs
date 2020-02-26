@@ -18,7 +18,7 @@ namespace NKLI.Nigiri
         // Descriptors
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-        // Textures
+        // Grid Textures
         public RenderTexture voxelGrid1;
         public RenderTexture voxelGrid2;
         public RenderTexture voxelGrid3;
@@ -27,25 +27,35 @@ namespace NKLI.Nigiri
         public RenderTexture voxelGridCascade1;
         public RenderTexture voxelGridCascade2;
 
+        // Render Textures
+        public RenderTexture lightingTexture;
+        public RenderTexture lightingTexture2;
+        public RenderTexture lightingTextureMono;
+        public RenderTexture lightingTexture2Mono;
+        public RenderTexture positionTexture;
+        public RenderTexture depthTexture;
+        public RenderTexture blur;
+        public RenderTexture gi;
+
         /// <summary>
         /// Creates all textures
         /// </summary>
-        public void Create(int resolution)
+        public void Create(int resolution, Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
         {
-            // Attempt to release any existing textures
-            DisposeTextures(false);
-
             // Create voxel grid textures
             CreateVoxelGrid(resolution);
 
             // Create render textures
+            CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
         }
 
         /// <summary>
-        /// create voxel grid textures
+        /// Create voxel grid textures
         /// </summary>
         private void CreateVoxelGrid(int resolution)
         {
+            // First release any existing
+            DisposeGridTextures(false);
 
             voxelGridDescriptorFloat4 = new RenderTextureDescriptor();
             voxelGridDescriptorFloat4.bindMS = false;
@@ -97,10 +107,95 @@ namespace NKLI.Nigiri
         }
 
         /// <summary>
+        /// Create render textures
+        /// </summary>
+        public void CreateRenderTextures(Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
+        {
+            // First release any existing
+            DisposeRenderTextures(false);
+
+            if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
+
+            if (lightingTexture != null) lightingTexture.Release();
+            if (lightingTexture2 != null) lightingTexture2.Release();
+            if (depthTexture != null) depthTexture.Release();
+            if (gi != null) gi.Release();
+            if (blur != null) blur.Release();
+
+            lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+            else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
+            gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+            blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
+            lightingTexture.filterMode = FilterMode.Bilinear;
+            lightingTexture2.filterMode = FilterMode.Bilinear;
+
+            depthTexture.filterMode = FilterMode.Bilinear;
+            blur.filterMode = FilterMode.Bilinear;
+            gi.filterMode = FilterMode.Bilinear;
+
+            if (localCam.stereoEnabled)
+            {
+                //We cut the injection images in half to avoid duplicate work in stereo
+                lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+                lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+
+                lightingTextureMono.vrUsage = VRTextureUsage.None;
+                lightingTexture2Mono.vrUsage = VRTextureUsage.None;
+                positionTexture.vrUsage = VRTextureUsage.None; // We disable this because it needs to not be stereo so the voxer does'nt do double the work
+                lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
+                lightingTexture2.vrUsage = VRTextureUsage.TwoEyes;
+                blur.vrUsage = VRTextureUsage.TwoEyes;
+                gi.vrUsage = VRTextureUsage.TwoEyes;
+                depthTexture.vrUsage = VRTextureUsage.TwoEyes; // Might cause regression with voxelization
+                lightingTextureMono.Create();
+                lightingTexture2Mono.Create();
+            }
+
+            lightingTexture.Create();
+            lightingTexture2.Create();
+            positionTexture.Create();
+            depthTexture.Create();
+            blur.Create();
+            gi.Create();
+        }
+
+        /// <summary>
         /// Disposes all textures, optionally also Destroys
         /// </summary>
         /// <param name="destroy"></param>
         public void DisposeTextures(bool destroy)
+        {
+            DisposeRenderTextures(destroy);
+            DisposeGridTextures(destroy);
+        }
+
+        /// <summary>
+        /// Disposes all render textures, optionally also Destroys
+        /// </summary>
+        /// <param name="destroy"></param>
+        public void DisposeRenderTextures(bool destroy)
+        {
+            // Dispose render textures
+            DisposeTextureRef(ref lightingTexture, destroy);
+            DisposeTextureRef(ref lightingTexture2, destroy);
+            DisposeTextureRef(ref lightingTextureMono, destroy);
+            DisposeTextureRef(ref lightingTexture2Mono, destroy);
+            DisposeTextureRef(ref positionTexture, destroy);
+            DisposeTextureRef(ref depthTexture, destroy);
+            DisposeTextureRef(ref gi, destroy);
+            DisposeTextureRef(ref blur, destroy);
+
+        }
+
+        /// <summary>
+        /// Disposes all grid textures, optionally also Destroys
+        /// </summary>
+        /// <param name="destroy"></param>
+        public void DisposeGridTextures(bool destroy)
         {
             // Dispose voxel grid textures
             DisposeTextureRef(ref voxelGridCascade1, destroy);
@@ -110,8 +205,6 @@ namespace NKLI.Nigiri
             DisposeTextureRef(ref voxelGrid3, destroy);
             DisposeTextureRef(ref voxelGrid4, destroy);
             DisposeTextureRef(ref voxelGrid5, destroy);
-
-            // Dispose render textures
         }
 
         /// <summary>

@@ -379,17 +379,7 @@ public class Nigiri : MonoBehaviour {
 
 
     //[Header("Render Textures")]
-    public static NKLI.Nigiri.RenderTextures renderTextures;
-
-    public RenderTexture lightingTexture;
-    public RenderTexture lightingTexture2;
-    public RenderTexture lightingTextureMono;
-    public RenderTexture lightingTexture2Mono;
-    public RenderTexture positionTexture;
-    public RenderTexture depthTexture;
-
-    private RenderTexture blur;
-    private RenderTexture gi;
+    public static RenderTextures renderTextures;
 
     private ComputeBuffer voxelUpdateSampleCount;
     private static ComputeBuffer voxelUpdateMaskBuffer;
@@ -454,8 +444,6 @@ public class Nigiri : MonoBehaviour {
 
         _preLightPass = new CommandBuffer();
         _preLightPass.name = "<Nigiri> Volumetric Prepass";
-
-        createRenderTextures();
 
         CreateComputeBuffers();
         ChangeResolution();
@@ -738,13 +726,12 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate render textures
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
-        renderTextures.Create(highestVoxelResolution);
+        renderTextures.Create(highestVoxelResolution, localCam, injectionTextureResolution, subsamplingRatio);
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
         SVO.Create();
 
-        createRenderTextures();
         CreateComputeBuffers();
 
         Setup();
@@ -810,59 +797,6 @@ public class Nigiri : MonoBehaviour {
     {
         Setup();
         UpdateLUT();
-    }
-
-
-
-    private void createRenderTextures()
-    {
-        if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
-
-        if (lightingTexture != null) lightingTexture.Release();
-        if (lightingTexture2 != null) lightingTexture2.Release();
-        if (depthTexture != null) depthTexture.Release();
-        if (gi != null) gi.Release();
-        if (blur != null) blur.Release();
-
-        lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-        if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
-        else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
-        gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
-        blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
-        lightingTexture.filterMode = FilterMode.Bilinear;
-        lightingTexture2.filterMode = FilterMode.Bilinear;
-
-        depthTexture.filterMode = FilterMode.Bilinear;
-        blur.filterMode = FilterMode.Bilinear;
-        gi.filterMode = FilterMode.Bilinear;
-
-        if (localCam.stereoEnabled)
-        {
-            //We cut the injection images in half to avoid duplicate work in stereo
-            lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-            lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-
-            lightingTextureMono.vrUsage = VRTextureUsage.None;
-            lightingTexture2Mono.vrUsage = VRTextureUsage.None;
-            positionTexture.vrUsage = VRTextureUsage.None; // We disable this because it needs to not be stereo so the voxer does'nt do double the work
-            lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
-            lightingTexture2.vrUsage = VRTextureUsage.TwoEyes;
-            blur.vrUsage = VRTextureUsage.TwoEyes;
-            gi.vrUsage = VRTextureUsage.TwoEyes;
-            depthTexture.vrUsage = VRTextureUsage.TwoEyes; // Might cause regression with voxelization
-            lightingTextureMono.Create();
-            lightingTexture2Mono.Create();
-        }
-
-        lightingTexture.Create();
-        lightingTexture2.Create();
-        positionTexture.Create();
-        depthTexture.Create();
-        blur.Create();
-        gi.Create();
     }
 
     private void CreateComputeBuffers()
@@ -947,8 +881,8 @@ public class Nigiri : MonoBehaviour {
                     break;
             }
             nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
-            nigiri_VoxelMask.SetTexture(0, "positionTexture", positionTexture);
-            nigiri_VoxelMask.Dispatch(0, lightingTexture.width / 16, lightingTexture.height / 16, 1);
+            nigiri_VoxelMask.SetTexture(0, "positionTexture", renderTextures.positionTexture);
+            nigiri_VoxelMask.Dispatch(0, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
             Graphics.ClearRandomWriteTargets();
 
             ///END Update Mask
@@ -976,15 +910,15 @@ public class Nigiri : MonoBehaviour {
                                
                 if (localCam.stereoEnabled)
                 {
-                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTextureMono);
-                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2Mono);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", renderTextures.lightingTextureMono);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", renderTextures.lightingTexture2Mono);
                 }
                 else
                 {
-                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", lightingTexture);
-                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", lightingTexture2);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture", renderTextures.lightingTexture);
+                    nigiri_VoxelEntry.SetTexture(kernelHandle, "lightingTexture2", renderTextures.lightingTexture2);
                 }
-                nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", positionTexture);
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "positionTexture", renderTextures.positionTexture);
                 nigiri_VoxelEntry.SetInt("nearestNeighbourPropagation", neighbourPropagation ? 1 : 0);
                 nigiri_VoxelEntry.Dispatch(kernelHandle, (int)maskcount / 16, 1, 1);
                 renderTimes.PrimaryVoxelisationStopwatch.Stop();
@@ -1093,16 +1027,16 @@ public class Nigiri : MonoBehaviour {
             UpdateForceGI();
         }
 
+        Camera localCam = GetComponent<Camera>();
+
         if ((injectionTextureResolution.x != (int)source.width / subsamplingRatio) || (injectionTextureResolution.y != (int)source.height / subsamplingRatio))
         {
             Debug.Log("<Nigiri> Resizing render textures");
             injectionTextureResolution.x = (int)source.width / subsamplingRatio;
             injectionTextureResolution.y = (int)source.height / subsamplingRatio;
-            createRenderTextures();
+            renderTextures.CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
             CreateComputeBuffers();
         }
-
-        Camera localCam = GetComponent<Camera>();
 
         //Fix stereo rendering matrix
         if (localCam.stereoEnabled)
@@ -1212,30 +1146,30 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetFloat("NearLightGain", NearLightGain);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
-        Graphics.Blit(source, lightingTexture);
-        Graphics.Blit(null, lightingTexture2, blitGBuffer0Material);
+        Graphics.Blit(source, renderTextures.lightingTexture);
+        Graphics.Blit(null, renderTextures.lightingTexture2, blitGBuffer0Material);
 
         if (localCam.stereoEnabled)
         {
-            Graphics.Blit(lightingTexture, lightingTextureMono, stereo2MonoMaterial);
-            Graphics.Blit(lightingTexture2, lightingTexture2Mono, stereo2MonoMaterial);
+            Graphics.Blit(renderTextures.lightingTexture, renderTextures.lightingTextureMono, stereo2MonoMaterial);
+            Graphics.Blit(renderTextures.lightingTexture2, renderTextures.lightingTexture2Mono, stereo2MonoMaterial);
         }
 
         //We send half the stereo eyeDistance to the depth blit. To offset correct coordinates in stereo clamping
         depthMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
         depthMaterial.SetInt("debug", visualizeDepth ? 1 : 0);
-        Graphics.Blit(null, depthTexture, depthMaterial);
+        Graphics.Blit(null, renderTextures.depthTexture, depthMaterial);
 
         //We only want to retrieve a single eye for the positional texture if we're in stereo
         tracerMaterial.SetInt("Stereo2Mono", localCam.stereoEnabled ? 1 : 0);
-        Graphics.Blit(source, positionTexture, tracerMaterial, 0);
+        Graphics.Blit(source, renderTextures.positionTexture, tracerMaterial, 0);
         tracerMaterial.SetInt("Stereo2Mono", 0);
 
         tracerMaterial.SetVector("gridOffset", gridOffset);
 
         if (visualizeDepth)
         {
-            Graphics.Blit(depthTexture, destination);
+            Graphics.Blit(renderTextures.depthTexture, destination);
             return;
         }
 
@@ -1291,7 +1225,7 @@ public class Nigiri : MonoBehaviour {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
             Graphics.SetRandomWriteTarget(1, voxelUpdateSampleCountBuffer, true);
-            Graphics.Blit (source, gi, tracerMaterial, 2);
+            Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
             renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
@@ -1299,8 +1233,8 @@ public class Nigiri : MonoBehaviour {
 
             // FXAA
             renderTimes.FXAAStopwatch.Start();
-            Graphics.Blit(gi, blur, fxaaMaterial, 0);
-            Graphics.Blit(blur, gi, fxaaMaterial, 1);
+            Graphics.Blit(renderTextures.gi, renderTextures.blur, fxaaMaterial, 0);
+            Graphics.Blit(renderTextures.blur, renderTextures.gi, fxaaMaterial, 1);
             renderTimes.FXAAStopwatch.Stop();
             renderTimes.RenderFXAA = renderTimes.FXAAStopwatch.Elapsed.TotalMilliseconds;
             renderTimes.FXAAStopwatch.Reset();
@@ -1378,7 +1312,7 @@ public class Nigiri : MonoBehaviour {
                 RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
                 temp.filterMode = FilterMode.Bilinear;
                 renderTimes.ToneMappingStopwatch.Start();
-                Graphics.Blit(gi, temp, _colorMaterial);
+                Graphics.Blit(renderTextures.gi, temp, _colorMaterial);
                 renderTimes.ToneMappingStopwatch.Stop();
 
                 _blitAddMaterial.SetTexture("_Source", temp);
@@ -1391,7 +1325,7 @@ public class Nigiri : MonoBehaviour {
         else
         {
             renderTimes.ToneMappingStopwatch.Start();
-            Graphics.Blit(gi, destination, _colorMaterial);
+            Graphics.Blit(renderTextures.gi, destination, _colorMaterial);
             renderTimes.ToneMappingStopwatch.Stop();
         }
         renderTimes.RenderToneMapping = renderTimes.ToneMappingStopwatch.Elapsed.TotalMilliseconds;
@@ -1409,16 +1343,7 @@ public class Nigiri : MonoBehaviour {
     private void OnDisable()
     {
         if (_renderCommand != null) UnregisterCommandBuffers();
-
-        if (lightingTexture != null) lightingTexture.Release();
-        if (lightingTexture2 != null) lightingTexture2.Release();
-        if (lightingTextureMono != null) lightingTextureMono.Release();
-        if (lightingTexture2Mono != null) lightingTexture2Mono.Release();
-        if (positionTexture != null) positionTexture.Release();
-        if (depthTexture != null) depthTexture.Release();
-        if (gi != null) gi.Release();
-        if (blur != null) blur.Release();
-             
+            
         if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
@@ -1564,23 +1489,23 @@ public class Nigiri : MonoBehaviour {
             }
             long v = 0;
 
-            if (lightingTexture != null)
-                v += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
+            if (renderTextures.lightingTexture != null)
+                v += renderTextures.lightingTexture.width * renderTextures.lightingTexture.height * bitValue(renderTextures.lightingTexture);
 
-            if (lightingTextureMono != null)
-                v += lightingTextureMono.width * lightingTextureMono.height * bitValue(lightingTextureMono); ;
+            if (renderTextures.lightingTextureMono != null)
+                v += renderTextures.lightingTextureMono.width * renderTextures.lightingTextureMono.height * bitValue(renderTextures.lightingTextureMono); ;
 
-            if (positionTexture != null)
-                v += positionTexture.width * positionTexture.height * bitValue(positionTexture);
+            if (renderTextures.positionTexture != null)
+                v += renderTextures.positionTexture.width * renderTextures.positionTexture.height * bitValue(renderTextures.positionTexture);
 
-            if (depthTexture != null)
-                v += depthTexture.width * depthTexture.height * depthTexture.volumeDepth * bitValue(depthTexture);
+            if (renderTextures.depthTexture != null)
+                v += renderTextures.depthTexture.width * renderTextures.depthTexture.height * renderTextures.depthTexture.volumeDepth * bitValue(renderTextures.depthTexture);
 
-            if (gi != null)
-                v += gi.width * gi.height * bitValue(gi);
+            if (renderTextures.gi != null)
+                v += renderTextures.gi.width * renderTextures.gi.height * bitValue(renderTextures.gi);
 
-            if (blur != null)
-                v += blur.width * blur.height * bitValue(blur);
+            if (renderTextures.blur != null)
+                v += renderTextures.blur.width * renderTextures.blur.height * bitValue(renderTextures.blur);
 
             if (renderTextures.voxelGrid1 != null)
                 v += renderTextures.voxelGrid1.width * renderTextures.voxelGrid1.height * renderTextures.voxelGrid1.volumeDepth * bitValue(renderTextures.voxelGrid1);
