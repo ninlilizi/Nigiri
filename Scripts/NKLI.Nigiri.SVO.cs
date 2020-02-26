@@ -9,13 +9,17 @@ namespace NKLI.Nigiri.SVO
     /// Builds static sparse voxel octree from Morton ordered buffer
     /// </summary>
     #region Spase voxel builder
-    public class SVOBuilder
+    public class Tree
     {
         // Read-only properties
-        public uint ThreadCount { get; private set; }
-        public uint VoxelCount { get; private set; }
-        public uint NodeCount { get; private set; }
-        public uint TreeDepth { get; private set; }
+        //public uint ThreadCount { get; private set; }
+        //public uint VoxelCount { get; private set; }
+        //public uint NodeCount { get; private set; }
+        //public uint TreeDepth { get; private set; }
+        public uint[] Counters { get; private set; }
+        // [0] Max depth
+        // [1] Max split queue items
+        // [2] Current split queue items
 
         // Offset into counters buffer that boundary offsets begin
         public static readonly int boundariesOffset = 9;
@@ -24,59 +28,79 @@ namespace NKLI.Nigiri.SVO
         // Read-only buffer properties
         public ComputeBuffer Buffer_SVO { get; private set; }
         public ComputeBuffer Buffer_Counters { get; private set; }
+        public ComputeBuffer Buffer_SplitQueue { get; private set; }
+
+        // static consts
+        public static readonly uint maxDepth = 8;
+        public static readonly int maxNodes = 128;
+        public static readonly uint split_QueueLength = 10;
 
         // Compute
         ComputeShader shader_SVOBuilder;
 
         // Constructor
-        public SVOBuilder(ComputeBuffer buffer_Morton, uint occupiedVoxels, uint gridWidth)
+        public Tree()
         {
             // Load shader
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
 
             // Calculate depth
-            TreeDepth = SVOHelper.GetDepth(gridWidth);
+            //TreeDepth = SVOHelper.GetDepth(gridWidth);
 
             // Calculate threadcount and depth index boundaries
-            ThreadCount = SVOHelper.GetThreadCount(gridWidth, TreeDepth, out uint[] Counters_boundaries);
-            NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
-            int dispatchCount = Convert.ToInt32(ThreadCount);
-            int maxVoxels = Convert.ToInt32(gridWidth * gridWidth * gridWidth);
+            //ThreadCount = SVOHelper.GetThreadCount(gridWidth, TreeDepth, out uint[] Counters_boundaries);
+            //NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth);
+            //int dispatchCount = Convert.ToInt32(ThreadCount);
+            //int maxVoxels = Convert.ToInt32(gridWidth * gridWidth * gridWidth);
 
             // Assign instance variables
-            VoxelCount = occupiedVoxels;
-            NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth) * 2;
+            //VoxelCount = occupiedVoxels;
+            //NodeCount = SVOHelper.GetNodeCount(occupiedVoxels, gridWidth, TreeDepth) * 2;
 
 
             // Temporary PTR storage buffer
-            ComputeBuffer buffer_PTR = new ComputeBuffer(maxVoxels * 2, sizeof(uint), ComputeBufferType.Default);
+            //ComputeBuffer buffer_PTR = new ComputeBuffer(maxVoxels * 2, sizeof(uint), ComputeBufferType.Default);
+
+            // Output buffer to contain final SVO
+            Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 8, ComputeBufferType.Default);
 
             // Synchronisation counter buffer
-            Buffer_Counters = new ComputeBuffer(Counters_boundaries.Length, sizeof(uint), ComputeBufferType.Default);
+            Buffer_Counters = new ComputeBuffer(boundariesOffset, sizeof(uint), ComputeBufferType.Default);
                 
-            // Output buffer to contain final SVO
-            Buffer_SVO = new ComputeBuffer(Convert.ToInt32(NodeCount), sizeof(uint) * 2, ComputeBufferType.Default);
+            // Temporary PTR storage buffer
+            Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(split_QueueLength), sizeof(uint), ComputeBufferType.Default);
 
             // Set buffer variables
-            Counters_boundaries[0] = boundariesOffsetU;
-            Counters_boundaries[3] = (uint)((Math.Ceiling(buffer_PTR.count / 8.0d) * 8) / 8) - 8;
-            Counters_boundaries[6] = ThreadCount;
-            Counters_boundaries[7] = TreeDepth;
+            Counters = new uint[boundariesOffset];
+            Counters[0] = maxDepth;
+            Counters[1] = split_QueueLength;
+            //Counters_boundaries[0] = boundariesOffsetU;
+            //Counters_boundaries[3] = (uint)((Math.Ceiling(buffer_PTR.count / 8.0d) * 8) / 8) - 8;
+            //Counters_boundaries[6] = ThreadCount;
+            //Counters_boundaries[7] = TreeDepth;
 
             // Send buffer to GPU
-            Buffer_Counters.SetData(Counters_boundaries);
+            Buffer_Counters.SetData(Counters);
+
+            // Send root node to GPU
+            SVONode rootNode = new SVONode(0, 0);
+            List<SVONode> nodeList = new List<SVONode>(1)
+            {
+                rootNode
+            };
+            Buffer_SVO.SetData(nodeList, 0, 0, 1);
 
             // Assign to compute
             shader_SVOBuilder.SetBuffer(0, "buffer_Counters", Buffer_Counters);
-            shader_SVOBuilder.SetBuffer(0, "buffer_Morton", buffer_Morton);
-            shader_SVOBuilder.SetBuffer(0, "buffer_PTR", buffer_PTR);
+            //shader_SVOBuilder.SetBuffer(0, "buffer_Morton", buffer_Morton);
+            //shader_SVOBuilder.SetBuffer(0, "buffer_PTR", buffer_PTR);
             shader_SVOBuilder.SetBuffer(0, "buffer_SVO", Buffer_SVO);            
 
             // Dispatch compute
-            shader_SVOBuilder.Dispatch(0, dispatchCount, 1, 1);
+            //shader_SVOBuilder.Dispatch(0, dispatchCount, 1, 1);
 
             // Cleanup
-            buffer_PTR.Dispose();
+            //buffer_PTR.Dispose();
         }
 
         // Syncronous 'async' readback for Unit Testing.
@@ -94,6 +118,7 @@ namespace NKLI.Nigiri.SVO
         {
             // We try to explicity dispose these objects as not doing can result
             //  in leaks or uneven performance further down the pipeline.
+            Buffer_SplitQueue.Dispose();
             Buffer_Counters.Dispose();
             Buffer_SVO.Dispose();
         }
@@ -103,21 +128,26 @@ namespace NKLI.Nigiri.SVO
 
     /// <summary>
     /// Packed octree node data format
+    /// Length (32B / 256b)
     /// </summary>
     #region Octree Node struct
-    public struct SVONode
+    public struct SVONode 
     {
-        // Linked reference offset or coordinate
-        // (isLeaf)  Morton/Buffer, target coordinate/Offset, 32b
-        // (!isLeaf) This buffer offset, 32b
+        // Linked reference offset or coordinate (32b)
         public uint referenceOffset;
 
-        // Packed payload
+        // Packed payload (32b)
         public uint packedBitfield;
 
+        // Colour value (128b)
+        public uint value_R;
+        public uint value_G;
+        public uint value_B;
+        public uint value_A;
+
         // When used in shader, pad to fit 128 bit cache alignment
-        //readonly uint pad0;
-        //readonly uint pad1;
+        readonly uint pad0;
+        readonly uint pad1;
         // In cases of 64 bit payloads, this is unnecesary
 
         // Constructor - Packed
@@ -125,6 +155,16 @@ namespace NKLI.Nigiri.SVO
         {
             packedBitfield = _packedBitfield;
             referenceOffset = _referenceOffset;
+
+            // Colour
+            value_R = 0;
+            value_G = 0;
+            value_B = 0;
+            value_A = 0;
+
+            // Padding
+            pad0 = 0;
+            pad1 = 0;
         }
 
         // Constructor - UnPacked
@@ -132,6 +172,18 @@ namespace NKLI.Nigiri.SVO
         {
             packedBitfield = 0;
             referenceOffset = _referenceOffset;
+
+            // Colour
+            value_R = 0;
+            value_G = 0;
+            value_B = 0;
+            value_A = 0;
+
+            // Padding
+            pad0 = 0;
+            pad1 = 0;
+
+            // Pack values
             PackStruct(bitFieldOccupancy, runLength, depth, isLeaf);
         }
 
@@ -186,10 +238,10 @@ namespace NKLI.Nigiri.SVO
         public static uint GetDepthFromBoundaries(uint index, uint treeDepth, uint[] boundaries)
         {
             // TODO - Make this efficient (LUT, etc)
-            for (uint j = SVOBuilder.boundariesOffsetU; j < (treeDepth + SVOBuilder.boundariesOffsetU); j++)
+            for (uint j = Tree.boundariesOffsetU; j < (treeDepth + Tree.boundariesOffsetU); j++)
             {
                 if (index < boundaries[j])
-                    return j - SVOBuilder.boundariesOffsetU;
+                    return j - Tree.boundariesOffsetU;
 
             }
             // Return of 999 designates error
@@ -200,12 +252,12 @@ namespace NKLI.Nigiri.SVO
         public static uint GetThreadCount(uint gridWidth, uint treeDepth, out uint[] counter_Boundaries)
         {
             // Get depth of tree
-            counter_Boundaries = new uint[SVOBuilder.boundariesOffset + treeDepth];
+            counter_Boundaries = new uint[Tree.boundariesOffset + treeDepth];
 
             // Start at max depth -1
-            int cycles = SVOBuilder.boundariesOffset + 1;
+            int cycles = Tree.boundariesOffset + 1;
             // max cycles to run
-            int maxCycles = Convert.ToInt32(SVOBuilder.boundariesOffset + treeDepth);
+            int maxCycles = Convert.ToInt32(Tree.boundariesOffset + treeDepth);
             // Starting value is thick buffer size for leaf nodes
             uint threadCount = (gridWidth * gridWidth * gridWidth) / 8;
 
@@ -213,7 +265,7 @@ namespace NKLI.Nigiri.SVO
             uint nodeCount = threadCount;
 
             // First boundary is thick buffer size
-            counter_Boundaries[SVOBuilder.boundariesOffset] = threadCount;
+            counter_Boundaries[Tree.boundariesOffset] = threadCount;
 
             // Do the work
             while (maxCycles > cycles)

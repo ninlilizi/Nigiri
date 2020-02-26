@@ -1,5 +1,6 @@
 #pragma kernel CSMain0
 #include "Nigiri_MortonOrder3D.cginc"
+#include "NKLI_Nigiri_SVONode.cginc"
 
 RWTexture3D<float4> voxelGrid;
 
@@ -9,6 +10,13 @@ uniform RWStructuredBuffer<uint>	_renderCountBuffer;
 uniform RWStructuredBuffer<uint4>	_sampleBuffer;
 // Output sample counts from voxelizer
 uniform RWStructuredBuffer<uint>	_sampleCountBuffer;
+// SVO Counters
+uniform RWStructuredBuffer<uint> _SVO_Counters;
+// SVO Queue of nodes to split
+uniform RWStructuredBuffer<uint> _SVO_SplitQueue;
+// SVO
+uniform RWStructuredBuffer<SVONode> _SVO;
+
 
 cbuffer cbSettings : register(b0)
 {
@@ -41,6 +49,71 @@ void CSMain0(uint3 id : SV_DispatchThreadID)
 		// Update Occupied voxel Count
 		uint occupiedCounter;
 		InterlockedAdd(_renderCountBuffer[6], 1, occupiedCounter);
+        
+        //
+        // Traverse tree
+        uint maxWidth = 256;
+        uint maxDepth = _SVO_Counters[0];
+        uint currentDepth = 0;
+        uint currentWidth = 1;
+        uint done = 0;
+        uint offset = 0;
+        while (done != 1)
+        {
+            SVONode node = _SVO[offset];
+            uint bitfieldOccupancy;
+            uint runLength;
+            uint depth;
+            uint isLeaf;
+            node.UnPackStruct(bitfieldOccupancy, runLength, depth, isLeaf);
+            
+            if (currentDepth = maxDepth)
+            {
+                node.value_R = newColour.r;
+                node.value_G = newColour.g;
+                node.value_B = newColour.b;
+                node.value_A = newColour.a;
+                
+                _SVO[offset] = node;
+                
+                done = 1;
+            }
+            else
+            {
+            
+                if (bitfieldOccupancy != 0)
+                {
+                    currentDepth++;
+                
+                    uint nextIndex = 0;
+                               
+                    uint halfWidth = maxWidth / (currentDepth * 2);
+                    if (index3D.x > halfWidth)
+                        nextIndex = nextIndex | (1);
+                    if (index3D.y > halfWidth)
+                        nextIndex = nextIndex | (1 << 1);
+                    if (index3D.z > halfWidth)
+                        nextIndex = nextIndex | (1 << 2);
+
+                    offset = nextIndex;
+                }
+                else
+                {
+                // Update Unique index
+                    uint counter_SplitQueue;
+                    InterlockedAdd(_SVO_Counters[2], 1, counter_SplitQueue);
+                
+                    if (counter_SplitQueue < _SVO_Counters[1])
+                    {
+                        _SVO_SplitQueue[counter_SplitQueue] = offset;
+                    }
+                
+                    done = 1;
+                }
+            }
+        }
+        //
+        //
 	}
 	else// if (SampleCountBuffer[counter].y > 0)
 	{

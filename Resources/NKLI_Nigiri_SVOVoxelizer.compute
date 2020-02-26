@@ -1,0 +1,50 @@
+﻿/// <summary>
+/// NKLI     : Nigiri - SVO Voxelization COMPUTE
+/// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
+/// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
+/// </summary>
+#pragma kernel CSMain
+
+// Include
+#include "NKLI_Nigiri_SVOVoxelizer.cginc"
+#include "Nigiri_MortonOrder2D.cginc"
+
+// List of ordered pixels to sample
+uniform ConsumeStructuredBuffer<uint> _maskBuffer;
+
+// SVO
+uniform RWStructuredBuffer<SVONode> _SVO;
+// SVO Counters
+uniform RWStructuredBuffer<uint> _SVO_Counters;
+// SVO Queue of nodes to split
+uniform RWStructuredBuffer<uint> _SVO_SplitQueue;
+
+// Max SVO depth
+uniform const uint _maxDepth;
+
+// Sample inputs
+uniform const float _emissiveIntensity;
+uniform const float _shadowStrength;
+uniform const float _occlusionGain;
+uniform const float _giAreaSize;
+
+// Sample input textures
+uniform Texture2D<float4> positionTexture;
+uniform Texture2D<float4> lightingTexture;
+uniform Texture2D<float4> lightingTexture2;
+
+/// <summary>
+/// Encodes samples into tree
+/// </summary>
+[numthreads(16, 1, 1)]
+void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
+{
+    // Get morton ordered read index from mask buffer
+    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
+   
+    // Traverse the SVO, splitting and writing the sampled colour as required
+    SplitInsertSVO(
+        _SVO, _SVO_SplitQueue, _SVO_Counters, positionTexture[orderedCoord],
+        GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain),
+        _maxDepth, _giAreaSize);
+}

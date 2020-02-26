@@ -1,8 +1,11 @@
 // Morder Order codec functions. 
 // Derived from https://github.com/Forceflow/libmorton/
+// Licence: MIT
 
+/// <summary>
 /// Morton 3D Magicbits Encode
-// Usage: uint = morton3D_Magicbits_Encode(uint X, uint Y, uint Z)
+/// Usage: uint = morton3D_Magicbits_Encode(uint X, uint Y, uint Z)
+/// </summary>
 inline uint morton3D_SplitBy3bits(uint a) 
 {
 	uint x = (a) & 0x000003ff;
@@ -16,10 +19,10 @@ inline uint morton3D_Magicbits_Encode(uint x, uint y, uint z) {
 	return morton3D_SplitBy3bits(x) | (morton3D_SplitBy3bits(y) << 1) | (morton3D_SplitBy3bits(z) << 2);
 }
 
-
-
+/// <summary>
 /// Morton 3D Magicbits Decode
-// Usage: uint3 = morton3D_Magicbits_Decode(uint MortonIndex)
+/// Usage: uint3 = morton3D_Magicbits_Decode(uint MortonIndex)
+/// </summary>
 inline uint morton3D_GetThirdBits(uint m)
 {
 	uint x = m & 0x9249249;

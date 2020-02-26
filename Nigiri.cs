@@ -403,6 +403,9 @@ public class Nigiri : MonoBehaviour {
     private static ComputeBuffer voxelUpdateSampleBuffer;
     private static ComputeBuffer voxelUpdateSampleCountBuffer;
 
+    // SVO
+    NKLI.Nigiri.SVO.Tree SVO;
+
     private int tracedTexture1UpdateCount;
 
     private float lengthOfCone = 0.0f;
@@ -490,6 +493,9 @@ public class Nigiri : MonoBehaviour {
 
         LoadNoise3dTexture();
         GenerateDitherTexture();
+
+        // SVO
+        SVO = new NKLI.Nigiri.SVO.Tree();
 
         // Create performance stopwatches.
         renderTimes.UpdateStopwatch = new System.Diagnostics.Stopwatch();
@@ -958,6 +964,9 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalBuffer("_maskBuffer", voxelUpdateMaskBuffer);
         Shader.SetGlobalBuffer("_sampleBuffer", voxelUpdateSampleBuffer);
         Shader.SetGlobalBuffer("_sampleCountBuffer", voxelUpdateSampleCountBuffer);
+        Shader.SetGlobalBuffer("_SVO_SplitQueue", SVO.Buffer_SplitQueue);
+        Shader.SetGlobalBuffer("_SVO_Counters", SVO.Buffer_Counters);
+        Shader.SetGlobalBuffer("_SVO", SVO.Buffer_SVO);
 
         // Secondary Voxelisation
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
@@ -1481,6 +1490,9 @@ public class Nigiri : MonoBehaviour {
         if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
 
         if (RenderCountBuffer != null) RenderCountBuffer.Release();
+
+        // SVO
+        if (SVO != null) SVO.Dispose();
 
         //Volumetric Lighting
         //_camera.RemoveAllCommandBuffers();

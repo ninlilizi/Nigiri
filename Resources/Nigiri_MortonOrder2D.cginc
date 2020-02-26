@@ -1,8 +1,12 @@
 // Morder Order codec functions. 
 // Derived from https://github.com/Forceflow/libmorton/
+// Licence: MIT
 
+
+/// <summary>
 /// Morton 2D Magicbit Encode
-// Usage: uint = morton2D_MagicBits_Encode(uint X, uint Y)
+/// Usage: uint = morton2D_MagicBits_Encode(uint X, uint Y)
+/// </summary>
 inline uint morton2D_SplitBy2Bits(uint x) 
 {
 	x = (x | x << 16) & 0x0000FFFF;
@@ -17,8 +21,10 @@ inline uint morton2D_MagicBits_Encode(uint x, uint y)
 	return morton2D_SplitBy2Bits(x) | (morton2D_SplitBy2Bits(y) << 1);
 }
 
+/// <summary>
 /// Morton 2D Magicbit Decode
-// Usage: uint2 = morton2D_MagicBits_Decode(uint MortonIndex)
+/// Usage: uint2 = morton2D_MagicBits_Decode(uint MortonIndex)
+/// </summary>
 static inline uint morton2D_GetSecondBits(uint morton) {
 	uint x = morton & 0x55555555;
 	x = (x ^ (x >> 1)) & 0x33333333;
