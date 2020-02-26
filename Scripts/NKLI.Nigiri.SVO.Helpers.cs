@@ -28,7 +28,13 @@ namespace NKLI.Nigiri.SVO
 
         }
 
-        // Finds current depth from boundary array
+        /// <summary>
+        /// Finds current depth from boundary array
+        /// </summary>
+        /// <param name="index"></param>
+        /// <param name="treeDepth"></param>
+        /// <param name="boundaries"></param>
+        /// <returns></returns>
         public static uint GetDepthFromBoundaries(uint index, uint treeDepth, uint[] boundaries)
         {
             // TODO - Make this efficient (LUT, etc)
@@ -42,7 +48,13 @@ namespace NKLI.Nigiri.SVO
             return 999;
         }
 
-        // Calculate thread count
+        /// <summary>
+        /// Calculate thread count
+        /// </summary>
+        /// <param name="gridWidth"></param>
+        /// <param name="treeDepth"></param>
+        /// <param name="counter_Boundaries"></param>
+        /// <returns></returns>
         public static uint GetThreadCount(uint gridWidth, uint treeDepth, out uint[] counter_Boundaries)
         {
             // Get depth of tree
@@ -79,7 +91,13 @@ namespace NKLI.Nigiri.SVO
             return threadCount;
         }
 
-        // Calculate thread count
+        /// <summary>
+        /// Calculate thread count
+        /// </summary>
+        /// <param name="_nodeCount"></param>
+        /// <param name="gridWidth"></param>
+        /// <param name="treeDepth"></param>
+        /// <returns></returns>
         public static uint GetNodeCount(uint _nodeCount, uint gridWidth, uint treeDepth)
         {
             // Assign local
@@ -104,7 +122,11 @@ namespace NKLI.Nigiri.SVO
             return finalNodeCount;
         }
 
-        // Calculate depth of tree
+        /// <summary>
+        /// Calculate depth of tree
+        /// </summary>
+        /// <param name="gridWidth"></param>
+        /// <returns></returns>
         public static uint GetDepth(uint gridWidth)
         {
             uint depth = 0;

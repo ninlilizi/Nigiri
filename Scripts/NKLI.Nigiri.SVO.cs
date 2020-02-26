@@ -124,21 +124,9 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         public void ReleaseBuffers()
         {
-            ReleaseBufferRef(ref Buffer_SplitQueue);
-            ReleaseBufferRef(ref Buffer_Counters);
-            ReleaseBufferRef(ref Buffer_SVO);
-        }
-
-        /// <summary>
-        /// Release a compute buffer
-        /// </summary>
-        /// <param name="cb"></param>
-        public void ReleaseBufferRef(ref ComputeBuffer cb)
-        {
-            if (cb != null)
-            {
-                cb.Release();
-            }
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SplitQueue);
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Counters);
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SVO);
         }
 
         #region IDisposable + Unity Scriped Destruction support
@@ -150,7 +138,7 @@ namespace NKLI.Nigiri.SVO
             {
                 if (disposing)
                 {
-                    // Attempt to dispose any existing textures
+                    // Attempt to dispose any existing buffers
                     ReleaseBuffers();
                 }
 
@@ -166,6 +154,11 @@ namespace NKLI.Nigiri.SVO
         }
 
         public void OnDestroy()
+        {
+            Dispose();
+        }
+
+        ~Tree()
         {
             Dispose();
         }

@@ -332,7 +332,7 @@ public class Nigiri : MonoBehaviour {
         }
     }
     private readonly int RenderCounterMax = 7;
-    public static ComputeBuffer RenderCountBuffer;
+    
 
     [Header("Performance Counters")]
     public bool expensiveGPUCounters = false;
@@ -379,15 +379,12 @@ public class Nigiri : MonoBehaviour {
 
 
     //[Header("Render Textures")]
+
+    // Scriptable objects
     public static RenderTextures renderTextures;
-
-    private ComputeBuffer voxelUpdateSampleCount;
-    private static ComputeBuffer voxelUpdateMaskBuffer;
-    private static ComputeBuffer voxelUpdateSampleBuffer;
-    private static ComputeBuffer voxelUpdateSampleCountBuffer;
-
-    // SVO
-    NKLI.Nigiri.SVO.Tree SVO;
+    public static ComputeBuffers computeBuffers;
+    public static NKLI.Nigiri.SVO.Tree SVO;
+    
 
     private int tracedTexture1UpdateCount;
 
@@ -445,7 +442,6 @@ public class Nigiri : MonoBehaviour {
         _preLightPass = new CommandBuffer();
         _preLightPass.name = "<Nigiri> Volumetric Prepass";
 
-        CreateComputeBuffers();
         ChangeResolution();
 
         if (_pointLightMesh == null)
@@ -582,7 +578,7 @@ public class Nigiri : MonoBehaviour {
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationEncodeUpdater] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.voxelisationMaskUpdate] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.occupiedVoxels] = 0;
-                RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
+                computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
 
                 gPU_Requests_RenderCounterData.Dequeue();
             }
@@ -728,11 +724,13 @@ public class Nigiri : MonoBehaviour {
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
         renderTextures.Create(highestVoxelResolution, localCam, injectionTextureResolution, subsamplingRatio);
 
+        // Instantiate buffers
+        computeBuffers = ScriptableObject.CreateInstance<ComputeBuffers>();
+        computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
+
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
         SVO.Create();
-
-        CreateComputeBuffers();
 
         Setup();
 
@@ -799,33 +797,6 @@ public class Nigiri : MonoBehaviour {
         UpdateLUT();
     }
 
-    private void CreateComputeBuffers()
-    {
-        Debug.Log("<Nigiri> Clearing compute buffers");
-
-
-        // Voxel Primary
-        if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
-        voxelUpdateSampleCount = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, 4, ComputeBufferType.Default);
-
-        if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
-        voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
-
-        if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
-        voxelUpdateSampleBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(float) * 4, ComputeBufferType.Default);
-
-        if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
-        voxelUpdateSampleCountBuffer = new ComputeBuffer(highestVoxelResolution * highestVoxelResolution * highestVoxelResolution, sizeof(uint), ComputeBufferType.Default);
-        ///END Voxel Primary
-
-        if (RenderCountBuffer != null) RenderCountBuffer.Release();
-        RenderCountBuffer = new ComputeBuffer(RenderCounterMax, sizeof(int), ComputeBufferType.IndirectArguments);
-
-        //if (MaskCountBuffer != null) MaskCountBuffer.Release();
-        //MaskCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.IndirectArguments);
-        ///END Counters
-    }
-
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid()
     {
@@ -839,10 +810,10 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
         Shader.SetGlobalInt("_cascade", cascadeSwitch);
         // Global buffers
-        Shader.SetGlobalBuffer("_renderCountBuffer", RenderCountBuffer);
-        Shader.SetGlobalBuffer("_maskBuffer", voxelUpdateMaskBuffer);
-        Shader.SetGlobalBuffer("_sampleBuffer", voxelUpdateSampleBuffer);
-        Shader.SetGlobalBuffer("_sampleCountBuffer", voxelUpdateSampleCountBuffer);
+        Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
+        Shader.SetGlobalBuffer("_maskBuffer", computeBuffers.voxelUpdateMaskBuffer);
+        Shader.SetGlobalBuffer("_sampleBuffer", computeBuffers.voxelUpdateSampleBuffer);
+        Shader.SetGlobalBuffer("_sampleCountBuffer", computeBuffers.voxelUpdateSampleCountBuffer);
         Shader.SetGlobalBuffer("_SVO_SplitQueue", SVO.Buffer_SplitQueue);
         Shader.SetGlobalBuffer("_SVO_Counters", SVO.Buffer_Counters);
         Shader.SetGlobalBuffer("_SVO", SVO.Buffer_SVO);
@@ -859,7 +830,7 @@ public class Nigiri : MonoBehaviour {
         // Voxelize main cam
         if (primaryVoxelization)
         {
-            voxelUpdateMaskBuffer.SetCounterValue(0);
+            computeBuffers.voxelUpdateMaskBuffer.SetCounterValue(0);
 
             // Update Mask
             uint maskcount = 0;
@@ -1035,7 +1006,7 @@ public class Nigiri : MonoBehaviour {
             injectionTextureResolution.x = (int)source.width / subsamplingRatio;
             injectionTextureResolution.y = (int)source.height / subsamplingRatio;
             renderTextures.CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
-            CreateComputeBuffers();
+            computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
         }
 
         //Fix stereo rendering matrix
@@ -1224,7 +1195,7 @@ public class Nigiri : MonoBehaviour {
 		} else {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
-            Graphics.SetRandomWriteTarget(1, voxelUpdateSampleCountBuffer, true);
+            Graphics.SetRandomWriteTarget(1, computeBuffers.voxelUpdateSampleCountBuffer, true);
             Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
@@ -1343,21 +1314,20 @@ public class Nigiri : MonoBehaviour {
     private void OnDisable()
     {
         if (_renderCommand != null) UnregisterCommandBuffers();
-            
-        if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
+
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
-        if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
-        if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
-        if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
-
-        if (RenderCountBuffer != null) RenderCountBuffer.Release();
+        if (Application.isEditor)  if (renderTextures != null) DestroyImmediate(renderTextures);
+        else if (renderTextures != null) Destroy(renderTextures);
 
         // Destroy render textures
-        if (renderTextures != null) DestroyImmediate(renderTextures);
+        Helpers.DestroyScriptableObject(ref renderTextures);
+
+        // Destroy buffers
+        Helpers.DestroyScriptableObject(ref computeBuffers);
 
         // Destroy SVO
-        if (SVO != null) DestroyImmediate(SVO);
+        Helpers.DestroyScriptableObject(ref SVO);
 
         //Volumetric Lighting
         //_camera.RemoveAllCommandBuffers();
@@ -1369,7 +1339,8 @@ public class Nigiri : MonoBehaviour {
     {
         Debug.Log("<Nigiri> Clearing cache");
 
-        CreateComputeBuffers();
+        // Recreate compute buffers
+        computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
 
         clearComputeCache.SetTexture(0, "RG0", renderTextures.voxelGridCascade1);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
@@ -2329,7 +2300,7 @@ public class Nigiri : MonoBehaviour {
 
 
         // Queue up Aync GPU Readbacks
-        if (gPU_Requests_RenderCounterData.Count < 5) gPU_Requests_RenderCounterData.Enqueue(AsyncGPUReadback.Request(RenderCountBuffer));
+        if (gPU_Requests_RenderCounterData.Count < 5) gPU_Requests_RenderCounterData.Enqueue(AsyncGPUReadback.Request(computeBuffers.RenderCountBuffer));
     }
 
     void OnPreRender()

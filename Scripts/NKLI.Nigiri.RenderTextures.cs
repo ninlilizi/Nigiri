@@ -38,8 +38,12 @@ namespace NKLI.Nigiri
         public RenderTexture gi;
 
         /// <summary>
-        /// Creates all textures
+        /// Generic create method
         /// </summary>
+        /// <param name="resolution"></param>
+        /// <param name="localCam"></param>
+        /// <param name="injectionTextureResolution"></param>
+        /// <param name="subsamplingRatio"></param>
         public void Create(int resolution, Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
         {
             // Create voxel grid textures
@@ -50,8 +54,9 @@ namespace NKLI.Nigiri
         }
 
         /// <summary>
-        /// Create voxel grid textures
+        /// /// Create voxel grid textures
         /// </summary>
+        /// <param name="resolution"></param>
         private void CreateVoxelGrid(int resolution)
         {
             // First release any existing
@@ -107,8 +112,11 @@ namespace NKLI.Nigiri
         }
 
         /// <summary>
-        /// Create render textures
+        /// Create render texture
         /// </summary>
+        /// <param name="localCam"></param>
+        /// <param name="injectionTextureResolution"></param>
+        /// <param name="subsamplingRatio"></param>
         public void CreateRenderTextures(Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
         {
             // First release any existing
@@ -180,14 +188,14 @@ namespace NKLI.Nigiri
         public void DisposeRenderTextures(bool destroy)
         {
             // Dispose render textures
-            DisposeTextureRef(ref lightingTexture, destroy);
-            DisposeTextureRef(ref lightingTexture2, destroy);
-            DisposeTextureRef(ref lightingTextureMono, destroy);
-            DisposeTextureRef(ref lightingTexture2Mono, destroy);
-            DisposeTextureRef(ref positionTexture, destroy);
-            DisposeTextureRef(ref depthTexture, destroy);
-            DisposeTextureRef(ref gi, destroy);
-            DisposeTextureRef(ref blur, destroy);
+            Helpers.DisposeTextureRef(ref lightingTexture, destroy);
+            Helpers.DisposeTextureRef(ref lightingTexture2, destroy);
+            Helpers.DisposeTextureRef(ref lightingTextureMono, destroy);
+            Helpers.DisposeTextureRef(ref lightingTexture2Mono, destroy);
+            Helpers.DisposeTextureRef(ref positionTexture, destroy);
+            Helpers.DisposeTextureRef(ref depthTexture, destroy);
+            Helpers.DisposeTextureRef(ref gi, destroy);
+            Helpers.DisposeTextureRef(ref blur, destroy);
 
         }
 
@@ -198,26 +206,13 @@ namespace NKLI.Nigiri
         public void DisposeGridTextures(bool destroy)
         {
             // Dispose voxel grid textures
-            DisposeTextureRef(ref voxelGridCascade1, destroy);
-            DisposeTextureRef(ref voxelGridCascade2, destroy);
-            DisposeTextureRef(ref voxelGrid1, destroy);
-            DisposeTextureRef(ref voxelGrid2, destroy);
-            DisposeTextureRef(ref voxelGrid3, destroy);
-            DisposeTextureRef(ref voxelGrid4, destroy);
-            DisposeTextureRef(ref voxelGrid5, destroy);
-        }
-
-        /// <summary>
-        /// Dispose and optionally destroy a texture
-        /// </summary>
-        /// <param name="rt"></param>
-        public void DisposeTextureRef(ref RenderTexture rt, bool destroy)
-        {
-            if (rt != null)
-            {
-                rt.Release();
-                if (destroy) DestroyImmediate(rt);
-            }
+            Helpers.DisposeTextureRef(ref voxelGridCascade1, destroy);
+            Helpers.DisposeTextureRef(ref voxelGridCascade2, destroy);
+            Helpers.DisposeTextureRef(ref voxelGrid1, destroy);
+            Helpers.DisposeTextureRef(ref voxelGrid2, destroy);
+            Helpers.DisposeTextureRef(ref voxelGrid3, destroy);
+            Helpers.DisposeTextureRef(ref voxelGrid4, destroy);
+            Helpers.DisposeTextureRef(ref voxelGrid5, destroy);
         }
 
         #region IDisposable + Unity Scriped Destruction support
@@ -245,6 +240,11 @@ namespace NKLI.Nigiri
         }
 
         public void OnDestroy()
+        {
+            Dispose();
+        }
+
+        ~RenderTextures()
         {
             Dispose();
         }
