@@ -1,5 +1,5 @@
 #pragma kernel CSMain0
-#include "Nigiri_MortonOrder3D.cginc"
+#include "NKLI_Nigiri_MortonOrder3D.cginc"
 
 RWTexture3D<float4> voxelGrid;
 

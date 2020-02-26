@@ -1,8 +1,8 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
-#include "Nigiri_MortonOrder2D.cginc"
-#include "Nigiri_MortonOrder3D.cginc"
+#include "NKLI_Nigiri_MortonOrder2D.cginc"
+#include "NKLI_Nigiri_MortonOrder3D.cginc"
 
 uniform RWTexture3D<float4>			voxelGrid : register(u1);
 
