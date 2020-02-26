@@ -7,7 +7,7 @@
 
 // Include
 #include "NKLI_Nigiri_SVOVoxelizer.cginc"
-#include "Nigiri_MortonOrder2D.cginc"
+#include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // List of ordered pixels to sample
 uniform ConsumeStructuredBuffer<uint> _maskBuffer;

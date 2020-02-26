@@ -1,7 +1,7 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
 #pragma kernel CSMain
 
-#include "Nigiri_MortonOrder2D.cginc"
+#include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // Unique Index for computing access coordinates
 uniform RWStructuredBuffer<uint>	_renderCountBuffer;

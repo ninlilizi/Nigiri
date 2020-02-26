@@ -146,8 +146,10 @@ namespace NKLI.Nigiri.SVO
         public uint value_A;
 
         // When used in shader, pad to fit 128 bit cache alignment
+        #pragma warning disable CS0414
         readonly uint pad0;
         readonly uint pad1;
+        #pragma warning restore CS0414
         // In cases of 64 bit payloads, this is unnecesary
 
         // Constructor - Packed

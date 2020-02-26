@@ -109,7 +109,7 @@ public class Nigiri_EmissiveCameraHelper : MonoBehaviour {
         if (lightingTexture != null)
         {
             Graphics.SetRandomWriteTarget(5, CountRenderTexture);
-            Graphics.SetRandomWriteTarget(6, Nigiri.voxelGrid1);
+            Graphics.SetRandomWriteTarget(6, Nigiri.renderTextures.voxelGrid1);
             cam.SetTargetBuffers(_rb, lightingDepthTexture.depthBuffer);
 
             encodeStopwatch.Start();
