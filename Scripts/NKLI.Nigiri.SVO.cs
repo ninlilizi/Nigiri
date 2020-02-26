@@ -9,7 +9,7 @@ namespace NKLI.Nigiri.SVO
     /// Builds static sparse voxel octree from Morton ordered buffer
     /// </summary>
     #region Spase voxel builder
-    public class Tree
+    public class Tree : ScriptableObject, IDisposable
     {
         // Read-only properties
         //public uint ThreadCount { get; private set; }
@@ -25,10 +25,10 @@ namespace NKLI.Nigiri.SVO
         public static readonly int boundariesOffset = 9;
         public static readonly uint boundariesOffsetU = 9;
 
-        // Read-only buffer properties
-        public ComputeBuffer Buffer_SVO { get; private set; }
-        public ComputeBuffer Buffer_Counters { get; private set; }
-        public ComputeBuffer Buffer_SplitQueue { get; private set; }
+        // Buffers
+        public ComputeBuffer Buffer_SVO;
+        public ComputeBuffer Buffer_Counters;
+        public ComputeBuffer Buffer_SplitQueue;
 
         // static consts
         public static readonly uint maxDepth = 8;
@@ -39,7 +39,7 @@ namespace NKLI.Nigiri.SVO
         ComputeShader shader_SVOBuilder;
 
         // Constructor
-        public Tree()
+        public void Create()
         {
             // Load shader
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
@@ -113,15 +113,57 @@ namespace NKLI.Nigiri.SVO
             req_SVO.WaitForCompletion();
         }
 
-        // Cleanup
+        /// <summary>
+        /// Releases all buffers
+        /// </summary>
+        public void ReleaseBuffers()
+        {
+            ReleaseBufferRef(ref Buffer_SplitQueue);
+            ReleaseBufferRef(ref Buffer_Counters);
+            ReleaseBufferRef(ref Buffer_SVO);
+        }
+
+        /// <summary>
+        /// Release a compute buffer
+        /// </summary>
+        /// <param name="cb"></param>
+        public void ReleaseBufferRef(ref ComputeBuffer cb)
+        {
+            if (cb != null)
+            {
+                cb.Release();
+            }
+        }
+
+        #region IDisposable + Unity Scriped Destruction support
+        private bool disposedValue = false; // To detect redundant calls
+
+        protected virtual void Dispose(bool disposing)
+        {
+            if (!disposedValue)
+            {
+                if (disposing)
+                {
+                    // Attempt to dispose any existing textures
+                    ReleaseBuffers();
+                }
+
+                disposedValue = true;
+            }
+        }
+
+        // This code added to correctly implement the disposable pattern.
         public void Dispose()
         {
-            // We try to explicity dispose these objects as not doing can result
-            //  in leaks or uneven performance further down the pipeline.
-            Buffer_SplitQueue.Dispose();
-            Buffer_Counters.Dispose();
-            Buffer_SVO.Dispose();
+            // Do not change this code. Put cleanup code in Dispose(bool disposing) above.
+            Dispose(true);
         }
+
+        public void OnDestroy()
+        {
+            Dispose();
+        }
+        #endregion
     }
     #endregion
     //

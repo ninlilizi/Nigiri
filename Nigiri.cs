@@ -488,9 +488,6 @@ public class Nigiri : MonoBehaviour {
         LoadNoise3dTexture();
         GenerateDitherTexture();
 
-        // SVO
-        SVO = new NKLI.Nigiri.SVO.Tree();
-
         // Create performance stopwatches.
         renderTimes.UpdateStopwatch = new System.Diagnostics.Stopwatch();
         renderTimes.PrimaryVoxelisationStopwatch = new System.Diagnostics.Stopwatch();
@@ -742,6 +739,10 @@ public class Nigiri : MonoBehaviour {
         // Instantiate render textures
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
         renderTextures.Create(highestVoxelResolution);
+
+        // Instantiate SVO Tree
+        SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+        SVO.Create();
 
         createRenderTextures();
         CreateComputeBuffers();
@@ -1427,11 +1428,11 @@ public class Nigiri : MonoBehaviour {
 
         if (RenderCountBuffer != null) RenderCountBuffer.Release();
 
-        // Dispose of all render textures
+        // Destroy render textures
         if (renderTextures != null) DestroyImmediate(renderTextures);
 
-        // SVO
-        if (SVO != null) SVO.Dispose();
+        // Destroy SVO
+        if (SVO != null) DestroyImmediate(SVO);
 
         //Volumetric Lighting
         //_camera.RemoveAllCommandBuffers();

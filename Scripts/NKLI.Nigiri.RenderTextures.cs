@@ -9,6 +9,10 @@ using UnityEngine;
 
 namespace NKLI.Nigiri
 {
+    /// <summary>
+    /// Holds all render textures.
+    /// Robust implementation of ScriptableObject destruction and IDisposable to ensure memory leak-proof lifetime management.
+    /// </summary>
     public class RenderTextures : ScriptableObject, IDisposable
     {
         // Descriptors
@@ -95,6 +99,7 @@ namespace NKLI.Nigiri
         /// <summary>
         /// Disposes all textures, optionally also Destroys
         /// </summary>
+        /// <param name="destroy"></param>
         public void DisposeTextures(bool destroy)
         {
             // Dispose voxel grid textures
@@ -110,7 +115,7 @@ namespace NKLI.Nigiri
         }
 
         /// <summary>
-        /// Release and optionally destroy a texture
+        /// Dispose and optionally destroy a texture
         /// </summary>
         /// <param name="rt"></param>
         public void DisposeTextureRef(ref RenderTexture rt, bool destroy)
