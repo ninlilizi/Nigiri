@@ -211,73 +211,73 @@ namespace Tests.Nigiri.SVO
             uint[] testValues = new uint[8];
 
             testValues[0] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_1000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_1000_0000);
 
             testValues[0] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 1
             testValues = new uint[8];
 
             testValues[1] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0100_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0100_0000);
 
             testValues[1] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 2
             testValues = new uint[8];
 
             testValues[2] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0010_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0010_0000);
 
             testValues[2] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 3
             testValues = new uint[8];
 
             testValues[3] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0001_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0001_0000);
 
             testValues[3] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 4
             testValues = new uint[8];
 
             testValues[4] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_1000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_1000);
 
             testValues[4] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 5
             testValues = new uint[8];
 
             testValues[5] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0100);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0100);
 
             testValues[5] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 6
             testValues = new uint[8];
 
             testValues[6] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0010);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0010);
 
             testValues[6] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
 
             // Position 7
             testValues = new uint[8];
 
             testValues[7] = 5;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0001);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0001);
 
             testValues[7] = 0;
-            Assert.AreEqual(SVOHelper.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
+            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
         }
 
         [Test]
@@ -286,8 +286,8 @@ namespace Tests.Nigiri.SVO
         {
             // Calculate control data
             uint gridWidth = 256;
-            uint treeDepth = SVOHelper.GetDepth(gridWidth);
-            uint threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
+            uint treeDepth = Helpers.GetDepth(gridWidth);
+            uint threadCount = Helpers.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
 
             uint testInterval = Convert.ToUInt32(Math.Floor(Convert.ToDouble(threadCount / 50000)));
             Debug.Log("<Unit Test> Total threads:" + threadCount);
@@ -339,7 +339,7 @@ namespace Tests.Nigiri.SVO
                 }
 
                 // Get sample
-                uint sampleDepth = SVOHelper.GetDepthFromBoundaries(sampleIndex, treeDepth, boundaries);
+                uint sampleDepth = Helpers.GetDepthFromBoundaries(sampleIndex, treeDepth, boundaries);
 
                 // Test result
                 Assert.AreEqual(controlDepth, sampleDepth);
@@ -353,8 +353,8 @@ namespace Tests.Nigiri.SVO
             // Calculate control data
             uint gridWidth = 256;
             uint voxelCount = Convert.ToUInt32(gridWidth * gridWidth * gridWidth);
-            uint treeDepth = SVOHelper.GetDepth(gridWidth);
-            uint threadCount = SVOHelper.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
+            uint treeDepth = Helpers.GetDepth(gridWidth);
+            uint threadCount = Helpers.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
 
             Assert.AreEqual(treeDepth, 8);
             Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
@@ -382,19 +382,19 @@ namespace Tests.Nigiri.SVO
         // Test Calculation of tree depth
         public void GetDepth()
         {
-            Assert.AreEqual(SVOHelper.GetDepth(16), 4);
-            Assert.AreEqual(SVOHelper.GetDepth(32), 5);
-            Assert.AreEqual(SVOHelper.GetDepth(64), 6);
-            Assert.AreEqual(SVOHelper.GetDepth(128), 7);
-            Assert.AreEqual(SVOHelper.GetDepth(256), 8);
-            Assert.AreEqual(SVOHelper.GetDepth(512), 9);
-            Assert.AreEqual(SVOHelper.GetDepth(1024), 10);
-            Assert.AreEqual(SVOHelper.GetDepth(2048), 11);
-            Assert.AreEqual(SVOHelper.GetDepth(4096), 12);
-            Assert.AreEqual(SVOHelper.GetDepth(8192), 13);
-            Assert.AreEqual(SVOHelper.GetDepth(16384), 14);
-            Assert.AreEqual(SVOHelper.GetDepth(32768), 15);
-            Assert.AreEqual(SVOHelper.GetDepth(65536), 16);
+            Assert.AreEqual(Helpers.GetDepth(16), 4);
+            Assert.AreEqual(Helpers.GetDepth(32), 5);
+            Assert.AreEqual(Helpers.GetDepth(64), 6);
+            Assert.AreEqual(Helpers.GetDepth(128), 7);
+            Assert.AreEqual(Helpers.GetDepth(256), 8);
+            Assert.AreEqual(Helpers.GetDepth(512), 9);
+            Assert.AreEqual(Helpers.GetDepth(1024), 10);
+            Assert.AreEqual(Helpers.GetDepth(2048), 11);
+            Assert.AreEqual(Helpers.GetDepth(4096), 12);
+            Assert.AreEqual(Helpers.GetDepth(8192), 13);
+            Assert.AreEqual(Helpers.GetDepth(16384), 14);
+            Assert.AreEqual(Helpers.GetDepth(32768), 15);
+            Assert.AreEqual(Helpers.GetDepth(65536), 16);
         }
 
         [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
