@@ -681,6 +681,9 @@ public class Nigiri : MonoBehaviour {
     // Use this for initialization
     void OnEnable ()
     {
+        // Set camera to render optional buffers
+        Camera.main.depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
+
         if (_preLightPass == null) Awake();
 
         if (_renderCommand != null) RegisterCommandBuffers();
@@ -982,7 +985,6 @@ public class Nigiri : MonoBehaviour {
 
     }
 
-
     // This is called once per frame after the scene is rendered
     //[ImageEffectOpaque]
     void OnRenderImage (RenderTexture source, RenderTexture destination)
@@ -1125,6 +1127,20 @@ public class Nigiri : MonoBehaviour {
             Graphics.Blit(renderTextures.lightingTexture, renderTextures.lightingTextureMono, stereo2MonoMaterial);
             Graphics.Blit(renderTextures.lightingTexture2, renderTextures.lightingTexture2Mono, stereo2MonoMaterial);
         }
+
+        // Save RenderBuffers to filea for Test units
+        /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+        {
+
+            Helpers_Debug.SaveRenderTextureBuiltIn("/Test_Unit-RenderTexture-gBuffer0", BuiltinRenderTextureType.GBuffer0, source.width, source.height);
+            Helpers_Debug.SaveRenderTextureBuiltIn("/Test_Unit-RenderTexture-gBuffer1", BuiltinRenderTextureType.GBuffer1, source.width, source.height);
+            Helpers_Debug.SaveRenderTextureBuiltIn("/Test_Unit-RenderTexture-gBuffer2", BuiltinRenderTextureType.GBuffer2, source.width, source.height);
+
+            Helpers_Debug.SaveRenderTexture("/Test_Unit-RenderTexture-Source", source, source.width, source.height);
+            Helpers_Debug.SaveRenderTexture("/Test_Unit-RenderTexture-PositionTexture", renderTextures.positionTexture, source.width, source.height);
+            Helpers_Debug.SaveRenderTexture("/Test_Unit-RenderTexture-DepthTexture", renderTextures.depthTexture, source.width, source.height);
+
+        }*/
 
         //We send half the stereo eyeDistance to the depth blit. To offset correct coordinates in stereo clamping
         depthMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);

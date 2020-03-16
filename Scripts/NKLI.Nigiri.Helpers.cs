@@ -1,5 +1,5 @@
 ﻿/// <summary>
-/// NKLI     : Nigiri - SVO Helpers
+/// NKLI     : Nigiri - Helpers
 /// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
 /// </summary>
@@ -51,6 +51,8 @@ namespace NKLI.Nigiri
             if (Application.isEditor) DestroyImmediate((ScriptableObject)scriptableOject);
             else Destroy((ScriptableObject)scriptableOject);
         }
-
     }
 }
+
+
+

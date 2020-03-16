@@ -56,6 +56,7 @@
 
 	fixed4 frag(v2f i) : SV_Target
 	{
+
 		if (debug) return Linear01Depth(tex2D(_CameraDepthTexture,UnityStereoTransformScreenSpaceTex(i.uv)));
 		else {
 		if (stereoEnabled)
