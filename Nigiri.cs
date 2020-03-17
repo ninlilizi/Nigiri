@@ -732,8 +732,8 @@ public class Nigiri : MonoBehaviour {
         computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
 
         // Instantiate SVO Tree
-        SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create();
+        //SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+        //SVO.Create();
 
         Setup();
 

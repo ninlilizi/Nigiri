@@ -66,7 +66,7 @@ namespace Tests.Nigiri.SVO
 
             // Decompress mask buffer
             byte[] test_MaskBuffer = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(textAsset.bytes);
-            Debug.Log("<Unit Test> Decompressed Buffer, size:" + test_MaskBuffer.Length + Environment.NewLine);
+            Debug.Log("<Unit Test> Decompressed Buffer, size: " + test_MaskBuffer.Length + " Bytes" + Environment.NewLine);
 
             // Test decompressed buffer is expected size
             Assert.AreEqual(10368000, test_MaskBuffer.Length);
@@ -74,27 +74,33 @@ namespace Tests.Nigiri.SVO
             // Write buffer to GPU
             ComputeBuffer buffer_Mask = new ComputeBuffer(sampleCount, sizeof(uint), ComputeBufferType.Append);
             buffer_Mask.SetData(test_MaskBuffer);
-            Debug.Log("<Unit Test> Buffer copied to GPU");
+            Debug.Log("<Unit Test> Buffer copied to GPU" + Environment.NewLine);
 
             // Instantiate SVO Tree
             NKLI.Nigiri.SVO.Tree SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-            SVO.Create();
+            SVO.Create(8, 64, 10);
 
             if (SVO.Buffer_SVO == null) Debug.LogError("<Unity Test> SVO_Buffer == Null");
+            else Debug.Log("<Unit Test> Instantiated SVO tree");
 
             // Instantiate voxelizer
             Voxelizer voxelizer = new Voxelizer(SVO, 1, 0.9f, 1, 100, 8);
+            Debug.Log("<Unit Test> Instantiated voxelizer" + Environment.NewLine);
 
             // Voxelize scene
             voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, RT_gBuffer0, buffer_Mask);
+            Debug.Log("<Unit Test> Voxelized scene");
 
             //Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
 
             // Intiate syncronous 'async' readback
-            SVO.SyncGPUReadback(out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters, out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO);
+            SVO.SyncGPUReadback(
+                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters,
+                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO,
+                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SplitQueue);
             
             // Readback counters to CPU
-            uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_ByteLength];
+            uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_Count];
             if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
             else
             {
@@ -114,6 +120,16 @@ namespace Tests.Nigiri.SVO
 
             }
 
+            // Readback splitqueue to CPU
+            byte[] test_Buffer_SplitQueue = new byte[SVO.SplitQueueMaxLength * 4];
+            if (req_SplitQueue.hasError) Debug.Log("GPU readback error detected.");
+            else
+            {
+                var buffer = req_SplitQueue.GetData<byte>();
+                buffer.CopyTo(test_Buffer_SplitQueue);
+
+            }
+
             // Manually flush pipeline to be sure we have everything
             Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
             GL.Flush();
@@ -129,9 +145,18 @@ namespace Tests.Nigiri.SVO
             // Log counter values
             Debug.Log(Environment.NewLine + "<Unit Test> (Counters) Max Depth: " + test_Buffer_Counters[0]);
             Debug.Log("<Unit Test> (Counters) Max split queue items: " + test_Buffer_Counters[1]);
-            Debug.Log("<Unit Test> (Counters) Cur split queue items:" + test_Buffer_Counters[2] + Environment.NewLine);
-            //Debug.Log("<Unit Test> PTR Write counter:" + test_Buffer_Counters[5]);
-            //Debug.Log("<Unit Test> Depth counter:" + test_Buffer_Counters[8] + Environment.NewLine);
+            Debug.Log("<Unit Test> (Counters) Cur split queue items: " + test_Buffer_Counters[2] + Environment.NewLine);
+
+
+            // Outputs contents of split queue buffer
+            string queueString = "";
+            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+            {
+                byte[] queueByte = new byte[4];
+                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
+            }
+            Debug.Log("Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
 
             // Attempt to verify number of output nodes
             int detectedCount = 0;
@@ -154,10 +179,6 @@ namespace Tests.Nigiri.SVO
                     ((test_Buffer_SVO[(i * 32) + 14]) != 0) ||
                     ((test_Buffer_SVO[(i * 32) + 15]) != 0))
                 {
-                    //byte[] outByte = new byte[16];
-                    //Buffer.BlockCopy(test_Buffer_SVO, i * 16, outByte, 0, 16);
-                    //Debug.Log(outByte.ToString());
-
                     detectedCount++;
                 }
             }

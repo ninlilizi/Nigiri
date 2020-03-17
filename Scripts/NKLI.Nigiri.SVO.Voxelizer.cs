@@ -76,6 +76,9 @@ namespace NKLI.Nigiri.SVO
                 throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Null PTRs detected");
             }
 
+            // Set counter buffer to initial values
+            SVO_Tree.SetCounterBuffer();
+
 
             // Set buffers
             Shader_VoxelEncocder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);

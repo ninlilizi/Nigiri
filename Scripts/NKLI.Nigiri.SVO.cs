@@ -19,11 +19,9 @@ namespace NKLI.Nigiri.SVO
     {
         // Read-only properties
         public int Buffer_SVO_ByteLength { get; private set; }
-
-        public uint[] Counters { get; private set; }
-        // [0] Max depth
-        // [1] Max split queue items
-        // [2] Current split queue items
+        public int Buffer_SVO_Count { get; private set; }
+        public uint MaxDepth { get; private set; }
+        public uint SplitQueueMaxLength { get; private set; }
 
         // Buffers
         public ComputeBuffer Buffer_SVO;
@@ -31,38 +29,37 @@ namespace NKLI.Nigiri.SVO
         public ComputeBuffer Buffer_SplitQueue;
 
         // static consts
-        public static readonly uint maxDepth = 8;
-        public static readonly int maxNodes = 128;
-        public static readonly uint split_MaxQueueLength = 10;
-        public static readonly int Buffer_Counters_ByteLength = 9;
+        //public static readonly uint maxDepth = 8;
+        //public static readonly int maxNodes = 128;
+        //public static readonly uint split_MaxQueueLength = 10;
+        public static readonly int Buffer_Counters_Count = 9;
 
         // Compute
         ComputeShader shader_SVOBuilder;
 
         // Constructor
-        public void Create()
+        public void Create(uint maxDepth, int maxNodes, uint splitQueueMaxLength)
         {
+            // Set properties
+            MaxDepth = maxDepth;
+            SplitQueueMaxLength = splitQueueMaxLength;
+
             // Load shader
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
 
             // Output buffer to contain final SVO
             Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 8, ComputeBufferType.Default);
             Buffer_SVO_ByteLength = maxNodes * sizeof(uint) * 8;
+            Buffer_SVO_Count = maxNodes;
 
             // Synchronisation counter buffer
-            Buffer_Counters = new ComputeBuffer(Buffer_Counters_ByteLength, sizeof(uint), ComputeBufferType.Default);
+            Buffer_Counters = new ComputeBuffer(Buffer_Counters_Count, sizeof(uint), ComputeBufferType.Default);
                 
             // Temporary PTR storage buffer
-            Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(split_MaxQueueLength), sizeof(uint), ComputeBufferType.Default);
+            Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
 
-            // Set buffer variables
-            Counters = new uint[Buffer_Counters_ByteLength];
-            Counters[0] = maxDepth;
-            Counters[1] = split_MaxQueueLength;
-            Counters[2] = 0;
-
-            // Send buffer to GPU
-            Buffer_Counters.SetData(Counters);
+            // Set counter buffer
+            SetCounterBuffer();
 
             // Send root node to GPU
             SVONode rootNode = new SVONode(0, 0);
@@ -79,14 +76,38 @@ namespace NKLI.Nigiri.SVO
 
         }
 
+        /// <summary>
+        /// Sets counter buffer initial values and sends to GPU
+        /// </summary>
+        public void SetCounterBuffer()
+        {
+            // [0] Max depth
+            // [1] Max split queue items
+            // [2] Current split queue items
+
+            // Set buffer variables
+            uint[] Counters = new uint[Buffer_Counters_Count];
+            Counters[0] = MaxDepth;
+            Counters[1] = SplitQueueMaxLength;
+            Counters[2] = 0;
+
+            // Send buffer to GPU
+            Buffer_Counters.SetData(Counters);
+        }
+
         // Syncronous 'async' readback for Unit Testing.
-        public void SyncGPUReadback(out AsyncGPUReadbackRequest req_Counters, out AsyncGPUReadbackRequest req_SVO)
+        public void SyncGPUReadback(
+            out AsyncGPUReadbackRequest req_Counters, 
+            out AsyncGPUReadbackRequest req_SVO, 
+            out AsyncGPUReadbackRequest req_SplitQueue)
         {
             req_Counters = AsyncGPUReadback.Request(Buffer_Counters);
             req_SVO = AsyncGPUReadback.Request(Buffer_SVO);
+            req_SplitQueue = AsyncGPUReadback.Request(Buffer_SplitQueue);
 
             req_Counters.WaitForCompletion();
             req_SVO.WaitForCompletion();
+            req_SplitQueue.WaitForCompletion();
         }
 
         /// <summary>

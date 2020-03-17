@@ -61,10 +61,10 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 inline SVONode SetNodeColour(SVONode node, uint4 colour)
 {
     // Set values
-    node.value_A = colour.a;
-    node.value_R = colour.r;
-    node.value_G = colour.g;
-    node.value_B = colour.b;
+    node.value_A = colour.a * 255;
+    node.value_R = colour.r * 255;
+    node.value_G = colour.g * 255;
+    node.value_B = colour.b * 255;
     
     // return node
     return node;
@@ -73,16 +73,20 @@ inline SVONode SetNodeColour(SVONode node, uint4 colour)
 /// <summary>
 /// Appends to the queue of nodes to be split
 /// </summary>
-inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> counterBuffer, 
-    uint offset, uint index_QueueLength, uint index_maxQueueLength)
+inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> counterBuffer, uint offset)
 {
-    //  Get write index
-    uint index_SplitQueue;
-    InterlockedAdd(counterBuffer[index_QueueLength], 1, index_SplitQueue);
-                
-    // Append to split queue if withing bounds
-    if (index_SplitQueue < counterBuffer[index_maxQueueLength])
-        queueBuffer[index_SplitQueue] = offset;
+    // Only if within bounds if withing bounds
+    if (counterBuffer[2] < counterBuffer[1])
+    {
+        //  Get write index
+        uint index_SplitQueue;
+        InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
+         
+        // Append to split queue it within bounds
+        //  offset is +1 because zero signifies null value
+        if (index_SplitQueue < counterBuffer[1])
+            queueBuffer[index_SplitQueue] = offset + 1;
+    }
 }
 
 /// <summary>
@@ -105,17 +109,16 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
         uint depth;
         uint isLeaf;
         node.UnPackStruct(bitfieldOccupancy, runLength, depth, isLeaf);
-         
+                
         // At max depth we just write out the voxel and quit
-        if (currentDepth = maxDepth)
+        if (currentDepth == maxDepth)
         {           
             // Write back to buffer
             // TODO - This is not threadsafe and will result in a
             //          race condition characterized by flicking GI
             //          This will be replaced with an atomic rolling
             //          average to fix this problem in the future
-            //svoBuffer[offset] = SetNodeColour(node, colour);
-            svoBuffer[offset] = SetNodeColour(node, uint4(1, 2, 3, 4));
+            svoBuffer[offset] = SetNodeColour(node, colour);
              
             // We're done here
             done = 1;
@@ -129,15 +132,16 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             if (node.referenceOffset == 0)
             {
                 // Here we split the node
-                AppendSVOSplitQueue(queueBuffer, counterBuffer, offset, 2, 1);
+                AppendSVOSplitQueue(queueBuffer, counterBuffer, offset);
                 
+                // Just here for debugging purposes
                 svoBuffer[offset] = SetNodeColour(node, uint4(5, 6, 7, 8));
                 
                 // We're done here
                 done = 1;
             }
             else
-            {
+            {               
                 // We setup to search next depth
                 currentDepth++;
                 
