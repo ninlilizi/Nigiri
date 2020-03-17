@@ -80,6 +80,9 @@ namespace Tests.Nigiri.SVO
             NKLI.Nigiri.SVO.Tree SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
             SVO.Create(8, 64, 10);
 
+            // Split queue length should be rounded to nerest mul of 8
+            Assert.AreEqual(SVO.SplitQueueMaxLength, 8);
+
             if (SVO.Buffer_SVO == null) Debug.LogError("<Unity Test> SVO_Buffer == Null");
             else Debug.Log("<Unit Test> Instantiated SVO tree");
 
@@ -134,14 +137,6 @@ namespace Tests.Nigiri.SVO
             Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
             GL.Flush();
 
-            //for (uint i = 0; i < (test_Buffer_Counters.Length - NKLI.Nigiri.SVO.SVOBuilder.boundariesOffsetU); i++)
-            //{
-            //    Debug.Log("<Unit Test> Boundary " + (i) + ":" + test_Buffer_Counters[i + NKLI.Nigiri.SVO.SVOBuilder.boundariesOffsetU]);
-            //}
-
-            // Test that returned max depth matches pre-calculated
-            //Assert.AreEqual((svo.TreeDepth - 1), test_Buffer_Counters[8]);
-
             // Log counter values
             Debug.Log(Environment.NewLine + "<Unit Test> (Counters) Max Depth: " + test_Buffer_Counters[0]);
             Debug.Log("<Unit Test> (Counters) Max split queue items: " + test_Buffer_Counters[1]);
@@ -157,6 +152,59 @@ namespace Tests.Nigiri.SVO
                 queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
             }
             Debug.Log("Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
+
+            //
+            /// It's important to remove duplicates from the queue!
+            //
+
+            // Copies split queue buffer to hashset to remove dupes
+            HashSet<UInt32> queueSet = new HashSet<uint>();
+            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+            {
+                byte[] queueByte = new byte[4];
+                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                uint queueValue = BitConverter.ToUInt32(queueByte, 0);
+                if (queueValue != 0) queueSet.Add(queueValue);
+            }
+            Debug.Log("Uniques in split queue: " + Environment.NewLine + queueSet.Count + Environment.NewLine);
+
+            // Should be a single record
+            Assert.AreEqual(queueSet.Count, 1);
+
+            // Copies hashset back to buffer
+            int queueWriteBackIndex = 0;
+            HashSet<uint>.Enumerator queueEnum = queueSet.GetEnumerator();
+            while (queueEnum.MoveNext())
+            {
+                byte[] queueByte = new byte[4];
+                queueByte = BitConverter.GetBytes(queueEnum.Current);
+                Buffer.BlockCopy(queueByte, 0, test_Buffer_SplitQueue, queueWriteBackIndex * 4, 4);
+                queueWriteBackIndex++;
+            }
+
+            // Zeros rest of buffer
+            int queueStartIndex = queueSet.Count;
+            Array.Clear(test_Buffer_SplitQueue, queueStartIndex, (test_Buffer_SplitQueue.Length - queueStartIndex));
+
+
+            // Outputs remaining contents of split queue buffer
+            queueString = "";
+            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+            {
+                byte[] queueByte = new byte[4];
+                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
+            }
+            Debug.Log("Ajusted Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
+
+            // Send adjusted buffer back to GPU
+            SVO.Buffer_SplitQueue.SetData(test_Buffer_SplitQueue);
+
+
+            //
+            /// TODO: Process split queue here!
+            //
+
 
             // Attempt to verify number of output nodes
             int detectedCount = 0;

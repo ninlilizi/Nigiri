@@ -75,7 +75,7 @@ inline SVONode SetNodeColour(SVONode node, uint4 colour)
 /// </summary>
 inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> counterBuffer, uint offset)
 {
-    // Only if within bounds if withing bounds
+    // Only if within bounds
     if (counterBuffer[2] < counterBuffer[1])
     {
         //  Get write index

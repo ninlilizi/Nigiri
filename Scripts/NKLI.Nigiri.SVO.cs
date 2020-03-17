@@ -42,7 +42,15 @@ namespace NKLI.Nigiri.SVO
         {
             // Set properties
             MaxDepth = maxDepth;
-            SplitQueueMaxLength = splitQueueMaxLength;
+
+            // Rounds split queue length to nearest mul of 8 
+            //  to match dispatch thread group size
+            int factor = 8;
+            SplitQueueMaxLength =
+                    Math.Max(Convert.ToUInt32(Math.Round(
+                         (Convert.ToInt32(splitQueueMaxLength) / (double)factor),
+                         MidpointRounding.AwayFromZero
+                     ) * factor), 8);
 
             // Load shader
             shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
