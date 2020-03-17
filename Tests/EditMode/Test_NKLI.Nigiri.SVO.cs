@@ -17,10 +17,10 @@ using UnityEngine.TestTools;
 namespace Tests.Nigiri.SVO
 {
     #region Test_SVOBuilder
-    public class Test_SVOBuilder
+    public class Test_SVOVoxelizer
     {
         [Test]
-        public void SVOBuilder()
+        public void Voxelizer()
         {
             // Load test buffer from disk
             // Test buffer is a Morton ordered 256^3 grid of stored RGBA (values * 256)
@@ -28,46 +28,89 @@ namespace Tests.Nigiri.SVO
             TextAsset textAsset = Resources.Load(fileNameWithoutExtension) as TextAsset;
             Debug.Log("<Unit Test> Loaded Buffer, size:" + textAsset.bytes.Length);*/
 
-            // Decompress test buffer
-            /*byte[] test_MortonBuffer = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(textAsset.bytes);
-            Debug.Log("<Unit Test> Decompressed Buffer, size:" + test_MortonBuffer.Length + Environment.NewLine);*/
+            int width = 2160;
+            int height = 1200;
+
+            // Load textures
+            Texture2D Tex2D_gBuffer0 = Resources.Load("Test_Unit-RenderTexture-gBuffer0", typeof(Texture2D)) as Texture2D;
+            Texture2D Tex2D_gBuffer1 = Resources.Load("Test_Unit-RenderTexture-gBuffer1", typeof(Texture2D)) as Texture2D;
+            Texture2D Tex2D_gBuffer2 = Resources.Load("Test_Unit-RenderTexture-gBuffer2", typeof(Texture2D)) as Texture2D;
+
+            Texture2D Tex2D_Position = Resources.Load("Test_Unit-RenderTexture-PositionTexture", typeof(Texture2D)) as Texture2D;
+            Texture2D Tex2D_Depth = Resources.Load("Test_Unit-RenderTexture-DepthTexture", typeof(Texture2D)) as Texture2D;
+            Texture2D Tex2D_Source = Resources.Load("Test_Unit-RenderTexture-Source", typeof(Texture2D)) as Texture2D;
+            Debug.Log("<Unit Test> Loaded textures");
+
+            RenderTexture RT_gBuffer0 = new RenderTexture(width, height, 24);
+            RenderTexture RT_gBuffer1 = new RenderTexture(width, height, 24);
+            RenderTexture RT_gBuffer2 = new RenderTexture(width, height, 24);
+
+            RenderTexture RT_Position = new RenderTexture(width, height, 24);
+            RenderTexture RT_Depth = new RenderTexture(width, height, 24);
+            RenderTexture RT_Source = new RenderTexture(width, height, 24);
+
+            Graphics.Blit(Tex2D_gBuffer0, RT_gBuffer0);
+            Graphics.Blit(Tex2D_gBuffer1, RT_gBuffer1);
+            Graphics.Blit(Tex2D_gBuffer2, RT_gBuffer2);
+
+            Graphics.Blit(Tex2D_Position, RT_Position);
+            Graphics.Blit(Tex2D_Depth, RT_Depth);
+            Graphics.Blit(Tex2D_Source, RT_Source);
+            Debug.Log("<Unit Test> Textures copied to GPU" + Environment.NewLine);
+
+            int sampleCount = Tex2D_Source.width * Tex2D_Source.height;
+
+            // Load mask buffer
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension("Test_Unit-MaskBuffer");
+            TextAsset textAsset = Resources.Load(fileNameWithoutExtension) as TextAsset;
+
+            // Decompress mask buffer
+            byte[] test_MaskBuffer = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(textAsset.bytes);
+            Debug.Log("<Unit Test> Decompressed Buffer, size:" + test_MaskBuffer.Length + Environment.NewLine);
 
             // Test decompressed buffer is expected size
-            //Assert.AreEqual(268435456, test_MortonBuffer.Length);
+            Assert.AreEqual(10368000, test_MaskBuffer.Length);
 
             // Write buffer to GPU
-            /*ComputeBuffer buffer_Morton = new ComputeBuffer(256 * 256 * 256, sizeof(float) * 4, ComputeBufferType.Default);
-            buffer_Morton.SetData(test_MortonBuffer);
-            Debug.Log("<Unit Test> Buffer copied to GPU");*/
+            ComputeBuffer buffer_Mask = new ComputeBuffer(sampleCount, sizeof(uint), ComputeBufferType.Append);
+            buffer_Mask.SetData(test_MaskBuffer);
+            Debug.Log("<Unit Test> Buffer copied to GPU");
 
-            //uint gridWidth = 256;
-            //uint occupiedVoxels = 20003;
+            // Instantiate SVO Tree
+            NKLI.Nigiri.SVO.Tree SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+            SVO.Create();
 
-            // Attempt to instantiate SVO
-            NKLI.Nigiri.SVO.Tree svo = new NKLI.Nigiri.SVO.Tree();
+            if (SVO.Buffer_SVO == null) Debug.LogError("<Unity Test> SVO_Buffer == Null");
+
+            // Instantiate voxelizer
+            Voxelizer voxelizer = new Voxelizer(SVO, 1, 0.9f, 1, 100, 8);
+
+            // Voxelize scene
+            voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, RT_gBuffer0, buffer_Mask);
+
             //Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
 
             // Intiate syncronous 'async' readback
-            svo.SyncGPUReadback(out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters, out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO);
+            SVO.SyncGPUReadback(out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters, out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO);
             
             // Readback counters to CPU
-            //uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.SVOBuilder.boundariesOffset + svo.TreeDepth];
+            uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_ByteLength];
             if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
             else
             {
                 var buffer = req_Counters.GetData<uint>();
-                //buffer.CopyTo(test_Buffer_Counters);
+                buffer.CopyTo(test_Buffer_Counters);
 
             }
 
             // Readback octree to CPU
             //uint sizeOctree = svo.NodeCount * 8;
-            //byte[] test_Buffer_SVO = new byte[sizeOctree];
+            byte[] test_Buffer_SVO = new byte[SVO.Buffer_SVO_ByteLength];
             if (req_SVO.hasError) Debug.Log("GPU readback error detected.");
             else
             {
                 var buffer = req_SVO.GetData<byte>();
-                //buffer.CopyTo(test_Buffer_SVO);
+                buffer.CopyTo(test_Buffer_SVO);
 
             }
 
@@ -84,58 +127,86 @@ namespace Tests.Nigiri.SVO
             //Assert.AreEqual((svo.TreeDepth - 1), test_Buffer_Counters[8]);
 
             // Log counter values
-            //Debug.Log(Environment.NewLine + "<Unit Test> SVO Read counter:" + test_Buffer_Counters[1]);
-            //Debug.Log("<Unit Test> SVO Write counter:" + test_Buffer_Counters[2]);
-            //Debug.Log("<Unit Test> PTR Read counter:" + test_Buffer_Counters[4]);
+            Debug.Log(Environment.NewLine + "<Unit Test> (Counters) Max Depth: " + test_Buffer_Counters[0]);
+            Debug.Log("<Unit Test> (Counters) Max split queue items: " + test_Buffer_Counters[1]);
+            Debug.Log("<Unit Test> (Counters) Cur split queue items:" + test_Buffer_Counters[2] + Environment.NewLine);
             //Debug.Log("<Unit Test> PTR Write counter:" + test_Buffer_Counters[5]);
             //Debug.Log("<Unit Test> Depth counter:" + test_Buffer_Counters[8] + Environment.NewLine);
 
             // Attempt to verify number of output nodes
-            /*int detectedCount = 0;
-            for (int i = 0; i < (test_Buffer_SVO.Length / 8); i++)
+            int detectedCount = 0;
+            for (int i = 0; i < (test_Buffer_SVO.Length / 32); i++)
             {
-                if (((test_Buffer_SVO[(i * 8)]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 1]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 2]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 3]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 4]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 5]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 6]) != 0) ||
-                    ((test_Buffer_SVO[(i * 8) + 7]) != 0))
+                if (((test_Buffer_SVO[(i * 32)]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 1]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 2]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 3]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 4]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 5]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 6]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 7]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 8]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 9]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 10]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 11]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 12]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 13]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 14]) != 0) ||
+                    ((test_Buffer_SVO[(i * 32) + 15]) != 0))
                 {
+                    //byte[] outByte = new byte[16];
+                    //Buffer.BlockCopy(test_Buffer_SVO, i * 16, outByte, 0, 16);
+                    //Debug.Log(outByte.ToString());
+
                     detectedCount++;
                 }
             }
-            Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);*/
+            Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
 
             // Out nodes in human readable format
-            /*string filenameReadable = Application.dataPath + "/Test_Unit-SVO-HumanReadable.txt";
+            string filenameReadable = Application.dataPath + "/Test_Unit-SVO-HumanReadable.txt";
             Debug.Log("Writing to:" + filenameReadable);
             using (System.IO.StreamWriter fileOutput = new System.IO.StreamWriter(filenameReadable))
             {
 
                 //int verifiedCount = 0;
-                for (int i = 0; i < (test_Buffer_SVO.Length / 8); i++)
+                for (int i = 0; i < (test_Buffer_SVO.Length / 32); i++)
                 {
-                    byte[] nodeBytes = new byte[8];
-                    byte[] nodeBytes0 = new byte[4];
-                    byte[] nodeBytes1 = new byte[4];
+                    byte[] nodeBytes = new byte[32];
+                    byte[] nodeBytesReferenceOffset = new byte[4];
+                    byte[] nodeBytesPackedBitfield = new byte[4];
 
-                    Buffer.BlockCopy(test_Buffer_SVO, (i * 8), nodeBytes, 0, 8);
-                    Buffer.BlockCopy(nodeBytes, 0, nodeBytes0, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 4, nodeBytes1, 0, 4);
+                    byte[] nodeBytesA = new byte[4];
+                    byte[] nodeBytesR = new byte[4];
+                    byte[] nodeBytesG = new byte[4];
+                    byte[] nodeBytesB = new byte[4];
 
-                    SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytes0, 0), BitConverter.ToUInt32(nodeBytes1, 0));
+                    Buffer.BlockCopy(test_Buffer_SVO, (i * 32), nodeBytes, 0, 32);
+                    Buffer.BlockCopy(nodeBytes, 0, nodeBytesReferenceOffset, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 4, nodeBytesPackedBitfield, 0, 4);
+
+                    Buffer.BlockCopy(nodeBytes, 8, nodeBytesA, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 12, nodeBytesR, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 16, nodeBytesG, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 20, nodeBytesB, 0, 4);
+
+                    SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytesReferenceOffset, 0), BitConverter.ToUInt32(nodeBytesPackedBitfield, 0));
                     node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _depth, out bool isLeaf);
 
+                    node.value_A = BitConverter.ToUInt32(nodeBytesA, 0);
+                    node.value_R = BitConverter.ToUInt32(nodeBytesR, 0);
+                    node.value_G = BitConverter.ToUInt32(nodeBytesG, 0);
+                    node.value_B = BitConverter.ToUInt32(nodeBytesB, 0);
+
                     string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
-                        " [RL:" + _runlength + "] [Depth:" + _depth + "] [isLeaf:" + isLeaf + "]";
+                        " [RL:" + _runlength + "] [Depth:" + _depth + "] [isLeaf:" + isLeaf + "]" +
+                        " [A:" + node.value_A + "] [R:" + node.value_R + "] [G:" + node.value_G + "] [B:" + node.value_B + "]";
 
                     fileOutput.WriteLine(line);
 
                     //Debug.Log(node.referenceOffset);
                 }
-            }*/
+            }
             //Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
 
 
@@ -150,267 +221,24 @@ namespace Tests.Nigiri.SVO
             fs.Close()*/
 
             // Cleanup
-            svo.Dispose();
-            //buffer_Morton.Dispose();
-        }
-    }
-    #endregion
 
-    #region Test_SVOHelper
-    public class Test_SVOHelper
-    {
-        // Functions for compressing and verifying Morton test buffer file
-        /*[Test]
-        public void CompressTestBuffer()
-        {
-            string file = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
-            byte[] array = File.ReadAllBytes(file);
+            // Dispose voxelizer
+            voxelizer.Dispose();
 
-            Debug.Log("<Unit Test> Uncompressed size:" + array.Length);
+            // Destroy SVO
+            NKLI.Nigiri.Helpers.DestroyScriptableObject(ref SVO);
 
-            byte[] compressed = NKLI.Nigiri.Tools.LZMAtools.CompressByteArrayToLZMAByteArray(array);
+            // Release buffer
+            NKLI.Nigiri.Helpers.ReleaseBufferRef(ref buffer_Mask);
 
-            Debug.Log("<Unit Test>   Compressed size:" + compressed.Length);
+            // Dispose textures
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_gBuffer0, true);
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_gBuffer1, true);
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_gBuffer2, true);
 
-            FileStream fs = System.IO.File.Create(file + ".lzma");
-            fs.Write(compressed, 0, compressed.Length);
-            fs.Close();
-        }
-
-        [Test]
-        public void VerifyTestBuffer()
-        {
-            string controlFile = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
-            byte[] controlArray = File.ReadAllBytes(controlFile);
-
-            Debug.Log("<Unit Test> Control size:" + controlArray.Length);
-
-            string sampleFile = Application.dataPath + "/Test_Unit-MortonBuffer.dat" + ".lzma";
-            byte[] sampleArray = File.ReadAllBytes(sampleFile);
-
-            Debug.Log("<Unit Test>   Compressed size:" + sampleArray.Length);
-            byte[] decompressed = NKLI.Nigiri.Tools.LZMAtools.DecompressLZMAByteArrayToByteArray(sampleArray);
-
-            Debug.Log("<Unit Test> Sample size:" + controlArray.Length);
-
-            Assert.True(ByteArrayCompare(controlArray, decompressed));
-
-            int occupiedCount = 0;
-            for (int i = 0; i < (decompressed.Length / 4); i++)
-            {
-                if (((decompressed[(i * 4)]) != 0) ||
-                        ((decompressed[(i * 4) + 1]) != 0) ||
-                        ((decompressed[(i * 4) + 2]) != 0) ||
-                        ((decompressed[(i * 4) + 3]) != 0))
-                {
-                    occupiedCount++;
-                }
-            }
-            Debug.Log("<Unit Test> Occupied voxels detected:" + occupiedCount);
-        }*/
-
-        [Test]
-        // Test occupancy bitmap calculation - position 0
-        public void GetOccupancyBitmap()
-        {
-            // Position 0
-            uint[] testValues = new uint[8];
-
-            testValues[0] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_1000_0000);
-
-            testValues[0] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 1
-            testValues = new uint[8];
-
-            testValues[1] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0100_0000);
-
-            testValues[1] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 2
-            testValues = new uint[8];
-
-            testValues[2] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0010_0000);
-
-            testValues[2] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 3
-            testValues = new uint[8];
-
-            testValues[3] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0001_0000);
-
-            testValues[3] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 4
-            testValues = new uint[8];
-
-            testValues[4] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_1000);
-
-            testValues[4] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 5
-            testValues = new uint[8];
-
-            testValues[5] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0100);
-
-            testValues[5] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 6
-            testValues = new uint[8];
-
-            testValues[6] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0010);
-
-            testValues[6] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-
-            // Position 7
-            testValues = new uint[8];
-
-            testValues[7] = 5;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0001);
-
-            testValues[7] = 0;
-            Assert.AreEqual(Helpers.GetOccupancyBitmap(testValues), (uint)0b_0000_0000);
-        }
-
-        [Test]
-        // Test calculation of current depth from boundary index
-        public void GetDepthFromBoundaries()
-        {
-            // Calculate control data
-            uint gridWidth = 256;
-            uint treeDepth = Helpers.GetDepth(gridWidth);
-            uint threadCount = Helpers.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
-
-            uint testInterval = Convert.ToUInt32(Math.Floor(Convert.ToDouble(threadCount / 50000)));
-            Debug.Log("<Unit Test> Total threads:" + threadCount);
-            Debug.Log("<Unit Test> Sample interval:" + testInterval);
-            Debug.Log("<Unit Test> Testing 50,000 indices...");
-
-            for (uint i = 0; i < 50000; i++)
-            {
-                // Calculate test index
-                uint sampleIndex = i * testInterval;
-
-                // Calculate control
-                uint controlDepth = 99;
-                if (sampleIndex >= 0 && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset])
-                {
-                    controlDepth = 0;
-                }
-                else if (sampleIndex > boundaries[0] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 1])
-                {
-                    controlDepth = 1;
-                }
-                else if (sampleIndex > boundaries[1] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 2])
-                {
-                    controlDepth = 2;
-                }
-                else if (sampleIndex > boundaries[2] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 3])
-                {
-                    controlDepth = 3;
-                }
-                else if (sampleIndex > boundaries[3] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 4])
-                {
-                    controlDepth = 4;
-                }
-                else if (sampleIndex > boundaries[4] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 5])
-                {
-                    controlDepth = 5;
-                }
-                else if (sampleIndex > boundaries[5] && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 6])
-                {
-                    controlDepth = 6;
-                }
-                else if ((sampleIndex > boundaries[6]) && sampleIndex <= boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + 7])
-                {
-                    controlDepth = 7;
-                }
-                else if (sampleIndex == threadCount)
-                {
-                    controlDepth = 8;
-                }
-
-                // Get sample
-                uint sampleDepth = Helpers.GetDepthFromBoundaries(sampleIndex, treeDepth, boundaries);
-
-                // Test result
-                Assert.AreEqual(controlDepth, sampleDepth);
-            }
-        }
-
-        [Test]
-        // Test calculation of thread count and boundary offsets
-        public void GetThreadCount()
-        {
-            // Calculate control data
-            uint gridWidth = 256;
-            uint voxelCount = Convert.ToUInt32(gridWidth * gridWidth * gridWidth);
-            uint treeDepth = Helpers.GetDepth(gridWidth);
-            uint threadCount = Helpers.GetThreadCount(gridWidth, treeDepth, out uint[] boundaries);
-
-            Assert.AreEqual(treeDepth, 8);
-            Debug.Log("<Unit Test> (GetThreadCount) gridWidth:" + gridWidth + ", voxelCount:" + voxelCount + ", threadCount:" + threadCount + ", treeDepth:" + treeDepth);
-
-            // Control data
-            uint[] control = new uint[8];
-            control[0] = voxelCount / 8;
-            control[1] = control[0] + (voxelCount / 8 / 8);
-            control[2] = control[1] + (voxelCount / 8 / 8 / 8);
-            control[3] = control[2] + (voxelCount / 8 / 8 / 8 / 8);
-            control[4] = control[3] + (voxelCount / 8 / 8 / 8 / 8 / 8);
-            control[5] = control[4] + (voxelCount / 8 / 8 / 8 / 8 / 8 / 8);
-            control[6] = control[5] + (voxelCount / 8 / 8 / 8 / 8 / 8 / 8 / 8);
-            control[7] = control[6] + (voxelCount / 8 / 8 / 8 / 8 / 8 / 8 / 8 / 8);
-
-            for (uint i = 0; i < treeDepth; i++)
-            {
-                // Test the boundary array
-                Debug.Log("<Unit Test> (GetThreadCount) Control " + i + ":" + control[i] + ", Boundary " + i + ":" + boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + i]);
-                Assert.AreEqual(control[i], boundaries[NKLI.Nigiri.SVO.Tree.boundariesOffset + i]);
-            }
-        }
-
-        [Test]
-        // Test Calculation of tree depth
-        public void GetDepth()
-        {
-            Assert.AreEqual(Helpers.GetDepth(16), 4);
-            Assert.AreEqual(Helpers.GetDepth(32), 5);
-            Assert.AreEqual(Helpers.GetDepth(64), 6);
-            Assert.AreEqual(Helpers.GetDepth(128), 7);
-            Assert.AreEqual(Helpers.GetDepth(256), 8);
-            Assert.AreEqual(Helpers.GetDepth(512), 9);
-            Assert.AreEqual(Helpers.GetDepth(1024), 10);
-            Assert.AreEqual(Helpers.GetDepth(2048), 11);
-            Assert.AreEqual(Helpers.GetDepth(4096), 12);
-            Assert.AreEqual(Helpers.GetDepth(8192), 13);
-            Assert.AreEqual(Helpers.GetDepth(16384), 14);
-            Assert.AreEqual(Helpers.GetDepth(32768), 15);
-            Assert.AreEqual(Helpers.GetDepth(65536), 16);
-        }
-
-        [DllImport("msvcrt.dll", CallingConvention = CallingConvention.Cdecl)]
-        static extern int memcmp(byte[] b1, byte[] b2, long count);
-
-        static bool ByteArrayCompare(byte[] b1, byte[] b2)
-        {
-            // Validate buffers are the same length.
-            // This also ensures that the count does not exceed the length of either buffer.  
-            return b1.Length == b2.Length && memcmp(b1, b2, b1.Length) == 0;
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_Position, true);
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_Depth, true);
+            NKLI.Nigiri.Helpers.DisposeTextureRef(ref RT_Source, true);
         }
     }
     #endregion

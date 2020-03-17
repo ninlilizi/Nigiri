@@ -860,6 +860,30 @@ public class Nigiri : MonoBehaviour {
             Graphics.ClearRandomWriteTargets();
 
             ///END Update Mask
+            ///
+
+            // Save MaskBuffer to file for Test units
+            /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+            {
+                string file = Application.dataPath + "/Test_Unit-MaskBuffer.bytes";
+                if (!System.IO.File.Exists(file))
+                {
+                    // Capture Morton buffer test data
+                    int size = (injectionTextureResolution.x * injectionTextureResolution.y) * sizeof(uint);
+                    byte[] test_MaskBuffer = new byte[size];
+
+                    computeBuffers.voxelUpdateMaskBuffer.GetData(test_MaskBuffer);
+                    GL.Flush();
+
+                    byte[] compressed = NKLI.Nigiri.Tools.LZMAtools.CompressByteArrayToLZMAByteArray(test_MaskBuffer);
+
+                    Debug.Log("Writing to:" + file);
+
+                    FileStream fs = System.IO.File.Create(file);
+                    fs.Write(compressed, 0, compressed.Length);
+                    fs.Close();
+                }
+            }*/
 
             if (maskcount > 0)
             {

@@ -58,12 +58,16 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 /// <summary>
 /// Writes colour value to node
 /// </summary>
-inline void SetNodeColour(SVONode node, uint4 colour)
+inline SVONode SetNodeColour(SVONode node, uint4 colour)
 {
+    // Set values
     node.value_A = colour.a;
     node.value_R = colour.r;
     node.value_G = colour.g;
     node.value_B = colour.b;
+    
+    // return node
+    return node;
 }
 
 /// <summary>
@@ -85,9 +89,10 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
 void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
-    float4 worldPosition, uint4 colour, uint maxDepth, float giAreaSize)
+    float4 worldPosition, uint4 colour, float giAreaSize)
 {
     // Traverse tree
+    uint maxDepth = counterBuffer[0];
     uint currentDepth = 0;
     uint done = 0;
     uint offset = 0;
@@ -103,16 +108,14 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
          
         // At max depth we just write out the voxel and quit
         if (currentDepth = maxDepth)
-        {
-            // Here we write the colour the value          
-            SetNodeColour(node, colour);
-            
+        {           
             // Write back to buffer
             // TODO - This is not threadsafe and will result in a
             //          race condition characterized by flicking GI
             //          This will be replaced with an atomic rolling
             //          average to fix this problem in the future
-            svoBuffer[offset] = node;
+            //svoBuffer[offset] = SetNodeColour(node, colour);
+            svoBuffer[offset] = SetNodeColour(node, uint4(1, 2, 3, 4));
              
             // We're done here
             done = 1;
@@ -123,10 +126,12 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             //  currentDepth = 0
             //  resolution = 1
             
-            if (bitfieldOccupancy == 0)
+            if (node.referenceOffset == 0)
             {
                 // Here we split the node
                 AppendSVOSplitQueue(queueBuffer, counterBuffer, offset, 2, 1);
+                
+                svoBuffer[offset] = SetNodeColour(node, uint4(5, 6, 7, 8));
                 
                 // We're done here
                 done = 1;

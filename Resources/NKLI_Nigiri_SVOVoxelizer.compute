@@ -6,7 +6,7 @@
 #pragma kernel CSMain
 
 // Include
-#include "NKLI_Nigiri_SVOVoxelizer.cginc"
+#include "NKLI_Nigiri_SVOVoxelizer_Functions.cginc"
 #include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // List of ordered pixels to sample
@@ -46,5 +46,5 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     SplitInsertSVO(
         _SVO, _SVO_SplitQueue, _SVO_Counters, positionTexture[orderedCoord],
         GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain),
-        _maxDepth, _giAreaSize);
+        _giAreaSize);
 }

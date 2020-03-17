@@ -4,6 +4,7 @@
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
 /// </summary>
 
+using System;
 using UnityEngine;
 
 namespace NKLI.Nigiri.SVO
@@ -43,6 +44,7 @@ namespace NKLI.Nigiri.SVO
 
             // Load shader
             Shader_VoxelEncocder = Resources.Load("NKLI_Nigiri_SVOVoxelizer") as ComputeShader;
+            if (Shader_VoxelEncocder == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOVoxelizer'");
 
             // Binds to SVO
             SVO_Tree = SVO;
@@ -73,6 +75,7 @@ namespace NKLI.Nigiri.SVO
                 // Throw exception
                 throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Null PTRs detected");
             }
+
 
             // Set buffers
             Shader_VoxelEncocder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
