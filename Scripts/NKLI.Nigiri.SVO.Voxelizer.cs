@@ -111,27 +111,37 @@ namespace NKLI.Nigiri.SVO
             return true;
         }
 
-        public bool SplitNodes(int queueLength)
+        public bool SplitNodes()
         {
+            // Only if a successful readback has been completed and flagged for action
+            if (SVO_Tree.AbleToSplit)
+            {
+                // Send buffer to GPU
+                SVO_Tree.Buffer_SplitQueue.SetData(SVO_Tree.SplitQueueSparse);
 
-            // Rounds split queue length to nearest mul of 8 
-            //  to match dispatch thread group size
-            queueLength = ((queueLength + 8 - (8 / Math.Abs(8))) / 8) * 8;
+                // Rounds split queue length to nearest mul of 8 
+                //  to match dispatch thread group size
+                int queueLength = ((SVO_Tree.SplitQueueSparseCount + 8 - (8 / Math.Abs(8))) / 8) * 8;
 
-            // Set buffers
-            Shader_SVOSplitter.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
-            Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
-            Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters_Internal", SVO_Tree.Buffer_Counters_Internal);
-            Shader_SVOSplitter.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
+                // Set buffers
+                Shader_SVOSplitter.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
+                Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
+                Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters_Internal", SVO_Tree.Buffer_Counters_Internal);
+                Shader_SVOSplitter.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
 
-            // Set values
-            Shader_SVOSplitter.SetFloat("_SVO_MaxNodes", SVO_Tree.Buffer_SVO_Count);
+                // Set values
+                Shader_SVOSplitter.SetFloat("_SVO_MaxNodes", SVO_Tree.Buffer_SVO_Count);
 
-            // Dispatch
-            Shader_SVOSplitter.Dispatch(0, queueLength / 8, 1, 1);
+                // Dispatch
+                Shader_SVOSplitter.Dispatch(0, queueLength / 8, 1, 1);
 
-            // We're done here
-            return true;
+                // We don't want to run again till there is something to do
+                SVO_Tree.AbleToSplit = false;
+
+                // We're done here
+                return true;
+            }
+            else return false;
         }
 
 

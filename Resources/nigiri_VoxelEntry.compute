@@ -7,7 +7,7 @@
 uniform RWTexture3D<float4>			voxelGrid : register(u1);
 
 //RWStructuredBuffer<int>					RenderCounter;
-uniform ConsumeStructuredBuffer<uint>	_maskBuffer;
+uniform ConsumeStructuredBuffer<uint>	_maskBufferAC;
 uniform RWStructuredBuffer<uint4>		_sampleBuffer	: register(u2);
 uniform RWStructuredBuffer<uint>		_sampleCountBuffer : register(u3);
 
@@ -119,7 +119,7 @@ inline uint2 oneD2twoD(uint index, uint width)
 [numthreads(16, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
-	uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
+	uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBufferAC.Consume());
 
 
 	//uint2 orderedCoord = id.xy;

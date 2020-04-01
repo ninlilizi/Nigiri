@@ -1,12 +1,15 @@
 ﻿// Each #kernel tells which function to compile; you can have many kernels
-#pragma kernel CSMain
+#pragma kernel CSMain0
+#pragma kernel CSMain1
 
 #include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // Unique Index for computing access coordinates
 uniform RWStructuredBuffer<uint>	_renderCountBuffer;
 // Output to voxelisation queue
-uniform AppendStructuredBuffer<uint>	_maskBuffer	 : register(u1);
+uniform AppendStructuredBuffer<uint> _maskBufferAC;
+// Output to voxelisation queue
+uniform RWStructuredBuffer<uint> _maskBufferRW;
 
 cbuffer cbSettings : register(b0)
 {
@@ -54,7 +57,7 @@ inline uint GetVoxelCascade(float4 worldPosition)
 
 // 0
 [numthreads(16, 16, 1)]
-void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
+void CSMain0(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
 	// Update Unique index
 	uint counter;
@@ -65,13 +68,22 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	if ((GetVoxelCascade(positionTexture[orderedCoord]) == _cascade) && (fmod(counter, 2) == 0))
 	{
 		InterlockedAdd(_renderCountBuffer[CountIndex], 1);
-		_maskBuffer.Append(counter);
+		_maskBufferAC.Append(counter);
 		
 	}
-	/*else
-	{
-		//DecayCount.IncrementCounter();
-	}*/
+}
+
+// 1
+[numthreads(16, 16, 1)]
+void CSMain1(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
+{
+	// Update Unique index
+    uint counter;
+    InterlockedAdd(_renderCountBuffer[MaskIndex], 1, counter);
+    uint2 orderedCoord = morton2D_MagicBits_Decode(counter);
+
+    InterlockedAdd(_renderCountBuffer[CountIndex], 1);
+    _maskBufferRW[counter] = counter;
 }
 
 	

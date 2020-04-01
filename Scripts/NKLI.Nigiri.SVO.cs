@@ -6,6 +6,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Threading;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -18,16 +19,30 @@ namespace NKLI.Nigiri.SVO
     public class Tree : ScriptableObject, IDisposable
     {
         // Read-only properties
-        public int Buffer_SVO_ByteLength { get; private set; }
-        public int Buffer_SVO_Count { get; private set; }
-        public uint MaxDepth { get; private set; }
-        public uint SplitQueueMaxLength { get; private set; }
+        public int Buffer_SVO_ByteLength { get; private set; } // Byte length of buffer
+        public int Buffer_SVO_Count { get; private set; } // Max possible nodes
+        public uint MaxDepth { get; private set; } // Default starting depth TTL of the tree
+        public uint SplitQueueMaxLength { get; private set; } // Max length of the spit queue
+        public byte[] SplitQueueSparse { get; private set; } // Processed list of nodes to split
+        public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
+        public bool AbleToSplit { get; set; } // If there are nodes to split
+
+        // GPU readback storage of the split queue
+        private byte[] splitQueue;
+        //private int sparseNodesTosplit;
+
 
         // Buffers
         public ComputeBuffer Buffer_SVO;
         public ComputeBuffer Buffer_Counters;
         public ComputeBuffer Buffer_Counters_Internal;
         public ComputeBuffer Buffer_SplitQueue;
+
+        // Readback queue
+        public Queue<AsyncGPUReadbackRequest> gPU_Requests_Buffer_Counters = new Queue<AsyncGPUReadbackRequest>();
+
+        // Commandbuffer
+        private CommandBuffer CB_Nigiri_SVO;
 
         // static consts
         //public static readonly uint maxDepth = 8;
@@ -38,8 +53,11 @@ namespace NKLI.Nigiri.SVO
         // Compute
         ComputeShader shader_SVOBuilder;
 
+        // Attached camera
+        private Camera attachedCamera;
+
         // Constructor
-        public void Create(uint maxDepth, int maxNodes, uint splitQueueMaxLength)
+        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength)
         {
             // Set properties
             MaxDepth = maxDepth;
@@ -53,8 +71,6 @@ namespace NKLI.Nigiri.SVO
                          MidpointRounding.AwayFromZero
                      ) * factor), 8);
 
-            // Load shader
-            shader_SVOBuilder = Resources.Load("NKLI_Nigiri_SVOBuilder") as ComputeShader;
 
             // Output buffer to contain final SVO
             Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 8, ComputeBufferType.Default);
@@ -69,6 +85,15 @@ namespace NKLI.Nigiri.SVO
 
             // Temporary PTR storage buffer
             Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
+
+            // CPU readback storage for the split queue
+            splitQueue = new byte[SplitQueueMaxLength * 4];
+
+            // Processed split queue for feeding to compute
+            SplitQueueSparse = new byte[SplitQueueMaxLength * 4];
+
+            // Target array for async counters readback
+            //Counters = new uint[Buffer_Counters_Count];
 
             // Set counter buffer
             SetCounterBuffer();
@@ -88,12 +113,102 @@ namespace NKLI.Nigiri.SVO
             };
             Buffer_SVO.SetData(nodeList, 0, 0, 1);
 
-            // Assign to compute
-            shader_SVOBuilder.SetBuffer(0, "buffer_Counters", Buffer_Counters);
-            shader_SVOBuilder.SetBuffer(0, "buffer_SVO", Buffer_SVO);            
-
+            // Setup commandbuffer
+            CB_Nigiri_SVO = new CommandBuffer
+            {
+                name = "Nigiri Asynchronous SVO"
+            };
+            //CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Counters, HandleCountersReadback);
+            CB_Nigiri_SVO.RequestAsyncReadback(Buffer_SplitQueue, HandleSplitQueueReadback);
+            
+            attachedCamera = _camera;
+            attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
 
         }
+
+        /// <summary>
+        /// Handles completed async readback of split queue buffer
+        /// </summary>
+        /// <param name="obj"></param>
+        private void HandleSplitQueueReadback(AsyncGPUReadbackRequest obj)
+        {
+            if (obj.hasError) Debug.Log("SVO split queue readback error");
+            else if (obj.done)
+            {
+                obj.GetData<byte>().CopyTo(splitQueue);
+            }
+
+            Thread workerThread = new Thread(ThreadedNodeSplit);
+            workerThread.Start();
+        }
+
+        private void ThreadedNodeSplit()
+        {
+            SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
+            AbleToSplit = contentsFound;
+        }
+
+        private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound)
+        {
+            // Copy split queue to hashset to remove dupes
+            HashSet<UInt32> arraySet = new HashSet<uint>();
+            for (int i = 0; i < (targetArray.Length / 4); i++)
+            {
+                byte[] queueByte = new byte[4];
+                Buffer.BlockCopy(targetArray, (i * 4), queueByte, 0, 4);
+                uint queueValue = BitConverter.ToUInt32(queueByte, 0);
+                if (queueValue != 0)  arraySet.Add(queueValue);
+            }
+
+            // Keep track of how many sparse nodes in the queue
+            SplitQueueSparseCount = arraySet.Count;
+
+            if (SplitQueueSparseCount > 0)
+            {
+                // Copy hashset back to array
+                int queueWriteBackIndex = 0;
+                HashSet<uint>.Enumerator queueEnum = arraySet.GetEnumerator();
+                while (queueEnum.MoveNext())
+                {
+                    byte[] queueByte = new byte[4];
+                    queueByte = BitConverter.GetBytes(queueEnum.Current);
+                    Buffer.BlockCopy(queueByte, 0, targetArray, queueWriteBackIndex * 4, 4);
+                    queueWriteBackIndex++;
+                }
+
+                // Zeros rest of array
+                int queueStartIndex = arraySet.Count * 4;
+                Array.Clear(targetArray, queueStartIndex, (targetArray.Length - queueStartIndex));
+
+                // There's work to do!
+                contentsFound = true;
+            }
+            else
+            {
+                // Zeros entire array
+                int queueStartIndex = arraySet.Count * 4;
+                Array.Clear(targetArray, 0, targetArray.Length);
+
+                // Nothing to do.
+                contentsFound = false;
+            }
+
+            // We're done here
+            return targetArray;
+        }
+
+        /*/// <summary>
+        /// Handles completed async readback of counter buffer
+        /// </summary>
+        /// <param name="obj"></param>
+        private void HandleCountersReadback(AsyncGPUReadbackRequest obj)
+        {
+            if (obj.hasError) Debug.Log("SVO GPU Counter readback error");
+            else if (obj.done)
+            {
+                obj.GetData<uint>().CopyTo(Counters);
+            }
+        }*/
 
         /// <summary>
         /// Sets counter buffer initial values and sends to GPU
@@ -170,6 +285,9 @@ namespace NKLI.Nigiri.SVO
                 {
                     // Attempt to dispose any existing buffers
                     ReleaseBuffers();
+
+                    // Remove command buffer from camera
+                    attachedCamera.RemoveCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
                 }
 
                 disposedValue = true;

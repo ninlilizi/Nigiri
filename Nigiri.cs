@@ -384,7 +384,9 @@ public class Nigiri : MonoBehaviour {
     public static RenderTextures renderTextures;
     public static ComputeBuffers computeBuffers;
     public static NKLI.Nigiri.SVO.Tree SVO;
-    
+
+    // Functional objects
+    public static NKLI.Nigiri.SVO.Voxelizer voxelizer;
 
     private int tracedTexture1UpdateCount;
 
@@ -732,8 +734,11 @@ public class Nigiri : MonoBehaviour {
         computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
 
         // Instantiate SVO Tree
-        //SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        //SVO.Create();
+        SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+        SVO.Create(this.GetComponent<Camera>(),8, 16777216, 64);
+
+        // Instantiate voxelizer
+        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 100, 8);
 
         Setup();
 
@@ -803,6 +808,24 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid()
     {
+        /// SVO
+        /// 
+        Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
+        Shader.SetGlobalBuffer("_maskBufferRW", computeBuffers.voxelUpdateMaskBuffer);
+
+
+        nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
+        nigiri_VoxelMask.Dispatch(1, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
+
+        // Voxelize scene
+        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBuffer);
+
+        // Split nodes
+        voxelizer.SplitNodes();
+
+
+        /// Naive
+        computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
         int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids        
@@ -814,12 +837,12 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalInt("_cascade", cascadeSwitch);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
-        Shader.SetGlobalBuffer("_maskBuffer", computeBuffers.voxelUpdateMaskBuffer);
+        Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
         Shader.SetGlobalBuffer("_sampleBuffer", computeBuffers.voxelUpdateSampleBuffer);
         Shader.SetGlobalBuffer("_sampleCountBuffer", computeBuffers.voxelUpdateSampleCountBuffer);
-        Shader.SetGlobalBuffer("_SVO_SplitQueue", SVO.Buffer_SplitQueue);
-        Shader.SetGlobalBuffer("_SVO_Counters", SVO.Buffer_Counters);
-        Shader.SetGlobalBuffer("_SVO", SVO.Buffer_SVO);
+        //Shader.SetGlobalBuffer("_SVO_SplitQueue", SVO.Buffer_SplitQueue);
+        //Shader.SetGlobalBuffer("_SVO_Counters", SVO.Buffer_Counters);
+        //Shader.SetGlobalBuffer("_SVO", SVO.Buffer_SVO);
 
         // Secondary Voxelisation
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
@@ -833,7 +856,7 @@ public class Nigiri : MonoBehaviour {
         // Voxelize main cam
         if (primaryVoxelization)
         {
-            computeBuffers.voxelUpdateMaskBuffer.SetCounterValue(0);
+            computeBuffers.voxelUpdateMaskBufferNaive.SetCounterValue(0);
 
             // Update Mask
             uint maskcount = 0;
@@ -1365,6 +1388,9 @@ public class Nigiri : MonoBehaviour {
 
         // Destroy buffers
         Helpers.DestroyScriptableObject(ref computeBuffers);
+
+        // Dispose voxelizer
+        voxelizer.Dispose();
 
         // Destroy SVO
         Helpers.DestroyScriptableObject(ref SVO);

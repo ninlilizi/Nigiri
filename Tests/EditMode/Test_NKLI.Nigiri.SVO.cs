@@ -80,7 +80,8 @@ namespace Tests.Nigiri.SVO
 
             // Instantiate SVO Tree
             NKLI.Nigiri.SVO.Tree SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-            SVO.Create(8, 4096, 66);
+            Camera testUnitCamera = new Camera();
+            SVO.Create(testUnitCamera, 8, 4096, 66);
 
             // Split queue length should be rounded to nerest mul of 8
             Assert.AreEqual(64, SVO.SplitQueueMaxLength);
@@ -226,7 +227,7 @@ namespace Tests.Nigiri.SVO
 
 
                 // Split nodes
-                voxelizer.SplitNodes(queueSet.Count);
+                voxelizer.SplitNodes();
             }
 
             // Attempt to verify number of output nodes

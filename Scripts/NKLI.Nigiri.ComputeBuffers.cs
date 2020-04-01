@@ -19,6 +19,7 @@ namespace NKLI.Nigiri
         public ComputeBuffer RenderCountBuffer;
 
         public ComputeBuffer voxelUpdateSampleCount;
+        public ComputeBuffer voxelUpdateMaskBufferNaive;
         public ComputeBuffer voxelUpdateMaskBuffer;
         public ComputeBuffer voxelUpdateSampleBuffer;
         public ComputeBuffer voxelUpdateSampleCountBuffer;
@@ -50,6 +51,9 @@ namespace NKLI.Nigiri
             if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
             voxelUpdateSampleCount = new ComputeBuffer(resolution * resolution * resolution, 4, ComputeBufferType.Default);
 
+            if (voxelUpdateMaskBufferNaive != null) voxelUpdateMaskBufferNaive.Release();
+            voxelUpdateMaskBufferNaive = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
+
             if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
             voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
 
@@ -74,6 +78,7 @@ namespace NKLI.Nigiri
         public void DisposeBuffers()
         {
             Helpers.ReleaseBufferRef(ref voxelUpdateSampleCount);
+            Helpers.ReleaseBufferRef(ref voxelUpdateMaskBufferNaive);
             Helpers.ReleaseBufferRef(ref voxelUpdateMaskBuffer);
             Helpers.ReleaseBufferRef(ref voxelUpdateSampleBuffer);
             Helpers.ReleaseBufferRef(ref voxelUpdateSampleCountBuffer);
