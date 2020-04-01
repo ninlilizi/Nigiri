@@ -20,10 +20,10 @@ struct SVONode
     uint packedBitfield;
 
     // Colour value (128b)
-    uint value_R;
-    uint value_G;
-    uint value_B;
-    uint value_A;
+    float value_R;
+    float value_G;
+    float value_B;
+    float value_A;
 
     // When used in shader, pad to fit 128 bit cache alignment
     uint pad0;

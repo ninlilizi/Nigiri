@@ -11,9 +11,13 @@
 
 		CGINCLUDE
 
+		// Include
 		#include "UnityCG.cginc"
+		#include "NKLI_Nigiri_SVONode.cginc"
 
 		#define PI 3.1415926f
+
+
 
 		struct colorStruct
 		{
@@ -117,7 +121,8 @@
 
 		//uniform StructuredBuffer<colorStruct> tracedBuffer0;
 		//uniform RWStructuredBuffer<float4> tracedBuffer1 : register(u1);
-		uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u1);
+		//uniform RWStructuredBuffer<uint> voxelUpdateBuffer : register(u1);
+		uniform StructuredBuffer<SVONode> _SVO;
 
 		float ConeTraceBias;
 
@@ -352,41 +357,12 @@ float3 offsets[6] =
 };
 
 // Returns the voxel position in the grids
-inline float4 GetVoxelPosition(float3 worldPosition)
+inline float3 GetVoxelPosition(float3 worldPosition)
 {
-	worldPosition = worldPosition.xyz - gridOffset.xyz;
-	   
-	uint cascade = 1;
-	float cascade1 = 0.33;
-	float cascade2 = 0.66;
-	float cascade3 = 1.00;
-	int cascadeBoundary = _giAreaSize;
-	int cascadeBoundary1 = _giAreaSize * cascade1;
-	int cascadeBoundary2 = _giAreaSize * cascade2;
-	int cascadeBoundary3 = _giAreaSize * cascade3;
-
-	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
-	{
-		cascade = 1;
-		cascadeBoundary = cascadeBoundary1;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary2) && (abs(worldPosition.y) < cascadeBoundary2) && (abs(worldPosition.z) < cascadeBoundary2))
-	{
-		cascade = 2;
-		cascadeBoundary = cascadeBoundary2;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary3) && (abs(worldPosition.y) < cascadeBoundary3) && (abs(worldPosition.z) < cascadeBoundary3))
-	{
-		cascade = 3;
-		cascadeBoundary = cascadeBoundary3;
-	}
-	else cascade = 4;
-	
-	float3 voxelPosition = worldPosition / cascadeBoundary;
+	float3 voxelPosition = worldPosition / _giAreaSize;
 	voxelPosition += float3(1.0f, 1.0f, 1.0f);
 	voxelPosition /= 2.0f;
-
-	return float4(voxelPosition, cascade);
+	return voxelPosition;
 }
 
 // Returns the voxel information from grid 1
@@ -395,9 +371,9 @@ inline float4 GetVoxelInfo1(float3 voxelPosition)
 	//voxelUpdateBuffer
 	//uint threeD2oneD(float3 coord)
 
-	uint index = threeD2oneD(voxelPosition);
+	//uint index = threeD2oneD(voxelPosition);
 	//if (voxelUpdateBuffer[index] == 0) 
-		voxelUpdateBuffer[index] = 2;
+		//voxelUpdateBuffer[index] = 2;
 
 	float4 tex = tex3D(voxelGrid1, voxelPosition);
 	
@@ -522,6 +498,120 @@ inline float4 GetCascadeVoxelInfo3(float3 voxelPosition)
 	return tex;
 }
 
+inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
+{
+	// Lazy caculation of node offset
+	// TODO - This can be condensed into single operaion
+	uint nextIndex = 0;
+	uint halfWidth = resolution / 2;
+	if (index3D.x > halfWidth)
+		nextIndex = nextIndex | (1);
+	if (index3D.y > halfWidth)
+		nextIndex = nextIndex | (1 << 1);
+	if (index3D.z > halfWidth)
+		nextIndex = nextIndex | (1 << 2);
+
+	return nextIndex;
+}
+
+inline uint3 GetGridPosition(float3 worldPosition, uint resolution)
+{
+	float3 encodedPosition = worldPosition.xyz / _giAreaSize;
+
+	encodedPosition += float3(1.0f, 1.0f, 1.0f);
+	encodedPosition /= 2.0f;
+
+	uint3 voxelPosition = (uint3) (encodedPosition * resolution);
+
+	return uint3(voxelPosition.xyz);
+}
+
+// Returns the voxel information from grid 1
+inline float4 GetVoxelInfoSVO(float3 worldPosition)
+{
+	//uint index = threeD2oneD(voxelPosition);
+	//float4 tex = tex3D(voxelGrid1, voxelPosition);
+	//float4 tex = float4(0, 0, 0, 0);
+
+	//////// ---------------------- SVO Traverse begin
+
+	// Traverse tree
+	//uint maxDepth = counterBuffer[0];
+	uint currentDepth = 0;
+	uint done = 0;
+	uint offset = 0;
+	uint emergencyExit = 0;
+	while (done == 0)
+	{
+		// Ejector seat
+		emergencyExit++;
+		if (emergencyExit > 8192)
+			return float4(1, 1, 0, 1);
+
+		// Unpack node
+		SVONode node = _SVO[offset];
+		uint bitfieldOccupancy;
+		uint runLength;
+		uint ttl;
+		uint isLeaf;
+		node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
+
+		// At max depth we just write out the voxel and quit
+		if (ttl == 0)
+		{
+			// Write back to buffer
+			// TODO - This is not threadsafe and will result in a
+			//          race condition characterized by flicking GI
+			//          This will be replaced with an atomic rolling
+			//          average to fix this problem in the future
+			//svoBuffer[offset] = SetNodeColour(node, colour);
+
+			//return float4(1, 1, 1, 1);
+			//if (node.value_A > 0) 
+			//return float4(1, 1, 1, 1);
+			//return float4(node.value_R, 0, 1, 1);
+			return float4(node.value_R, node.value_G, node.value_B, node.value_A);
+
+			// We're done here
+			//done = 1;
+		}
+		else
+		{
+			// At depth 0, we take default values
+			//  currentDepth = 0
+			//  resolution = 1
+
+			if (node.referenceOffset == 0)
+			{
+				return float4(node.value_R, node.value_G, node.value_B, node.value_A);
+			}
+			else
+			{
+				// We setup to search next depth
+				currentDepth++;
+
+				// Resolution is depth to the power of 4
+				uint resolution = pow(currentDepth, 2);
+
+
+				// Offet is reference + the node offset index
+				offset = node.referenceOffset + GetSVOBitOffset(GetGridPosition(worldPosition, resolution), resolution);
+				//offset = node.referenceOffset + GetSVOBitOffset(GetVoxelPosition(worldPosition), resolution);
+				//GetVoxelPosition
+
+			}
+		}
+	}
+
+
+
+
+
+	//////// ---------------------- SVO Traverse end
+
+	return float4(0, 0, 1, 1);
+}
+
 float4 frag_debug(v2f i) : SV_Target
 {
 	// read low res depth and reconstruct world position
@@ -568,7 +658,7 @@ float4 frag_debug(v2f i) : SV_Target
 	}
 
 	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
-	float4 voxelPosition = float4(0.0f, 0.0f, 0.0f, 0.0f);
+	float3 voxelPosition = (0).xxx;
 
 	#if defined(GRID_1)
 	voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
@@ -576,14 +666,12 @@ float4 frag_debug(v2f i) : SV_Target
 
 	#if defined(GRID_2)
 	voxelPosition = GetVoxelPosition(worldPos);
-	if (voxelPosition.w == 1) voxelInfo = GetVoxelInfo2(voxelPosition);
-	else if (voxelPosition.w == 2) voxelInfo = GetCascadeVoxelInfo2(voxelPosition);
+	voxelInfo = GetVoxelInfo2(voxelPosition);
 	#endif
 
 	#if defined(GRID_3)
 	voxelPosition = GetVoxelPosition(worldPos);
-	if (voxelPosition.w == 1) voxelInfo = GetVoxelInfo3(voxelPosition);
-	else if (voxelPosition.w == 3) voxelInfo = GetCascadeVoxelInfo3(voxelPosition);
+	voxelInfo = GetVoxelInfo3(voxelPosition);
 	#endif
 
 	#if defined(GRID_4)
@@ -592,6 +680,12 @@ float4 frag_debug(v2f i) : SV_Target
 
 	#if defined(GRID_5)
 	voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
+	#endif
+
+
+
+	#if defined(GRID_SVO)
+	voxelInfo = GetVoxelInfoSVO(worldPos);
 	#endif
 
 	float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
@@ -737,7 +831,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float occlusion;
 	float4 gi = float4(0, 0, 0, 0);
 	//float2 interMult = float2(0, 0);
-	float4 voxelPosition = (0).xxxx;
+	float3 voxelPosition = (0).xxx;
 
 	// Sample voxel grid 1
 	if (skipFirstMipLevel == 0)
@@ -755,7 +849,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (hitFound < 0.9f)
 			{
 				voxelPosition = GetVoxelPosition(currentPosition);
-				if (voxelPosition.w == 1) currentVoxelInfo = GetVoxelInfo1(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+				currentVoxelInfo = GetVoxelInfo1(voxelPosition) * GISampleWeight(voxelPosition);
 				if (currentVoxelInfo.a > 0.0f)
 				{
 					if (depthStopOptimization) hitFound = 1.0f;
@@ -801,8 +895,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			if (voxelPosition.w == 1) currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (voxelPosition.w == 2) currentVoxelInfo = GetCascadeVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
@@ -847,8 +940,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			if (voxelPosition.w == 1) currentVoxelInfo = GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (voxelPosition.w == 3) currentVoxelInfo = GetCascadeVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
@@ -1209,7 +1301,7 @@ Pass
 	CGPROGRAM
 	#pragma vertex vert
 	#pragma fragment frag_debug
-	#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5
+	#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5 GRID_SVO
 	#pragma target 5.0
 	ENDCG
 }

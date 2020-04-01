@@ -11,26 +11,19 @@
 /// Returns position within a grid, given specific resolution and area size.
 /// </summary>
 inline uint3 GetGridPosition(float4 worldPosition, uint resolution, uint giAreaSize)
-{
-    // Relevant function when grid mobility is reenabled
-	//worldPosition.xyz = worldPosition.xyz - gridOffset.xyz;
-
-
-    float3 encodedPosition = worldPosition.xyz;
-	   	 
+{   
+    float3 encodedPosition = worldPosition / giAreaSize;
     encodedPosition += float3(1.0f, 1.0f, 1.0f);
     encodedPosition /= 2.0f;
-
     uint3 voxelPosition = (uint3) (encodedPosition * resolution);
-
-    return uint3(voxelPosition.xyz);
+    return voxelPosition;
 }
 
 /// <summary>
 /// Returns mixed colour for insertion
 /// </summary>
 inline float4 GetNewMixedColour(uint2 orderedCoord, Texture2D<float4> lightingTexture, Texture2D<float4> lightingTexture2, float emissiveIntensity, float shadowStrength, float occlusionGain)
-{
+{  
     return float4((
     max(lightingTexture[orderedCoord].rgb * emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - shadowStrength).xxx)),
     lightingTexture2[orderedCoord].a * occlusionGain);
@@ -61,10 +54,10 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 inline SVONode SetNodeColour(SVONode node, float4 colour)
 {
     // Set values
-    node.value_A = colour.a * 255;
-    node.value_R = colour.r * 255;
-    node.value_G = colour.g * 255;
-    node.value_B = colour.b * 255;
+    node.value_A = lerp(colour.a, node.value_A, 0.99);
+    node.value_R = lerp(colour.r, node.value_R, 0.99);
+    node.value_G = lerp(colour.g, node.value_G, 0.99);
+    node.value_B = lerp(colour.b, node.value_B, 0.99);
     
     // return node
     return node;
@@ -125,7 +118,7 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             //          This will be replaced with an atomic rolling
             //          average to fix this problem in the future
             svoBuffer[offset] = SetNodeColour(node, colour);
-             
+                       
             // We're done here
             done = 1;
         }
@@ -141,7 +134,7 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
                 AppendSVOSplitQueue(queueBuffer, counterBuffer, offset);
                 
                 // Just here for debugging purposes
-                //svoBuffer[offset] = SetNodeColour(node, colour);
+                //svoBuffer[offset] = SetNodeColour(node, float4(1, 1, 1, 1));
                 
                 // We're done here
                 done = 1;
@@ -152,7 +145,7 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
                 currentDepth++;
                 
                 // Resolution is depth to the power of 4
-                uint resolution = pow(currentDepth, 4);
+                uint resolution = pow(currentDepth, 2);
                 
                 // Offet is reference + the node offset index
                 offset = node.referenceOffset + GetSVOBitOffset(GetGridPosition(worldPosition, resolution, giAreaSize), resolution);

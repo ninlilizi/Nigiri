@@ -10,7 +10,7 @@
 #include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // List of ordered pixels to sample
-uniform RWStructuredBuffer<uint> _maskBuffer;
+uniform ConsumeStructuredBuffer<uint> _maskBuffer;
 
 // SVO
 uniform RWStructuredBuffer<SVONode> _SVO;
@@ -33,6 +33,11 @@ uniform Texture2D<float4> positionTexture;
 uniform Texture2D<float4> lightingTexture;
 uniform Texture2D<float4> lightingTexture2;
 
+inline uint2 oneD2twoD(uint index, uint width)
+{
+    return uint2(index % width, index / width);
+}
+
 /// <summary>
 /// Encodes samples into tree
 /// </summary>
@@ -40,15 +45,19 @@ uniform Texture2D<float4> lightingTexture2;
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
     // Get mask position
-    uint counter;
-    InterlockedAdd(_SVO_Counters[4], 1, counter);
+    //uint counter;
+    //InterlockedAdd(_SVO_Counters[4], 1, counter);
     
     // Get morton ordered read index from mask buffer
-    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
+    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
+    //uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
+    //uint2 orderedCoord = oneD2twoD(counter, 1920);
+    
+    float4 colour = GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain);
    
     // Traverse the SVO, splitting and writing the sampled colour as required
     SplitInsertSVO(
         _SVO, _SVO_SplitQueue, _SVO_Counters, positionTexture[orderedCoord],
-        GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain),
+        colour,
         _giAreaSize);
 }

@@ -398,7 +398,6 @@ public class Nigiri : MonoBehaviour {
     int voxelizationSliceOffset;
     int voxelizationSliceDispatch;
 
-    private int cascadeSwitch = 0;
     private int frameSwitch = 0;
     private int mipSwitch = 0;
     int emissiveCameraLocationSwitch;
@@ -632,7 +631,6 @@ public class Nigiri : MonoBehaviour {
         FilterMode filterMode = FilterMode.Point;
         if (bilinearFiltering) filterMode = FilterMode.Bilinear;
 
-        renderTextures.voxelGridCascade1.filterMode = filterMode;
         renderTextures.voxelGrid1.filterMode = filterMode;
         renderTextures.voxelGrid2.filterMode = filterMode;
         renderTextures.voxelGrid3.filterMode = filterMode;
@@ -736,10 +734,10 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(),8, 16777216, 64);
+        SVO.Create(this.GetComponent<Camera>(), 8, 16777216, 64);
 
         // Instantiate voxelizer
-        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 100, 8);
+        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 50, 8);
 
         Setup();
 
@@ -812,14 +810,12 @@ public class Nigiri : MonoBehaviour {
         /// SVO
         /// 
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
-        Shader.SetGlobalBuffer("_maskBufferRW", computeBuffers.voxelUpdateMaskBuffer);
-
-
+        Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
         nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
-        nigiri_VoxelMask.Dispatch(1, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
+        nigiri_VoxelMask.Dispatch(0, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
 
         // Voxelize scene
-        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBuffer);
+        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBufferNaive);
 
         // Split nodes
         voxelizer.SplitNodes();
@@ -835,7 +831,6 @@ public class Nigiri : MonoBehaviour {
         Shader.SetGlobalFloat("_occlusionGain", occlusionGain);
         Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
         Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
-        Shader.SetGlobalInt("_cascade", cascadeSwitch);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
         Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
@@ -861,23 +856,10 @@ public class Nigiri : MonoBehaviour {
 
             // Update Mask
             uint maskcount = 0;
-            switch (cascadeSwitch)
-            {
-                case 0:
-                    nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary0);
-                    maskcount = renderCounts.VoxelSamplesPrimary0;
-                    break;
-                case 1:
-                    nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary1);
-                    maskcount = renderCounts.VoxelSamplesPrimary1;
-                    break;
-                case 2:
-                    nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary2);
-                    maskcount = renderCounts.VoxelSamplesPrimary2;
-                    break;
-                default:
-                    break;
-            }
+
+            nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary0);
+            maskcount = renderCounts.VoxelSamplesPrimary0;
+
             nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
             nigiri_VoxelMask.SetTexture(0, "positionTexture", renderTextures.positionTexture);
             nigiri_VoxelMask.Dispatch(0, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
@@ -912,23 +894,10 @@ public class Nigiri : MonoBehaviour {
             if (maskcount > 0)
             {
                 renderTimes.PrimaryVoxelisationStopwatch.Start();
-                switch (cascadeSwitch)
-                {
-                    case 0:
-                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGrid1);
-                        nigiri_VoxelEncodeUpdater.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGrid1);
-                        break;
-                    case 1:
-                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGridCascade1);
-                        nigiri_VoxelEncodeUpdater.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGridCascade1);
-                        break;
-                    case 2:
-                        nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGridCascade2);
-                        nigiri_VoxelEncodeUpdater.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGridCascade2);
-                        break;
-                    default:
-                        break;
-                }
+
+                nigiri_VoxelEntry.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGrid1);
+                nigiri_VoxelEncodeUpdater.SetTexture(kernelHandle, "voxelGrid", renderTextures.voxelGrid1);
+
                                
                 if (localCam.stereoEnabled)
                 {
@@ -975,8 +944,6 @@ public class Nigiri : MonoBehaviour {
                 renderTimes.RenderVoxelUpdate = renderTimes.VoxelUpdateStopwatch.Elapsed.TotalMilliseconds;
                 renderTimes.VoxelUpdateStopwatch.Reset();
             }
-
-            // cascadeSwitch = (cascadeSwitch + 1) % (3); // Disable cascdes as will become supurflous
         }
         ///END Voxelize main cam
 
@@ -1213,8 +1180,7 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetTexture("voxelGrid3", renderTextures.voxelGrid3);
         tracerMaterial.SetTexture("voxelGrid4", renderTextures.voxelGrid4);
         tracerMaterial.SetTexture("voxelGrid5", renderTextures.voxelGrid5);
-        tracerMaterial.SetTexture("voxelGridCascade1", renderTextures.voxelGridCascade1);
-        tracerMaterial.SetTexture("voxelGridCascade2", renderTextures.voxelGridCascade2);
+        tracerMaterial.SetBuffer("_SVO", SVO.Buffer_SVO);
 
 
         if (VisualizeVoxels) {
@@ -1432,14 +1398,6 @@ public class Nigiri : MonoBehaviour {
         // Recreate compute buffers
         computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
 
-        clearComputeCache.SetTexture(0, "RG0", renderTextures.voxelGridCascade1);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
-        clearComputeCache.SetTexture(0, "RG0", renderTextures.voxelGridCascade2);
-        clearComputeCache.SetInt("Resolution", highestVoxelResolution);
-        clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
-
         clearComputeCache.SetTexture(0, "RG0", renderTextures.voxelGrid1);
         clearComputeCache.SetInt("Resolution", highestVoxelResolution);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);
@@ -1578,11 +1536,6 @@ public class Nigiri : MonoBehaviour {
                 v += renderTextures.voxelGrid4.width * renderTextures.voxelGrid4.height * renderTextures.voxelGrid4.volumeDepth * bitValue(renderTextures.voxelGrid4);
             if (renderTextures.voxelGrid5 != null)
                 v += renderTextures.voxelGrid5.width * renderTextures.voxelGrid5.height * renderTextures.voxelGrid5.volumeDepth * bitValue(renderTextures.voxelGrid5);
-
-            if (renderTextures.voxelGridCascade1 != null)
-                v += renderTextures.voxelGridCascade1.width * renderTextures.voxelGridCascade1.height * renderTextures.voxelGridCascade1.volumeDepth * bitValue(renderTextures.voxelGridCascade1);
-            if (renderTextures.voxelGridCascade2 != null)
-                v += renderTextures.voxelGridCascade2.width * renderTextures.voxelGridCascade2.height * renderTextures.voxelGridCascade2.volumeDepth * bitValue(renderTextures.voxelGridCascade2);
 
             float vram = (v / 8388608.0f);
 

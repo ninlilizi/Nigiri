@@ -55,7 +55,7 @@ namespace NKLI.Nigiri
             voxelUpdateMaskBufferNaive = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
 
             if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
-            voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
+            voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Default);
 
             if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
             voxelUpdateSampleBuffer = new ComputeBuffer(resolution * resolution * resolution, sizeof(float) * 4, ComputeBufferType.Default);

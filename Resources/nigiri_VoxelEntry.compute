@@ -51,53 +51,13 @@ uniform uint							_cascade;
 
 
 // Function to get position of voxel in the grid
-inline uint4 GetVoxelPosition(float4 worldPosition)
+inline uint3 GetVoxelPosition(float3 worldPosition)
 {
-	//worldPosition.xyz = worldPosition.xyz - gridOffset.xyz;
-
-	// What do I know?
-	// Worldspace position of pixel
-	// boundary
-	// grid offset
-	// depth
-	uint cascade = 3;
-	float cascade1 = 0.33;
-	float cascade2 = 0.66;
-	float cascade3 = 1.00;
-	uint cachedResolution = _voxelResolution;
-	int cascadeBoundary = _giAreaSize;
-	int cascadeBoundary1 = _giAreaSize * cascade1;
-	int cascadeBoundary2 = _giAreaSize * cascade2;
-	int cascadeBoundary3 = _giAreaSize * cascade3;
-
-	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
-	{
-		cascade = 0;
-		//cachedResolution = voxelResolution;
-		cascadeBoundary = cascadeBoundary1;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary2) && (abs(worldPosition.y) < cascadeBoundary2) && (abs(worldPosition.z) < cascadeBoundary2))
-	{
-		cascade = 1;
-		cachedResolution /= 2;
-		cascadeBoundary = cascadeBoundary2;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary3) && (abs(worldPosition.y) < cascadeBoundary3) && (abs(worldPosition.z) < cascadeBoundary3))
-	{
-		cachedResolution /= 4;
-		cascade = 2;
-		cascadeBoundary = cascadeBoundary3;
-	}
-	else cascade = 3;
-	
-	float3 encodedPosition = worldPosition.xyz / cascadeBoundary;
-	   	 
-	encodedPosition += float3(1.0f, 1.0f, 1.0f);
-	encodedPosition /= 2.0f;
-
-	uint3 voxelPosition = (uint3)(encodedPosition * cachedResolution);
-
-	return float4(voxelPosition.xyz, cascade);
+    float3 encodedPosition = worldPosition / _giAreaSize;
+    encodedPosition += float3(1.0f, 1.0f, 1.0f);
+    encodedPosition /= 2.0f;
+    uint3 voxelPosition = (uint3) (encodedPosition * _voxelResolution);
+    return voxelPosition;
 }
 
 uint threeD2oneD(float3 coord)
@@ -125,62 +85,60 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 	//uint2 orderedCoord = id.xy;
 
 	if ((orderedCoord.x > 0) || (orderedCoord.y > 0))
-	{
+    {
 
-		uint4 voxelPosition = GetVoxelPosition(positionTexture[orderedCoord]);
+        uint3 voxelPosition = GetVoxelPosition(positionTexture[orderedCoord].xyz);
 
-		uint samplecountIndex = morton3D_Magicbits_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
+        uint samplecountIndex = morton3D_Magicbits_Encode(voxelPosition.x, voxelPosition.y, voxelPosition.z);
 
-		uint voxelUpdated = 0;
-		if (voxelPosition.w == _cascade)
-		{
-			voxelUpdated = 1;
+        uint voxelUpdated = 0;
+
+        voxelUpdated = 1;
 			//uint index = threeD2oneD(voxelPosition.xyz);
 			//uint cascadeBoundary0 = _voxelResolution * 0.25;
 			//uint cascadeBoundary1 = _voxelResolution * 0.66;
 
-			float4 newMixedColor = (0).xxxx;
-			if (nearestNeighbourPropagation == 1)
-			{
-				uint count = 1;
-				float4 mixedColor = voxelGrid[voxelPosition.xyz];
+        float4 newMixedColor = (0).xxxx;
+        if (nearestNeighbourPropagation == 1)
+        {
+            uint count = 1;
+            float4 mixedColor = voxelGrid[voxelPosition.xyz];
 
-				for (int x = 0; x < 16; x++)
-				{
-					float3 offset = offsets[x];
-					half4 testColor = voxelGrid[float3(voxelPosition.xyz + offset.xyz)];
-					if (testColor.a > 0.1)
-					{
-						mixedColor += testColor;
-						count++;
-					}
-				}
-				mixedColor /= count;
+            for (int x = 0; x < 16; x++)
+            {
+                float3 offset = offsets[x];
+                half4 testColor = voxelGrid[float3(voxelPosition.xyz + offset.xyz)];
+                if (testColor.a > 0.1)
+                {
+                    mixedColor += testColor;
+                    count++;
+                }
+            }
+            mixedColor /= count;
 
-				newMixedColor =
+            newMixedColor =
 					float4((max(lightingTexture[orderedCoord].rgb * _emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
 						lightingTexture2[orderedCoord].a * _occlusionGain);
 
-				newMixedColor = lerp(newMixedColor, mixedColor, 0.5);
-			}
-			else
-			{
-				newMixedColor =
+            newMixedColor = lerp(newMixedColor, mixedColor, 0.5);
+        }
+        else
+        {
+            newMixedColor =
 					float4((max(lightingTexture[orderedCoord].rgb * _emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - _shadowStrength).xxx)),
 						lightingTexture2[orderedCoord].a * _occlusionGain);
-			}
+        }
 
-			newMixedColor *= 255;
-			InterlockedAdd(_sampleBuffer[samplecountIndex].r, uint(newMixedColor.r));
-			InterlockedAdd(_sampleBuffer[samplecountIndex].g, uint(newMixedColor.g));
-			InterlockedAdd(_sampleBuffer[samplecountIndex].b, uint(newMixedColor.b));
-			InterlockedAdd(_sampleBuffer[samplecountIndex].a, uint(newMixedColor.a));
-			InterlockedAdd(_sampleCountBuffer[samplecountIndex].x, 1);
-		}
-
+        newMixedColor *= 255;
+        InterlockedAdd(_sampleBuffer[samplecountIndex].r, uint(newMixedColor.r));
+        InterlockedAdd(_sampleBuffer[samplecountIndex].g, uint(newMixedColor.g));
+        InterlockedAdd(_sampleBuffer[samplecountIndex].b, uint(newMixedColor.b));
+        InterlockedAdd(_sampleBuffer[samplecountIndex].a, uint(newMixedColor.a));
+        InterlockedAdd(_sampleCountBuffer[samplecountIndex].x, 1);
+	
 		// SampleCountBuffer is set to one in the case of visible + empty voxels and will be decayed by the voxel update Compute.
 		//InterlockedAdd(SampleCountBuffer[samplecountIndex].y, 1);
-	}
+    }
 }
 
 	

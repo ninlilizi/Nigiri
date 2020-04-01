@@ -24,8 +24,6 @@ namespace NKLI.Nigiri
         public RenderTexture voxelGrid3;
         public RenderTexture voxelGrid4;
         public RenderTexture voxelGrid5;
-        public RenderTexture voxelGridCascade1;
-        public RenderTexture voxelGridCascade2;
 
         // Render Textures
         public RenderTexture lightingTexture;
@@ -81,14 +79,12 @@ namespace NKLI.Nigiri
             voxelGridDescriptorFloat4.volumeDepth = resolution / 2;
 
             voxelGrid2 = new RenderTexture(voxelGridDescriptorFloat4);
-            voxelGridCascade1 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 4;
             voxelGridDescriptorFloat4.height = resolution / 4;
             voxelGridDescriptorFloat4.volumeDepth = resolution / 4;
 
             voxelGrid3 = new RenderTexture(voxelGridDescriptorFloat4);
-            voxelGridCascade2 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 8;
             voxelGridDescriptorFloat4.height = resolution / 8;
@@ -102,8 +98,6 @@ namespace NKLI.Nigiri
 
             voxelGrid5 = new RenderTexture(voxelGridDescriptorFloat4);
 
-            voxelGridCascade1.Create();
-            voxelGridCascade2.Create();
             voxelGrid1.Create();
             voxelGrid2.Create();
             voxelGrid3.Create();
@@ -206,8 +200,6 @@ namespace NKLI.Nigiri
         public void DisposeGridTextures(bool destroy)
         {
             // Dispose voxel grid textures
-            Helpers.DisposeTextureRef(ref voxelGridCascade1, destroy);
-            Helpers.DisposeTextureRef(ref voxelGridCascade2, destroy);
             Helpers.DisposeTextureRef(ref voxelGrid1, destroy);
             Helpers.DisposeTextureRef(ref voxelGrid2, destroy);
             Helpers.DisposeTextureRef(ref voxelGrid3, destroy);
