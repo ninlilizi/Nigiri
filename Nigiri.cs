@@ -734,7 +734,7 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(), 8, 16777216, 64);
+        SVO.Create(this.GetComponent<Camera>(), 8, 16777216, 256);
 
         // Instantiate voxelizer
         voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 50, 8);
@@ -869,7 +869,7 @@ public class Nigiri : MonoBehaviour {
             ///
 
             // Save MaskBuffer to file for Test units
-            /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+            /*if (mipSwitch == 0)
             {
                 string file = Application.dataPath + "/Test_Unit-MaskBuffer.bytes";
                 if (!System.IO.File.Exists(file))
@@ -917,7 +917,7 @@ public class Nigiri : MonoBehaviour {
                 renderTimes.PrimaryVoxelisationStopwatch.Reset();
 
                 // Save MortonBuffer to file for Test units
-                /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+                /*if (mipSwitch == 0)
                 {
                     string file = Application.dataPath + "/Test_Unit-MortonBuffer.dat";
                     if (!System.IO.File.Exists(file))
@@ -1144,7 +1144,7 @@ public class Nigiri : MonoBehaviour {
         }
 
         // Save RenderBuffers to filea for Test units
-        /*if ((cascadeSwitch) == 0 && (mipSwitch == 0))
+        /*if (mipSwitch == 0)
         {
 
             Helpers_Debug.SaveRenderTextureBuiltIn("/Test_Unit-RenderTexture-gBuffer0", BuiltinRenderTextureType.GBuffer0, source.width, source.height);

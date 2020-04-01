@@ -54,10 +54,10 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 inline SVONode SetNodeColour(SVONode node, float4 colour)
 {
     // Set values
-    node.value_A = lerp(colour.a, node.value_A, 0.99);
-    node.value_R = lerp(colour.r, node.value_R, 0.99);
-    node.value_G = lerp(colour.g, node.value_G, 0.99);
-    node.value_B = lerp(colour.b, node.value_B, 0.99);
+    node.value_A = lerp(colour.a, node.value_A, 0.999);
+    node.value_R = lerp(colour.r, node.value_R, 0.999);
+    node.value_G = lerp(colour.g, node.value_G, 0.999);
+    node.value_B = lerp(colour.b, node.value_B, 0.999);
     
     // return node
     return node;
@@ -71,14 +71,18 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
     // Only if within bounds
     if (counterBuffer[2] < counterBuffer[1])
     {
-        //  Get write index
-        uint index_SplitQueue;
-        InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
+        // Lazy test against filling with runs of identical offsets
+        if ((queueBuffer[counterBuffer[2]] + 1) != (offset + 1))
+        {
+            //  Get write index
+            uint index_SplitQueue;
+            InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
          
-        // Append to split queue it within bounds
-        //  offset is +1 because zero signifies null value
-        if (index_SplitQueue < counterBuffer[1])
-            queueBuffer[index_SplitQueue] = offset + 1;
+            // Append to split queue it within bounds
+            //  offset is +1 because zero signifies null value
+            if (index_SplitQueue < counterBuffer[1])
+                queueBuffer[index_SplitQueue] = offset + 1;
+        }
     }
 }
 
@@ -134,21 +138,22 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
                 AppendSVOSplitQueue(queueBuffer, counterBuffer, offset);
                 
                 // Just here for debugging purposes
-                //svoBuffer[offset] = SetNodeColour(node, float4(1, 1, 1, 1));
+                svoBuffer[offset] = SetNodeColour(node, colour);
                 
                 // We're done here
                 done = 1;
             }
             else
             {               
-                // We setup to search next depth
-                currentDepth++;
-                
                 // Resolution is depth to the power of 4
                 uint resolution = pow(currentDepth, 2);
                 
                 // Offet is reference + the node offset index
                 offset = node.referenceOffset + GetSVOBitOffset(GetGridPosition(worldPosition, resolution, giAreaSize), resolution);
+                //offset = node.referenceOffset + GetSVOBitOffset(worldPosition * resolution, resolution);
+                
+                // We setup to search next depth
+                currentDepth++;
             }
         }
     }

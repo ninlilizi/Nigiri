@@ -33,11 +33,6 @@ uniform Texture2D<float4> positionTexture;
 uniform Texture2D<float4> lightingTexture;
 uniform Texture2D<float4> lightingTexture2;
 
-inline uint2 oneD2twoD(uint index, uint width)
-{
-    return uint2(index % width, index / width);
-}
-
 /// <summary>
 /// Encodes samples into tree
 /// </summary>

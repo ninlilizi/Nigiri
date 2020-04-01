@@ -114,14 +114,14 @@ namespace NKLI.Nigiri.SVO
         public bool SplitNodes()
         {
             // Only if a successful readback has been completed and flagged for action
-            if (SVO_Tree.AbleToSplit)
+            if (SVO_Tree.AbleToSplit && (SVO_Tree.SplitQueueSparseCount > 0))
             {
                 // Send buffer to GPU
                 SVO_Tree.Buffer_SplitQueue.SetData(SVO_Tree.SplitQueueSparse);
 
                 // Rounds split queue length to nearest mul of 8 
                 //  to match dispatch thread group size
-                int queueLength = ((SVO_Tree.SplitQueueSparseCount + 8 - (8 / Math.Abs(8))) / 8) * 8;
+                int queueLength = Math.Max(((SVO_Tree.SplitQueueSparseCount + 8 - (8 / Math.Abs(8))) / 8) * 8, 8);
 
                 // Set buffers
                 Shader_SVOSplitter.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);

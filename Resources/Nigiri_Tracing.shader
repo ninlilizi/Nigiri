@@ -29,8 +29,6 @@
 		uniform sampler3D				voxelGrid3;
 		uniform sampler3D				voxelGrid4;
 		uniform sampler3D				voxelGrid5;
-		uniform sampler3D				voxelGridCascade1;
-		uniform sampler3D				voxelGridCascade2;	
 
 		uniform sampler2D 				_MainTex;
 		uniform sampler2D				_IndirectTex;
@@ -461,43 +459,6 @@ inline float4 GetVoxelInfo5(float3 voxelPosition)
 	return tex;
 }
 
-// Returns the voxel information from cascade 1
-inline float4 GetCascadeVoxelInfo2(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGridCascade1, voxelPosition);
-
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
-		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGridCascade1, voxelPosition + offset), tex);
-		}
-	}
-
-	return tex;
-}
-
-// Returns the voxel information from cascade 2
-inline float4 GetCascadeVoxelInfo3(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGridCascade2, voxelPosition);
-
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
-		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGridCascade2, voxelPosition + offset), tex);
-		}
-	}
-	return tex;
-}
-
 inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 {
 	// Lazy caculation of node offset
@@ -514,34 +475,14 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 	return nextIndex;
 }
 
-inline uint3 GetGridPosition(float3 worldPosition, uint resolution)
-{
-	float3 encodedPosition = worldPosition.xyz / _giAreaSize;
-
-	encodedPosition += float3(1.0f, 1.0f, 1.0f);
-	encodedPosition /= 2.0f;
-
-	uint3 voxelPosition = (uint3) (encodedPosition * resolution);
-
-	return uint3(voxelPosition.xyz);
-}
-
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfoSVO(float3 worldPosition)
 {
-	//uint index = threeD2oneD(voxelPosition);
-	//float4 tex = tex3D(voxelGrid1, voxelPosition);
-	//float4 tex = float4(0, 0, 0, 0);
-
-	//////// ---------------------- SVO Traverse begin
-
 	// Traverse tree
-	//uint maxDepth = counterBuffer[0];
 	uint currentDepth = 0;
-	uint done = 0;
 	uint offset = 0;
 	uint emergencyExit = 0;
-	while (done == 0)
+	while (true)
 	{
 		// Ejector seat
 		emergencyExit++;
@@ -556,60 +497,39 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 		uint isLeaf;
 		node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
 
-		// At max depth we just write out the voxel and quit
+		// If TTL expired then return current value
 		if (ttl == 0)
 		{
-			// Write back to buffer
-			// TODO - This is not threadsafe and will result in a
-			//          race condition characterized by flicking GI
-			//          This will be replaced with an atomic rolling
-			//          average to fix this problem in the future
-			//svoBuffer[offset] = SetNodeColour(node, colour);
-
-			//return float4(1, 1, 1, 1);
-			//if (node.value_A > 0) 
-			//return float4(1, 1, 1, 1);
-			//return float4(node.value_R, 0, 1, 1);
 			return float4(node.value_R, node.value_G, node.value_B, node.value_A);
-
-			// We're done here
-			//done = 1;
 		}
 		else
 		{
-			// At depth 0, we take default values
-			//  currentDepth = 0
-			//  resolution = 1
-
+			// If no deeper nodes then return current value
 			if (node.referenceOffset == 0)
 			{
 				return float4(node.value_R, node.value_G, node.value_B, node.value_A);
 			}
 			else
 			{
-				// We setup to search next depth
-				currentDepth++;
-
 				// Resolution is depth to the power of 4
 				uint resolution = pow(currentDepth, 2);
 
+				// Calculate voxel coord at current depth
+				float3 encodedPosition = worldPosition.xyz / _giAreaSize;
+				encodedPosition += float3(1.0f, 1.0f, 1.0f);
+				encodedPosition /= 2.0f;
+				encodedPosition *= resolution;
 
 				// Offet is reference + the node offset index
-				offset = node.referenceOffset + GetSVOBitOffset(GetGridPosition(worldPosition, resolution), resolution);
-				//offset = node.referenceOffset + GetSVOBitOffset(GetVoxelPosition(worldPosition), resolution);
-				//GetVoxelPosition
+				offset = node.referenceOffset + GetSVOBitOffset(encodedPosition, resolution);
+
+				// We setup to search next depth
+				currentDepth++;
 
 			}
 		}
 	}
-
-
-
-
-
-	//////// ---------------------- SVO Traverse end
-
-	return float4(0, 0, 1, 1);
+	return float4(0, 0, 0, 0);
 }
 
 float4 frag_debug(v2f i) : SV_Target
@@ -688,6 +608,8 @@ float4 frag_debug(v2f i) : SV_Target
 	voxelInfo = GetVoxelInfoSVO(worldPos);
 	#endif
 
+	//return float4(worldPos, 1);
+
 	float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
 	return float4(resultingColor, 1.0f);
 }
@@ -706,47 +628,18 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 	// Default value
 	float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
-	uint cascade = 1;
-	float cascade1 = 0.33;
-	float cascade2 = 0.66;
-	float cascade3 = 1.00;
-	int cascadeBoundary = _giAreaSize;
-	int cascadeBoundary1 = _giAreaSize * cascade1;
-	int cascadeBoundary2 = _giAreaSize * cascade2;
-	int cascadeBoundary3 = _giAreaSize * cascade3;
-
-	if ((abs(worldPosition.x) < cascadeBoundary1) && (abs(worldPosition.y) < cascadeBoundary1) && (abs(worldPosition.z) < cascadeBoundary1))
-	{
-		cascade = 1;
-		cascadeBoundary = cascadeBoundary1;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary2) && (abs(worldPosition.y) < cascadeBoundary2) && (abs(worldPosition.z) < cascadeBoundary2))
-	{
-		cascade = 2;
-		cascadeBoundary = cascadeBoundary2;
-	}
-	else if ((abs(worldPosition.x) < cascadeBoundary3) && (abs(worldPosition.y) < cascadeBoundary3) && (abs(worldPosition.z) < cascadeBoundary3))
-	{
-		cascade = 3;
-		cascadeBoundary = cascadeBoundary3;
-	}
-
 	// Check if the given position is inside the voxelized volume
-	if ((abs(worldPosition.x) < cascadeBoundary) && (abs(worldPosition.y) < cascadeBoundary) && (abs(worldPosition.z) < cascadeBoundary))
+	if ((abs(worldPosition.x) < _giAreaSize) && (abs(worldPosition.y) < _giAreaSize) && (abs(worldPosition.z) < _giAreaSize))
 	{
-		worldPosition += cascadeBoundary;
-		worldPosition /= (2.0f * cascadeBoundary);
+		worldPosition += _giAreaSize;
+		worldPosition /= (2.0f * _giAreaSize);
 
-		if (cascade == 1)
-		{
-			info = tex3D(voxelGrid1, worldPosition);
-			info += tex3D(voxelGrid2, worldPosition);
-			info += tex3D(voxelGrid3, worldPosition);
-			info += tex3D(voxelGrid4, worldPosition);
-			info += tex3D(voxelGrid5, worldPosition);
-		}
-		else if (cascade == 2) info += tex3D(voxelGridCascade1, worldPosition) * 3;
-		else if (cascade == 3) info += tex3D(voxelGridCascade2, worldPosition) * 3;
+
+		info = tex3D(voxelGrid1, worldPosition);
+		info += tex3D(voxelGrid2, worldPosition);
+		info += tex3D(voxelGrid3, worldPosition);
+		info += tex3D(voxelGrid4, worldPosition);
+		info += tex3D(voxelGrid5, worldPosition);
 	}
 
 	return info;
@@ -755,8 +648,6 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 // Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
 inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
 {
-	worldPosition = worldPosition.xyz - gridOffset.xyz;
-
 	// Color for storing all the samples
 	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
 
@@ -895,7 +786,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			//currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
@@ -940,7 +831,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			//GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
@@ -979,7 +870,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			//currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;

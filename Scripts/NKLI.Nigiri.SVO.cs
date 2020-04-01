@@ -27,9 +27,11 @@ namespace NKLI.Nigiri.SVO
         public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
         public bool AbleToSplit { get; set; } // If there are nodes to split
 
-        // GPU readback storage of the split queue
         private byte[] splitQueue;
-        //private int sparseNodesTosplit;
+        // Worker thread to preprocesses the split queue
+        private Thread thread_SplitPreProcessor;
+        // Does the preprocessor have work to do?
+        private bool thread_SplitPreProcessor_HasWork;
 
 
         // Buffers
@@ -124,6 +126,10 @@ namespace NKLI.Nigiri.SVO
 
                 attachedCamera = _camera;
                 attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
+
+                // Start worker thread
+                thread_SplitPreProcessor = new Thread(ThreadedNodeSplitPreProcessor);
+                thread_SplitPreProcessor.Start();
             }
         }
 
@@ -139,17 +145,40 @@ namespace NKLI.Nigiri.SVO
                 obj.GetData<byte>().CopyTo(splitQueue);
             }
 
-            Thread workerThread = new Thread(ThreadedNodeSplit);
-            workerThread.Start();
+            // Tell the thread there's work to do
+            thread_SplitPreProcessor_HasWork = true;
         }
 
-        /// <summary> 
-        /// Worker thread - Preprocesses the node split queue for later dispatch 
-        /// </summary> 
-        private void ThreadedNodeSplit()
+        /// <summary>
+        /// Worker thread - Preprocesses the node split queue for later dispatch
+        /// </summary>
+        private void ThreadedNodeSplitPreProcessor()
         {
-            SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
-            AbleToSplit = contentsFound;
+            // Permanent worker
+            while (true)
+            {
+                // Only check for work every 4ms
+                Thread.Sleep(1);
+
+                try
+                {
+                    if (thread_SplitPreProcessor_HasWork)
+                    {
+                        // Process the node split queue to remove duplicates
+                        SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
+
+                        // Allow nodes to be split if applicable
+                        AbleToSplit = contentsFound;
+
+                        // We're done here
+                        thread_SplitPreProcessor_HasWork = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
+                }
+            }
         }
 
 
@@ -160,7 +189,7 @@ namespace NKLI.Nigiri.SVO
         public void SetSplitQueue(byte[] _splitQueue)
         {
             splitQueue = _splitQueue;
-            ThreadedNodeSplit();
+            //ThreadedNodeSplit();
         }
 
         /// <summary> 
@@ -291,6 +320,9 @@ namespace NKLI.Nigiri.SVO
             {
                 if (disposing)
                 {
+                    // Stop worker thread
+                    if (thread_SplitPreProcessor != null) thread_SplitPreProcessor.Abort();
+
                     // Attempt to dispose any existing buffers
                     ReleaseBuffers();
 
