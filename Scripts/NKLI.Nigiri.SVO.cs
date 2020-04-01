@@ -118,7 +118,7 @@ namespace NKLI.Nigiri.SVO
             {
                 CB_Nigiri_SVO = new CommandBuffer
                 {
-                    name = "Nigiri Asynchronous SVO"
+                    name = "<Nigiri> Asynchronous SVO"
                 };
                 CB_Nigiri_SVO.RequestAsyncReadback(Buffer_SplitQueue, HandleSplitQueueReadback);
 
@@ -137,14 +137,18 @@ namespace NKLI.Nigiri.SVO
         /// <param name="obj"></param>
         private void HandleSplitQueueReadback(AsyncGPUReadbackRequest obj)
         {
-            if (obj.hasError) Debug.Log("SVO split queue readback error");
-            else if (obj.done)
+            // Only if the worker is idle
+            if (!thread_SplitPreProcessor_HasWork)
             {
-                obj.GetData<byte>().CopyTo(splitQueue);
-            }
+                if (obj.hasError) Debug.Log("SVO split queue readback error");
+                else if (obj.done)
+                {
+                    obj.GetData<byte>().CopyTo(splitQueue);
+                }
 
-            // Tell the thread there's work to do
-            thread_SplitPreProcessor_HasWork = true;
+                // Tell the thread there's work to do
+                thread_SplitPreProcessor_HasWork = true;
+            }
         }
 
         /// <summary>
@@ -156,11 +160,11 @@ namespace NKLI.Nigiri.SVO
             while (true)
             {
                 // Only check for work every 4ms
-                Thread.Sleep(4);
+                Thread.Sleep(2);
 
-                try
+                if (thread_SplitPreProcessor_HasWork)
                 {
-                    if (thread_SplitPreProcessor_HasWork)
+                    try
                     {
                         // Process the node split queue to remove duplicates
                         SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
@@ -168,13 +172,13 @@ namespace NKLI.Nigiri.SVO
                         // Allow nodes to be split if applicable
                         AbleToSplit = contentsFound;
 
-                        // We're done here
+                        // Toggle flag off
                         thread_SplitPreProcessor_HasWork = false;
                     }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
+                    catch (Exception ex)
+                    {
+                        Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
+                    }
                 }
             }
         }
@@ -194,7 +198,7 @@ namespace NKLI.Nigiri.SVO
                 byte[] queueByte = new byte[4];
                 Buffer.BlockCopy(targetArray, (i * 4), queueByte, 0, 4);
                 uint queueValue = BitConverter.ToUInt32(queueByte, 0);
-                if (queueValue != 0)  arraySet.Add(queueValue);
+                if (queueValue != 0) arraySet.Add(queueValue);
             }
 
             // Keep track of how many sparse nodes in the queue
@@ -261,9 +265,9 @@ namespace NKLI.Nigiri.SVO
         public void SyncGPUReadback(
             out Queue<AsyncGPUReadbackRequest> queue_Counters,
             out Queue<AsyncGPUReadbackRequest> queue_Counters_Internal,
-            out Queue<AsyncGPUReadbackRequest> queue_SVO, 
+            out Queue<AsyncGPUReadbackRequest> queue_SVO,
             out Queue<AsyncGPUReadbackRequest> queue_SplitQueue)
-            
+
         {
             queue_Counters = new Queue<AsyncGPUReadbackRequest>();
             queue_Counters_Internal = new Queue<AsyncGPUReadbackRequest>();
@@ -341,5 +345,5 @@ namespace NKLI.Nigiri.SVO
     }
     #endregion
     //
-      
+
 }
