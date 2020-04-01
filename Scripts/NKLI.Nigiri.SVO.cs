@@ -29,10 +29,7 @@ namespace NKLI.Nigiri.SVO
 
         // GPU readback storage of the split queue
         private byte[] splitQueue;
-        // Worker thread to preprocesses the split queue
-        private Thread thread_SplitPreProcessor;
-        // Does the preprocessor have work to do?
-        private bool thread_SplitPreProcessor_HasWork;
+        //private int sparseNodesTosplit;
 
 
         // Buffers
@@ -48,6 +45,9 @@ namespace NKLI.Nigiri.SVO
         private CommandBuffer CB_Nigiri_SVO;
 
         // static consts
+        //public static readonly uint maxDepth = 8;
+        //public static readonly int maxNodes = 128;
+        //public static readonly uint split_MaxQueueLength = 10;
         public static readonly int Buffer_Counters_Count = 9;
 
         // Compute
@@ -114,21 +114,16 @@ namespace NKLI.Nigiri.SVO
             Buffer_SVO.SetData(nodeList, 0, 0, 1);
 
             // Setup commandbuffer
-            if (_camera != null)
+            CB_Nigiri_SVO = new CommandBuffer
             {
-                CB_Nigiri_SVO = new CommandBuffer
-                {
-                    name = "Nigiri Asynchronous SVO"
-                };
-                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_SplitQueue, HandleSplitQueueReadback);
+                name = "Nigiri Asynchronous SVO"
+            };
+            //CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Counters, HandleCountersReadback);
+            CB_Nigiri_SVO.RequestAsyncReadback(Buffer_SplitQueue, HandleSplitQueueReadback);
+            
+            attachedCamera = _camera;
+            attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
 
-                attachedCamera = _camera;
-                attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
-
-                // Start worker thread
-                thread_SplitPreProcessor = new Thread(ThreadedNodeSplitPreProcessor);
-                thread_SplitPreProcessor.Start();
-            }
         }
 
         /// <summary>
@@ -143,48 +138,16 @@ namespace NKLI.Nigiri.SVO
                 obj.GetData<byte>().CopyTo(splitQueue);
             }
 
-            // Tell the thread there's work to do
-            thread_SplitPreProcessor_HasWork = true;
+            Thread workerThread = new Thread(ThreadedNodeSplit);
+            workerThread.Start();
         }
 
-        /// <summary>
-        /// Worker thread - Preprocesses the node split queue for later dispatch
-        /// </summary>
-        private void ThreadedNodeSplitPreProcessor()
+        private void ThreadedNodeSplit()
         {
-            // Permanent worker
-            while (true)
-            {
-                // Only check for work every 4ms
-                Thread.Sleep(4);
-
-                try
-                {
-                    if (thread_SplitPreProcessor_HasWork)
-                    {
-                        // Process the node split queue to remove duplicates
-                        SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
-
-                        // Allow nodes to be split if applicable
-                        AbleToSplit = contentsFound;
-
-                        // We're done here
-                        thread_SplitPreProcessor_HasWork = false;
-                    }
-                }
-                catch (Exception ex)
-                {
-                    Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
-                }
-            }
+            SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
+            AbleToSplit = contentsFound;
         }
 
-        /// <summary>
-        /// Removes duplicates from a byte array of 32bit uint values
-        /// </summary>
-        /// <param name="targetArray"></param>
-        /// <param name="contentsFound"></param>
-        /// <returns></returns>
         private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound)
         {
             // Copy split queue to hashset to remove dupes
@@ -233,6 +196,19 @@ namespace NKLI.Nigiri.SVO
             // We're done here
             return targetArray;
         }
+
+        /*/// <summary>
+        /// Handles completed async readback of counter buffer
+        /// </summary>
+        /// <param name="obj"></param>
+        private void HandleCountersReadback(AsyncGPUReadbackRequest obj)
+        {
+            if (obj.hasError) Debug.Log("SVO GPU Counter readback error");
+            else if (obj.done)
+            {
+                obj.GetData<uint>().CopyTo(Counters);
+            }
+        }*/
 
         /// <summary>
         /// Sets counter buffer initial values and sends to GPU
@@ -307,14 +283,11 @@ namespace NKLI.Nigiri.SVO
             {
                 if (disposing)
                 {
-                    // Stop worker thread
-                    if (thread_SplitPreProcessor != null) thread_SplitPreProcessor.Abort();
-
                     // Attempt to dispose any existing buffers
                     ReleaseBuffers();
 
                     // Remove command buffer from camera
-                    if (attachedCamera != null) attachedCamera.RemoveCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
+                    attachedCamera.RemoveCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
                 }
 
                 disposedValue = true;
