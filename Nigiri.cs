@@ -16,7 +16,8 @@ public class Nigiri : MonoBehaviour {
         GRID_2,
         GRID_3,
         GRID_4,
-        GRID_5
+        GRID_5,
+        GRID_SVO
     };
 
     [Header("General Settings")]
@@ -1217,37 +1218,60 @@ public class Nigiri : MonoBehaviour {
 
 
         if (VisualizeVoxels) {
-			if (debugVoxelGrid == DebugVoxelGrid.GRID_1) {
+			if (debugVoxelGrid == DebugVoxelGrid.GRID_1)
+            {
 				tracerMaterial.EnableKeyword ("GRID_1");
 				tracerMaterial.DisableKeyword ("GRID_2");
 				tracerMaterial.DisableKeyword ("GRID_3");
 				tracerMaterial.DisableKeyword ("GRID_4");
 				tracerMaterial.DisableKeyword ("GRID_5");
-			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_2) {
+                tracerMaterial.DisableKeyword("GRID_SVO");
+            }
+            else if (debugVoxelGrid == DebugVoxelGrid.GRID_2)
+            {
 				tracerMaterial.DisableKeyword ("GRID_1");
 				tracerMaterial.EnableKeyword ("GRID_2");
 				tracerMaterial.DisableKeyword ("GRID_3");
 				tracerMaterial.DisableKeyword ("GRID_4");
 				tracerMaterial.DisableKeyword ("GRID_5");
-			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_3) {
+                tracerMaterial.DisableKeyword("GRID_SVO");
+            }
+            else if (debugVoxelGrid == DebugVoxelGrid.GRID_3)
+            {
 				tracerMaterial.DisableKeyword ("GRID_1");
 				tracerMaterial.DisableKeyword ("GRID_2");
 				tracerMaterial.EnableKeyword ("GRID_3");
 				tracerMaterial.DisableKeyword ("GRID_4");
 				tracerMaterial.DisableKeyword ("GRID_5");
-			} else if (debugVoxelGrid == DebugVoxelGrid.GRID_4) {
+                tracerMaterial.DisableKeyword("GRID_SVO");
+            }
+            else if (debugVoxelGrid == DebugVoxelGrid.GRID_4)
+            {
 				tracerMaterial.DisableKeyword ("GRID_1");
 				tracerMaterial.DisableKeyword ("GRID_2");
 				tracerMaterial.DisableKeyword ("GRID_3");
 				tracerMaterial.EnableKeyword ("GRID_4");
 				tracerMaterial.DisableKeyword ("GRID_5");
-			} else {
+                tracerMaterial.DisableKeyword("GRID_SVO");
+            }
+            else if (debugVoxelGrid == DebugVoxelGrid.GRID_5)
+            {
 				tracerMaterial.DisableKeyword ("GRID_1");
 				tracerMaterial.DisableKeyword ("GRID_2");
 				tracerMaterial.DisableKeyword ("GRID_3");
 				tracerMaterial.DisableKeyword ("GRID_4");
 				tracerMaterial.EnableKeyword ("GRID_5");
-			}
+                tracerMaterial.DisableKeyword("GRID_SVO");
+            }
+            else
+            {
+                tracerMaterial.DisableKeyword("GRID_1");
+                tracerMaterial.DisableKeyword("GRID_2");
+                tracerMaterial.DisableKeyword("GRID_3");
+                tracerMaterial.DisableKeyword("GRID_4");
+                tracerMaterial.DisableKeyword("GRID_5");
+                tracerMaterial.EnableKeyword("GRID_SVO");
+            }
 
             renderTimes.TraceStopwatch.Start();
             Graphics.Blit (source, destination, tracerMaterial, 1);
