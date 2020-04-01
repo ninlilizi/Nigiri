@@ -58,7 +58,7 @@ inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
 /// <summary>
 /// Writes colour value to node
 /// </summary>
-inline SVONode SetNodeColour(SVONode node, uint4 colour)
+inline SVONode SetNodeColour(SVONode node, float4 colour)
 {
     // Set values
     node.value_A = colour.a * 255;
@@ -93,26 +93,32 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
 void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
-    float4 worldPosition, uint4 colour, float giAreaSize)
+    float4 worldPosition, float4 colour, float giAreaSize)
 {
     // Traverse tree
     uint maxDepth = counterBuffer[0];
     uint currentDepth = 0;
     uint done = 0;
     uint offset = 0;
+    uint emergencyExit = 0;
     while (done == 0)
     {
+        // Ejector seat
+        emergencyExit++;
+        if (emergencyExit > 8192)
+            return;
+        
         // Unpack node
         SVONode node = svoBuffer[offset];
         uint bitfieldOccupancy;
         uint runLength;
-        uint depth;
+        uint ttl;
         uint isLeaf;
-        node.UnPackStruct(bitfieldOccupancy, runLength, depth, isLeaf);
+        node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
                 
         // At max depth we just write out the voxel and quit
-        if (currentDepth == maxDepth)
-        {           
+        if (ttl == 0)
+        {                     
             // Write back to buffer
             // TODO - This is not threadsafe and will result in a
             //          race condition characterized by flicking GI
@@ -135,7 +141,7 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
                 AppendSVOSplitQueue(queueBuffer, counterBuffer, offset);
                 
                 // Just here for debugging purposes
-                svoBuffer[offset] = SetNodeColour(node, uint4(5, 6, 7, 8));
+                //svoBuffer[offset] = SetNodeColour(node, colour);
                 
                 // We're done here
                 done = 1;

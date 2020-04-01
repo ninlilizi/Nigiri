@@ -10,7 +10,7 @@
 #include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // List of ordered pixels to sample
-uniform ConsumeStructuredBuffer<uint> _maskBuffer;
+uniform RWStructuredBuffer<uint> _maskBuffer;
 
 // SVO
 uniform RWStructuredBuffer<SVONode> _SVO;
@@ -39,8 +39,12 @@ uniform Texture2D<float4> lightingTexture2;
 [numthreads(16, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
+    // Get mask position
+    uint counter;
+    InterlockedAdd(_SVO_Counters[4], 1, counter);
+    
     // Get morton ordered read index from mask buffer
-    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
+    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
    
     // Traverse the SVO, splitting and writing the sampled colour as required
     SplitInsertSVO(

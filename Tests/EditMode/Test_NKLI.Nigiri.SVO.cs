@@ -11,7 +11,9 @@ using System.IO;
 using System.Runtime.InteropServices;
 using NKLI.Nigiri.SVO;
 using NUnit.Framework;
+using Unity.Collections;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.TestTools;
 
 namespace Tests.Nigiri.SVO
@@ -72,16 +74,16 @@ namespace Tests.Nigiri.SVO
             Assert.AreEqual(10368000, test_MaskBuffer.Length);
 
             // Write buffer to GPU
-            ComputeBuffer buffer_Mask = new ComputeBuffer(sampleCount, sizeof(uint), ComputeBufferType.Append);
+            ComputeBuffer buffer_Mask = new ComputeBuffer(sampleCount, sizeof(uint), ComputeBufferType.Default);
             buffer_Mask.SetData(test_MaskBuffer);
             Debug.Log("<Unit Test> Buffer copied to GPU" + Environment.NewLine);
 
             // Instantiate SVO Tree
             NKLI.Nigiri.SVO.Tree SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-            SVO.Create(8, 64, 10);
+            SVO.Create(8, 4096, 66);
 
             // Split queue length should be rounded to nerest mul of 8
-            Assert.AreEqual(SVO.SplitQueueMaxLength, 8);
+            Assert.AreEqual(64, SVO.SplitQueueMaxLength);
 
             if (SVO.Buffer_SVO == null) Debug.LogError("<Unity Test> SVO_Buffer == Null");
             else Debug.Log("<Unit Test> Instantiated SVO tree");
@@ -90,145 +92,154 @@ namespace Tests.Nigiri.SVO
             Voxelizer voxelizer = new Voxelizer(SVO, 1, 0.9f, 1, 100, 8);
             Debug.Log("<Unit Test> Instantiated voxelizer" + Environment.NewLine);
 
-            // Voxelize scene
-            voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, RT_gBuffer0, buffer_Mask);
-            Debug.Log("<Unit Test> Voxelized scene");
+            Debug.Log("<Unit Test> Max SVO Nodes: " + SVO.Buffer_SVO_Count);
+            Debug.Log("<Unit Test> Testing 4096 iterations..." + Environment.NewLine);
 
-            //Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
-
-            // Intiate syncronous 'async' readback
-            SVO.SyncGPUReadback(
-                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_Counters,
-                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SVO,
-                out UnityEngine.Rendering.AsyncGPUReadbackRequest req_SplitQueue);
-            
-            // Readback counters to CPU
-            uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_Count];
-            if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
-            else
+            // We iterate multiple times to fill buffer
+            byte[] test_Buffer_SVO = new byte[1];
+            for (int z = 0; z <= 1024; z = z + 1)
             {
-                var buffer = req_Counters.GetData<uint>();
-                buffer.CopyTo(test_Buffer_Counters);
+                // Keep track of interation index
+                //Debug.Log("-----------------------------------");
+                //Debug.Log("Iterating encode and split. Count: " + z + Environment.NewLine);
 
+
+                // Voxelize scene
+                voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, RT_gBuffer0, buffer_Mask);
+                //Debug.Log("<Unit Test> Voxelized scene");
+
+                //Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);
+
+                // Intiate syncronous 'async' readback
+                SVO.SyncGPUReadback(
+                    out Queue<AsyncGPUReadbackRequest> queue_Counters,
+                    out Queue<AsyncGPUReadbackRequest> queue_Counters_Internal,
+                    out Queue<AsyncGPUReadbackRequest> queue_SVO,
+                    out Queue<AsyncGPUReadbackRequest> queue_SplitQueue);
+
+                // Readback counters to CPU
+                var req_Counters = queue_Counters.Peek();
+                uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_Count];
+                if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
+                else
+                {
+                    req_Counters.GetData<uint>().CopyTo(test_Buffer_Counters);
+                    queue_Counters.Dequeue();
+                }
+
+
+                // Readback internal counters to CPU
+                var req_Counters_Internal = queue_Counters_Internal.Peek();
+                uint[] test_Buffer_Counters_Internal = new uint[1];
+                if (req_Counters_Internal.hasError) Debug.Log("GPU readback error detected.");
+                else
+                {
+                    req_Counters_Internal.GetData<uint>().CopyTo(test_Buffer_Counters_Internal);
+                    queue_Counters_Internal.Dequeue();
+                }
+
+                // Readback octree to CPU
+                //uint sizeOctree = svo.NodeCount * 8;
+                var req_SVO = queue_SVO.Peek();
+                test_Buffer_SVO = new byte[SVO.Buffer_SVO_ByteLength];
+                if (req_SVO.hasError) Debug.Log("GPU readback error detected.");
+                else
+                {
+                    req_SVO.GetData<byte>().CopyTo(test_Buffer_SVO);
+                    queue_SVO.Dequeue();
+                }
+
+                // Readback splitqueue to CPU
+                var req_SplitQueue = queue_SplitQueue.Peek();
+                byte[] test_Buffer_SplitQueue = new byte[SVO.SplitQueueMaxLength * 4];
+                if (req_SplitQueue.hasError) Debug.Log("GPU readback error detected.");
+                else
+                {
+                    req_SplitQueue.GetData<byte>().CopyTo(test_Buffer_SplitQueue);
+                    queue_SplitQueue.Dequeue();
+                }
+
+                // Manually flush pipeline to be sure we have everything
+                //Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
+                GL.Flush();
+
+                // Log counter values
+                //Debug.Log("<Unit Test> (Counters) Max Depth: " + test_Buffer_Counters[0]);
+                //Debug.Log("<Unit Test> (Counters) Max split queue items: " + test_Buffer_Counters[1]);
+                //Debug.Log("<Unit Test> (Counters) Cur split queue items: " + test_Buffer_Counters[2]);
+                //Debug.Log("<Unit Test> (Counters) SVO write position: " + test_Buffer_Counters_Internal[0] + Environment.NewLine);
+
+
+                // Outputs contents of split queue buffer
+                string queueString = "";
+                for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+                {
+                    byte[] queueByte = new byte[4];
+                    Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                    queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
+                }
+                //Debug.Log("Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
+
+                //
+                /// It's important to remove duplicates from the queue!
+                //
+
+                // Copies split queue buffer to hashset to remove dupes
+                HashSet<UInt32> queueSet = new HashSet<uint>();
+                for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+                {
+                    byte[] queueByte = new byte[4];
+                    Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                    uint queueValue = BitConverter.ToUInt32(queueByte, 0);
+                    if (queueValue != 0) queueSet.Add(queueValue);
+                }
+                //Debug.Log("Uniques in split queue: " + Environment.NewLine + queueSet.Count + Environment.NewLine);
+
+                // Copies hashset back to buffer
+                int queueWriteBackIndex = 0;
+                HashSet<uint>.Enumerator queueEnum = queueSet.GetEnumerator();
+                while (queueEnum.MoveNext())
+                {
+                    byte[] queueByte = new byte[4];
+                    queueByte = BitConverter.GetBytes(queueEnum.Current);
+                    Buffer.BlockCopy(queueByte, 0, test_Buffer_SplitQueue, queueWriteBackIndex * 4, 4);
+                    queueWriteBackIndex++;
+                }
+
+                // Zeros rest of buffer
+                int queueStartIndex = queueSet.Count * 4;
+                Array.Clear(test_Buffer_SplitQueue, queueStartIndex, (test_Buffer_SplitQueue.Length - queueStartIndex));
+
+
+                // Outputs remaining contents of split queue buffer
+                queueString = "";
+                for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
+                {
+                    byte[] queueByte = new byte[4];
+                    Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
+                    queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
+                }
+                //Debug.Log("Ajusted Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
+
+                // Send adjusted buffer back to GPU
+                SVO.Buffer_SplitQueue.SetData(test_Buffer_SplitQueue);
+
+
+                // Split nodes
+                voxelizer.SplitNodes(queueSet.Count);
             }
-
-            // Readback octree to CPU
-            //uint sizeOctree = svo.NodeCount * 8;
-            byte[] test_Buffer_SVO = new byte[SVO.Buffer_SVO_ByteLength];
-            if (req_SVO.hasError) Debug.Log("GPU readback error detected.");
-            else
-            {
-                var buffer = req_SVO.GetData<byte>();
-                buffer.CopyTo(test_Buffer_SVO);
-
-            }
-
-            // Readback splitqueue to CPU
-            byte[] test_Buffer_SplitQueue = new byte[SVO.SplitQueueMaxLength * 4];
-            if (req_SplitQueue.hasError) Debug.Log("GPU readback error detected.");
-            else
-            {
-                var buffer = req_SplitQueue.GetData<byte>();
-                buffer.CopyTo(test_Buffer_SplitQueue);
-
-            }
-
-            // Manually flush pipeline to be sure we have everything
-            Debug.Log("<Unit Test> Buffers copied to CPU" + Environment.NewLine);
-            GL.Flush();
-
-            // Log counter values
-            Debug.Log(Environment.NewLine + "<Unit Test> (Counters) Max Depth: " + test_Buffer_Counters[0]);
-            Debug.Log("<Unit Test> (Counters) Max split queue items: " + test_Buffer_Counters[1]);
-            Debug.Log("<Unit Test> (Counters) Cur split queue items: " + test_Buffer_Counters[2] + Environment.NewLine);
-
-
-            // Outputs contents of split queue buffer
-            string queueString = "";
-            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
-            {
-                byte[] queueByte = new byte[4];
-                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
-                queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
-            }
-            Debug.Log("Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
-
-            //
-            /// It's important to remove duplicates from the queue!
-            //
-
-            // Copies split queue buffer to hashset to remove dupes
-            HashSet<UInt32> queueSet = new HashSet<uint>();
-            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
-            {
-                byte[] queueByte = new byte[4];
-                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
-                uint queueValue = BitConverter.ToUInt32(queueByte, 0);
-                if (queueValue != 0) queueSet.Add(queueValue);
-            }
-            Debug.Log("Uniques in split queue: " + Environment.NewLine + queueSet.Count + Environment.NewLine);
-
-            // Should be a single record
-            Assert.AreEqual(queueSet.Count, 1);
-
-            // Copies hashset back to buffer
-            int queueWriteBackIndex = 0;
-            HashSet<uint>.Enumerator queueEnum = queueSet.GetEnumerator();
-            while (queueEnum.MoveNext())
-            {
-                byte[] queueByte = new byte[4];
-                queueByte = BitConverter.GetBytes(queueEnum.Current);
-                Buffer.BlockCopy(queueByte, 0, test_Buffer_SplitQueue, queueWriteBackIndex * 4, 4);
-                queueWriteBackIndex++;
-            }
-
-            // Zeros rest of buffer
-            int queueStartIndex = queueSet.Count;
-            Array.Clear(test_Buffer_SplitQueue, queueStartIndex, (test_Buffer_SplitQueue.Length - queueStartIndex));
-
-
-            // Outputs remaining contents of split queue buffer
-            queueString = "";
-            for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
-            {
-                byte[] queueByte = new byte[4];
-                Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
-                queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
-            }
-            Debug.Log("Ajusted Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
-
-            // Send adjusted buffer back to GPU
-            SVO.Buffer_SplitQueue.SetData(test_Buffer_SplitQueue);
-
-
-            //
-            /// TODO: Process split queue here!
-            //
-
 
             // Attempt to verify number of output nodes
             int detectedCount = 0;
             for (int i = 0; i < (test_Buffer_SVO.Length / 32); i++)
             {
-                if (((test_Buffer_SVO[(i * 32)]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 1]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 2]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 3]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 4]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 5]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 6]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 7]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 8]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 9]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 10]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 11]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 12]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 13]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 14]) != 0) ||
-                    ((test_Buffer_SVO[(i * 32) + 15]) != 0))
+                bool isDetected = false;
+                for (int y = 0; y < 32; y++)
                 {
-                    detectedCount++;
+                    if (test_Buffer_SVO[(i * 32) + y] != 0) isDetected = true;
                 }
+                if (isDetected) detectedCount++;
+
             }
             Debug.Log("<Unit Test> Detected SVO nodes:" + detectedCount + Environment.NewLine);
 
@@ -245,22 +256,22 @@ namespace Tests.Nigiri.SVO
                     byte[] nodeBytesReferenceOffset = new byte[4];
                     byte[] nodeBytesPackedBitfield = new byte[4];
 
-                    byte[] nodeBytesA = new byte[4];
                     byte[] nodeBytesR = new byte[4];
                     byte[] nodeBytesG = new byte[4];
                     byte[] nodeBytesB = new byte[4];
+                    byte[] nodeBytesA = new byte[4];
 
                     Buffer.BlockCopy(test_Buffer_SVO, (i * 32), nodeBytes, 0, 32);
                     Buffer.BlockCopy(nodeBytes, 0, nodeBytesReferenceOffset, 0, 4);
                     Buffer.BlockCopy(nodeBytes, 4, nodeBytesPackedBitfield, 0, 4);
 
-                    Buffer.BlockCopy(nodeBytes, 8, nodeBytesA, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 12, nodeBytesR, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 16, nodeBytesG, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 20, nodeBytesB, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 8, nodeBytesR, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 12, nodeBytesG, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 16, nodeBytesB, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 20, nodeBytesA, 0, 4);
 
                     SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytesReferenceOffset, 0), BitConverter.ToUInt32(nodeBytesPackedBitfield, 0));
-                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _depth, out bool isLeaf);
+                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _ttl, out bool isLeaf);
 
                     node.value_A = BitConverter.ToUInt32(nodeBytesA, 0);
                     node.value_R = BitConverter.ToUInt32(nodeBytesR, 0);
@@ -268,8 +279,8 @@ namespace Tests.Nigiri.SVO
                     node.value_B = BitConverter.ToUInt32(nodeBytesB, 0);
 
                     string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
-                        " [RL:" + _runlength + "] [Depth:" + _depth + "] [isLeaf:" + isLeaf + "]" +
-                        " [A:" + node.value_A + "] [R:" + node.value_R + "] [G:" + node.value_G + "] [B:" + node.value_B + "]";
+                        " [RL:" + _runlength + "] [TTL:" + _ttl + "] [isLeaf:" + isLeaf + "]" +
+                        " [R:" + node.value_R + "] [G:" + node.value_G + "] [B:" + node.value_B + "] [A:" + node.value_A + "]";
 
                     fileOutput.WriteLine(line);
 

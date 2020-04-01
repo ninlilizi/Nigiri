@@ -26,6 +26,7 @@ namespace NKLI.Nigiri.SVO
         // Buffers
         public ComputeBuffer Buffer_SVO;
         public ComputeBuffer Buffer_Counters;
+        public ComputeBuffer Buffer_Counters_Internal;
         public ComputeBuffer Buffer_SplitQueue;
 
         // static consts
@@ -62,15 +63,25 @@ namespace NKLI.Nigiri.SVO
 
             // Synchronisation counter buffer
             Buffer_Counters = new ComputeBuffer(Buffer_Counters_Count, sizeof(uint), ComputeBufferType.Default);
-                
+
+            // Internal position counter buffer
+            Buffer_Counters_Internal = new ComputeBuffer(1, sizeof(uint), ComputeBufferType.Default);
+
             // Temporary PTR storage buffer
             Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
 
             // Set counter buffer
             SetCounterBuffer();
 
+            // Set internal position counter buffer 
+            // [0] SVO buffer write position
+            uint[] Counters_Internal = new uint[1];
+            Counters_Internal[0] = 1;
+            Buffer_Counters_Internal.SetData(Counters_Internal);
+
             // Send root node to GPU
             SVONode rootNode = new SVONode(0, 0);
+            rootNode.PackStruct(0, 0, maxDepth, false);
             List<SVONode> nodeList = new List<SVONode>(1)
             {
                 rootNode
@@ -92,12 +103,16 @@ namespace NKLI.Nigiri.SVO
             // [0] Max depth
             // [1] Max split queue items
             // [2] Current split queue items
+            // [3] Split queue position counter
+            // [4] Mask buffer position
 
             // Set buffer variables
             uint[] Counters = new uint[Buffer_Counters_Count];
             Counters[0] = MaxDepth;
             Counters[1] = SplitQueueMaxLength;
             Counters[2] = 0;
+            Counters[3] = 0;
+            Counters[4] = 0;
 
             // Send buffer to GPU
             Buffer_Counters.SetData(Counters);
@@ -105,15 +120,30 @@ namespace NKLI.Nigiri.SVO
 
         // Syncronous 'async' readback for Unit Testing.
         public void SyncGPUReadback(
-            out AsyncGPUReadbackRequest req_Counters, 
-            out AsyncGPUReadbackRequest req_SVO, 
-            out AsyncGPUReadbackRequest req_SplitQueue)
+            out Queue<AsyncGPUReadbackRequest> queue_Counters,
+            out Queue<AsyncGPUReadbackRequest> queue_Counters_Internal,
+            out Queue<AsyncGPUReadbackRequest> queue_SVO, 
+            out Queue<AsyncGPUReadbackRequest> queue_SplitQueue)
+            
         {
-            req_Counters = AsyncGPUReadback.Request(Buffer_Counters);
-            req_SVO = AsyncGPUReadback.Request(Buffer_SVO);
-            req_SplitQueue = AsyncGPUReadback.Request(Buffer_SplitQueue);
+            queue_Counters = new Queue<AsyncGPUReadbackRequest>();
+            queue_Counters_Internal = new Queue<AsyncGPUReadbackRequest>();
+            queue_SVO = new Queue<AsyncGPUReadbackRequest>();
+            queue_SplitQueue = new Queue<AsyncGPUReadbackRequest>();
+
+            queue_Counters.Enqueue(AsyncGPUReadback.Request(Buffer_Counters));
+            queue_Counters_Internal.Enqueue(AsyncGPUReadback.Request(Buffer_Counters_Internal));
+            queue_SVO.Enqueue(AsyncGPUReadback.Request(Buffer_SVO));
+            queue_SplitQueue.Enqueue(AsyncGPUReadback.Request(Buffer_SplitQueue));
+
+
+            var req_Counters = queue_Counters.Peek();
+            var req_Counters_Internal = queue_Counters_Internal.Peek();
+            var req_SVO = queue_SVO.Peek();
+            var req_SplitQueue = queue_SplitQueue.Peek();
 
             req_Counters.WaitForCompletion();
+            req_Counters_Internal.WaitForCompletion();
             req_SVO.WaitForCompletion();
             req_SplitQueue.WaitForCompletion();
         }
@@ -125,6 +155,7 @@ namespace NKLI.Nigiri.SVO
         {
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SplitQueue);
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Counters);
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Counters_Internal);
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SVO);
         }
 

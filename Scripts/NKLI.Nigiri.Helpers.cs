@@ -51,6 +51,20 @@ namespace NKLI.Nigiri
             if (Application.isEditor) DestroyImmediate((ScriptableObject)scriptableOject);
             else Destroy((ScriptableObject)scriptableOject);
         }
+
+        /// <summary>
+        /// Rounds up to the nearest multiple
+        /// </summary>
+        /// <param name="num"></param>
+        /// <param name="multiple"></param>
+        /// <returns></returns>
+        public static int RoundUp(int num, int multiple)
+        {
+            if (multiple == 0)
+                return 0;
+            int add = multiple / Math.Abs(multiple);
+            return ((num + multiple - add) / multiple) * multiple;
+        }
     }
 }
 

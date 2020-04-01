@@ -26,6 +26,7 @@ namespace NKLI.Nigiri.SVO
 
         // Compute
         readonly private ComputeShader Shader_VoxelEncocder;
+        readonly private ComputeShader Shader_SVOSplitter;
 
         /// <summary>
         /// Constructor
@@ -42,9 +43,14 @@ namespace NKLI.Nigiri.SVO
                 throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer> Null PTRs detected");
             }
 
-            // Load shader
+            // Load encode shader
             Shader_VoxelEncocder = Resources.Load("NKLI_Nigiri_SVOVoxelizer") as ComputeShader;
             if (Shader_VoxelEncocder == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOVoxelizer'");
+
+            // Load splitter shader
+            Shader_SVOSplitter = Resources.Load("NKLI_Nigiri_SVOSplitter") as ComputeShader;
+            if (Shader_SVOSplitter == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOSplitter'");
+
 
             // Binds to SVO
             SVO_Tree = SVO;
@@ -100,6 +106,29 @@ namespace NKLI.Nigiri.SVO
 
             // Dispatch
             Shader_VoxelEncocder.Dispatch(0, sampleCount / 16, 1, 1);
+
+            // We're done here
+            return true;
+        }
+
+        public bool SplitNodes(int queueLength)
+        {
+
+            // Rounds split queue length to nearest mul of 8 
+            //  to match dispatch thread group size
+            queueLength = ((queueLength + 8 - (8 / Math.Abs(8))) / 8) * 8;
+
+            // Set buffers
+            Shader_SVOSplitter.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
+            Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
+            Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters_Internal", SVO_Tree.Buffer_Counters_Internal);
+            Shader_SVOSplitter.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
+
+            // Set values
+            Shader_SVOSplitter.SetFloat("_SVO_MaxNodes", SVO_Tree.Buffer_SVO_Count);
+
+            // Dispatch
+            Shader_SVOSplitter.Dispatch(0, queueLength / 8, 1, 1);
 
             // We're done here
             return true;

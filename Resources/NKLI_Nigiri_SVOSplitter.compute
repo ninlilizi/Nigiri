@@ -1,0 +1,72 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+// Include
+#include "NKLI_Nigiri_SVOVoxelizer_Functions.cginc"
+
+// SVO
+uniform RWStructuredBuffer<SVONode> _SVO;
+// SVO Counters
+uniform RWStructuredBuffer<uint> _SVO_Counters;
+// SVO Internal Counters
+uniform RWStructuredBuffer<uint> _SVO_Counters_Internal;
+// SVO Queue of nodes to split
+uniform RWStructuredBuffer<uint> _SVO_SplitQueue;
+
+// Max SVO depth
+uniform const uint _SVO_MaxNodes;
+
+[numthreads(8, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // Get queue position
+    uint counter;
+    InterlockedAdd(_SVO_Counters[3], 1, counter);
+    
+    // Get index of cell to split
+    uint splitIndex = _SVO_SplitQueue[counter];
+    
+    // If index == 0 then do nothing
+    if (splitIndex != 0)
+    {
+        // Decrement by one to get adjusted index
+        splitIndex--;
+        
+        // Unpack node to be split        
+        SVONode nodeToSplit = _SVO[splitIndex];        
+        uint bitfieldOccupancy;
+        uint runLength;
+        uint ttl;
+        uint isLeaf;
+        nodeToSplit.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
+        
+        // Only split the node if TTL is non-zero and SVO not full
+        if ((ttl != 0) && (_SVO_Counters_Internal[0] < _SVO_MaxNodes))
+        {
+        
+            // pack node to write        
+            SVONode nodeToWrite;
+            nodeToWrite.Intialize();
+            nodeToWrite.PackStruct(0, 0, (ttl - 1), 0);
+            
+            // Get write position
+            uint writePosition;
+            InterlockedAdd(_SVO_Counters_Internal[0], 8, writePosition);
+            
+            // write new nodes
+            _SVO[writePosition] = nodeToWrite;
+            _SVO[writePosition + 1] = nodeToWrite;
+            _SVO[writePosition + 2] = nodeToWrite;
+            _SVO[writePosition + 3] = nodeToWrite;
+            _SVO[writePosition + 4] = nodeToWrite;
+            _SVO[writePosition + 5] = nodeToWrite;
+            _SVO[writePosition + 6] = nodeToWrite;
+            _SVO[writePosition + 7] = nodeToWrite;
+            
+            // Update split node
+            nodeToSplit.referenceOffset = writePosition;
+            _SVO[splitIndex] = nodeToSplit;
+        }
+    }
+
+}
