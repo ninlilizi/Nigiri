@@ -114,7 +114,7 @@ namespace NKLI.Nigiri.SVO
         public bool SplitNodes()
         {
             // Only if a successful readback has been completed and flagged for action
-            if (SVO_Tree.AbleToSplit)
+            if (SVO_Tree.AbleToSplit && (SVO_Tree.SplitQueueSparseCount > 0))
             {
                 // Send buffer to GPU
                 SVO_Tree.Buffer_SplitQueue.SetData(SVO_Tree.SplitQueueSparse);
@@ -137,6 +137,8 @@ namespace NKLI.Nigiri.SVO
 
                 // We don't want to run again till there is something to do
                 SVO_Tree.AbleToSplit = false;
+
+                //Debug.Log("Node split successfully");
 
                 // We're done here
                 return true;
