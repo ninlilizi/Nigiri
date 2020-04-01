@@ -138,6 +138,8 @@ namespace NKLI.Nigiri.SVO
                 // We don't want to run again till there is something to do
                 SVO_Tree.AbleToSplit = false;
 
+                //Debug.Log("Nodes split successfully!");
+
                 // We're done here
                 return true;
             }

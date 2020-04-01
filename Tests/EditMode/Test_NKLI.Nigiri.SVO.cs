@@ -181,52 +181,8 @@ namespace Tests.Nigiri.SVO
                 }
                 //Debug.Log("Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
 
-                //
-                /// It's important to remove duplicates from the queue!
-                //
-
-                // Copies split queue buffer to hashset to remove dupes
-                HashSet<UInt32> queueSet = new HashSet<uint>();
-                for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
-                {
-                    byte[] queueByte = new byte[4];
-                    Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
-                    uint queueValue = BitConverter.ToUInt32(queueByte, 0);
-                    if (queueValue != 0) queueSet.Add(queueValue);
-                }
-                //Debug.Log("Uniques in split queue: " + Environment.NewLine + queueSet.Count + Environment.NewLine);
-
-                // Copies hashset back to buffer
-                int queueWriteBackIndex = 0;
-                HashSet<uint>.Enumerator queueEnum = queueSet.GetEnumerator();
-                while (queueEnum.MoveNext())
-                {
-                    byte[] queueByte = new byte[4];
-                    queueByte = BitConverter.GetBytes(queueEnum.Current);
-                    Buffer.BlockCopy(queueByte, 0, test_Buffer_SplitQueue, queueWriteBackIndex * 4, 4);
-                    queueWriteBackIndex++;
-                }
-
-                // Zeros rest of buffer
-                int queueStartIndex = queueSet.Count * 4;
-                Array.Clear(test_Buffer_SplitQueue, queueStartIndex, (test_Buffer_SplitQueue.Length - queueStartIndex));
-
-
-                // Outputs remaining contents of split queue buffer
-                queueString = "";
-                for (int i = 0; i < (test_Buffer_SplitQueue.Length / 4); i++)
-                {
-                    byte[] queueByte = new byte[4];
-                    Buffer.BlockCopy(test_Buffer_SplitQueue, (i * 4), queueByte, 0, 4);
-                    queueString += "[" + i + ":" + BitConverter.ToUInt32(queueByte, 0) + "]";
-                }
-                //Debug.Log("Ajusted Split queue content:" + Environment.NewLine + queueString + Environment.NewLine);
-
-                // Send adjusted buffer back to GPU
-                SVO.Buffer_SplitQueue.SetData(test_Buffer_SplitQueue);
-
-
                 // Split nodes
+                SVO.SetSplitQueue(test_Buffer_SplitQueue);
                 voxelizer.SplitNodes();
             }
 
