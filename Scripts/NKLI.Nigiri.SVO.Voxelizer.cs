@@ -21,8 +21,7 @@ namespace NKLI.Nigiri.SVO
         public float Occlusion_Gain { get; private set; }
         public float GI_Area_Size { get; private set; }
         public int Max_Depth { get; private set; }
-
-        // Read-only buffer properties
+        public Vector3 GridOffset { get; private set; }
 
         // Compute
         readonly private ComputeShader Shader_VoxelEncoder;
@@ -54,6 +53,8 @@ namespace NKLI.Nigiri.SVO
 
             // Binds to SVO
             SVO_Tree = SVO;
+
+            GridOffset = new Vector3(-(giAreaSize / 2), -(giAreaSize / 2), -(giAreaSize / 2));
 
             // Sets values
             Emissive_Intensity = emissiveIntensity;
@@ -93,6 +94,7 @@ namespace NKLI.Nigiri.SVO
             Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
 
             // Set textures
+            Shader_VoxelEncoder.SetTextureFromGlobal(0, "_CameraDepthTexture", "_CameraDepthTexture");
             Shader_VoxelEncoder.SetTexture(0, "positionTexture", positionTexture);
             Shader_VoxelEncoder.SetTexture(0, "lightingTexture", lightingTexture);
             Shader_VoxelEncoder.SetTexture(0, "lightingTexture2", lightingTexture2);
@@ -138,7 +140,7 @@ namespace NKLI.Nigiri.SVO
                 // We don't want to run again till there is something to do
                 SVO_Tree.AbleToSplit = false;
 
-                Debug.Log("Nodes split successfully!");
+                //Debug.Log("Nodes split successfully!");
 
                 // We're done here
                 return true;

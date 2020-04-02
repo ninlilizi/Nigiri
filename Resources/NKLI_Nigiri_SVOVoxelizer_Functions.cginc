@@ -8,16 +8,21 @@
 // Include
 #include "NKLI_Nigiri_SVONode.cginc"
 
+
+#define LUMA_THRESHOLD_FACTOR 0.01f // Higher = higher accuracy with higher flickering
+#define LUMA_DEPTH_FACTOR 100.0f 	// Higher = lesser variation with depth
+#define LUMA_FACTOR 1.9632107f
+
+
 /// <summary>
 /// Returns position within a grid, given specific resolution and area size.
 /// </summary>
 inline uint3 GetGridPosition(float4 worldPosition, uint resolution, uint giAreaSize)
-{   
+{      
     float3 encodedPosition = worldPosition.xyz / giAreaSize;
     encodedPosition += float3(1.0f, 1.0f, 1.0f);
     encodedPosition /= 2.0f;
-    encodedPosition *= resolution;
-    return encodedPosition;
+    return (uint3) (encodedPosition * resolution);
 }
 
 /// <summary>
@@ -33,32 +38,49 @@ inline float4 GetNewMixedColour(uint2 orderedCoord, Texture2D<float4> lightingTe
 /// <summary>
 /// Returns the node offset calculated from spatial relation
 /// </summary>
-inline uint GetSVOBitOffset(uint3 index3D, uint resolution)
+inline uint GetSVOBitOffset(float3 tX, float3 tM)
 {
-    // Lazy caculation of node offset
-    // TODO - This can be condensed into single operaion
     uint nextIndex = 0;
-    uint halfWidth = resolution / 2;
-    if (index3D.x > halfWidth)
+    if (tX.x > tM.x)
         nextIndex = nextIndex | (1);
-    if (index3D.y > halfWidth)
+    if (tX.y > tM.y)
         nextIndex = nextIndex | (1 << 1);
-    if (index3D.z > halfWidth)
+    if (tX.z > tM.z)
         nextIndex = nextIndex | (1 << 2);
     
     return nextIndex;
 }
 
+// Function to get the luma value of the input color
+inline float GetLuma(float3 inputColor)
+{
+    return ((inputColor.y * LUMA_FACTOR) + inputColor.x);
+}
+
 /// <summary>
 /// Writes colour value to node
 /// </summary>
-inline SVONode SetNodeColour(SVONode node, float4 colour)
+inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
 {
-    // Set values
-    node.value_A = lerp(colour.a, node.value_A, 0.999);
-    node.value_R = lerp(colour.r, node.value_R, 0.999);
-    node.value_G = lerp(colour.g, node.value_G, 0.999);
-    node.value_B = lerp(colour.b, node.value_B, 0.999);
+    // Calculate depth based luma threshold (decreases with increasing depth)
+    float lumaThreshold = LUMA_THRESHOLD_FACTOR * (1.0f / max(depth * LUMA_DEPTH_FACTOR, 0.1f));
+    
+    // Find the current pixel's luma
+    float pixelLuma = GetLuma(colour.rgb);
+    
+    // Calculate difference between voxel and pixel luma
+    float currentVoxelLuma = GetLuma(float3(node.value_R, node.value_G, node.value_B));
+    float lumaDiff = saturate(currentVoxelLuma - pixelLuma);
+    
+    // Only inject if currently voxel is either 1. unoccupied or 2. of a lesser depth and passes luma test
+    if ((node.value_A == 0.0f) || ((depth < node.value_A) && (lumaDiff < lumaThreshold)))
+    {
+        // Set values
+        node.value_A = colour.a;
+        node.value_R = colour.r;
+        node.value_G = colour.g;
+        node.value_B = colour.b;
+    }
     
     // return node
     return node;
@@ -88,7 +110,7 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
 /// </summary>
 void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuffer<uint> _SVO_SplitQueue, RWStructuredBuffer<uint> _SVO_Counters)
 {
-    uint seenOffset[4];
+    uint seenOffset[8];
     uint seenCount = 0;
         
     // Search thread group for highest offset
@@ -99,7 +121,7 @@ void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuff
         {
             uint seen = 0;
             int rowSeen;
-            for (rowSeen = 0; rowSeen < 4; rowSeen++)
+            for (rowSeen = 0; rowSeen < 8; rowSeen++)
             {
                 if (splitOffsets[row] == seenOffset[rowSeen])
                 {
@@ -115,7 +137,7 @@ void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuff
                 seenOffset[seenCount] = splitOffsets[row];
                 seenCount++;
                     
-                if (seenCount > 3)
+                if (seenCount > 7)
                     return;
             }
         }
@@ -126,8 +148,14 @@ void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuff
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
 uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
-    float4 worldPosition, float4 colour, float giAreaSize)
+    float4 worldPosition, float4 colour, float depth, float giAreaSize)
 {
+    /// Calculate initial values
+    // AABB Min/Max x,y,z
+    float halfArea = giAreaSize / 2;
+    float3 t0 = float3(-halfArea, -halfArea, -halfArea);
+    float3 t1 = float3(halfArea, halfArea, halfArea);    
+    
     // Traverse tree
     uint currentDepth = 0;
     uint offset = 0;
@@ -138,7 +166,7 @@ uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
         emergencyExit++;
         if (emergencyExit > 8192)
             return 0;
-        
+                
         // Unpack node
         SVONode node = svoBuffer[offset];
         uint bitfieldOccupancy;
@@ -155,32 +183,68 @@ uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             //          race condition characterized by flicking GI
             //          This will be replaced with an atomic rolling
             //          average to fix this problem in the future
-            svoBuffer[offset] = SetNodeColour(node, colour);
+            svoBuffer[offset] = SetNodeColour(node, colour, depth);
                        
             // We're done here
             return 0;
         }
         else
         {
-            // At depth 0, we take default values
-            //  currentDepth = 0
-            //  resolution = 1
-            
+            // If no children then tag for split queue consideration
             if (node.referenceOffset == 0)
             {       
                 // Just here for debugging purposes
-                svoBuffer[offset] = SetNodeColour(node, colour);
+                svoBuffer[offset] = SetNodeColour(node, colour, depth);
                 
                 return offset + 1;
             }
             else
-            {               
-                // Resolution is depth to the power of 4
-                uint resolution = pow(currentDepth, 2);
+            {           
+                // Middle of node coordiates
+                float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
+                
+                // Child node offset index
+                uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
+                
+                // Set extents of child node
+                switch (childIndex)
+                {
+                    case 0:
+                        t0 = float3(t0.x, t0.y, t0.z);
+                        t1 = float3(tM.x, tM.y, tM.z);
+                        break;
+                    case 4:
+                        t0 = float3(t0.x, t0.y, tM.z);
+                        t1 = float3(tM.x, tM.y, t1.z);
+                        break;
+                    case 2:
+                        t0 = float3(t0.x, tM.y, t0.z);
+                        t1 = float3(tM.x, t1.y, tM.z);
+                        break;
+                    case 6:
+                        t0 = float3(t0.x, tM.y, tM.z);
+                        t1 = float3(tM.x, t1.y, t1.z);
+                        break;
+                    case 1:
+                        t0 = float3(tM.x, t0.y, t0.z);
+                        t1 = float3(t1.x, tM.y, tM.z);
+                        break;
+                    case 5:
+                        t0 = float3(tM.x, t0.y, tM.z);
+                        t1 = float3(t1.x, tM.y, t1.z);
+                        break;
+                    case 3:
+                        t0 = float3(tM.x, tM.y, t0.z);
+                        t1 = float3(t1.x, t1.y, tM.z);
+                        break;
+                    case 7:
+                        t0 = float3(tM.x, tM.y, tM.z);
+                        t1 = float3(t1.x, t1.y, t1.z);
+                        break;
+                }
                 
                 // Offet is reference + the node offset index
-                offset = node.referenceOffset + GetSVOBitOffset(GetGridPosition(worldPosition, resolution, giAreaSize), resolution);
-                //offset = node.referenceOffset + GetSVOBitOffset(worldPosition * resolution, resolution);
+                offset = node.referenceOffset + childIndex;
                 
                 // We setup to search next depth
                 currentDepth++;

@@ -53,6 +53,8 @@ uniform uint							_cascade;
 // Function to get position of voxel in the grid
 inline uint3 GetVoxelPosition(float3 worldPosition)
 {
+    worldPosition.xyz = worldPosition.xyz - gridOffset.xyz;
+    
     float3 encodedPosition = worldPosition / _giAreaSize;
     encodedPosition += float3(1.0f, 1.0f, 1.0f);
     encodedPosition /= 2.0f;

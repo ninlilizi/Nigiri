@@ -722,7 +722,7 @@ public class Nigiri : MonoBehaviour {
         if (stereo2MonoMaterial == null) stereo2MonoMaterial = new Material(stereo2MonoShader);
 
         //gridOffset = localCam.transform.position; -- Removed due to no grid-offsetting.
-        gridOffset = new Vector3(0, 0, 0);
+        gridOffset = new Vector3(-(GIAreaSize / 2), -(GIAreaSize / 2), -(GIAreaSize / 2));
 
         // Instantiate render textures
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
@@ -734,10 +734,10 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(), 15, 16777216, 256);
+        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, 256);
 
         // Instantiate voxelizer
-        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 50, 15);
+        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 100, 10);
 
         Setup();
 
@@ -1167,7 +1167,7 @@ public class Nigiri : MonoBehaviour {
         Graphics.Blit(source, renderTextures.positionTexture, tracerMaterial, 0);
         tracerMaterial.SetInt("Stereo2Mono", 0);
 
-        tracerMaterial.SetVector("gridOffset", gridOffset);
+        tracerMaterial.SetVector("gridOffset", voxelizer.GridOffset);
 
         if (visualizeDepth)
         {
