@@ -25,7 +25,7 @@ namespace NKLI.Nigiri.SVO
         // Read-only buffer properties
 
         // Compute
-        readonly private ComputeShader Shader_VoxelEncocder;
+        readonly private ComputeShader Shader_VoxelEncoder;
         readonly private ComputeShader Shader_SVOSplitter;
 
         /// <summary>
@@ -44,8 +44,8 @@ namespace NKLI.Nigiri.SVO
             }
 
             // Load encode shader
-            Shader_VoxelEncocder = Resources.Load("NKLI_Nigiri_SVOVoxelizer") as ComputeShader;
-            if (Shader_VoxelEncocder == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOVoxelizer'");
+            Shader_VoxelEncoder = Resources.Load("NKLI_Nigiri_SVOVoxelizer") as ComputeShader;
+            if (Shader_VoxelEncoder == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOVoxelizer'");
 
             // Load splitter shader
             Shader_SVOSplitter = Resources.Load("NKLI_Nigiri_SVOSplitter") as ComputeShader;
@@ -87,25 +87,25 @@ namespace NKLI.Nigiri.SVO
 
 
             // Set buffers
-            Shader_VoxelEncocder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
-            Shader_VoxelEncocder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
-            Shader_VoxelEncocder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
-            Shader_VoxelEncocder.SetBuffer(0, "_maskBuffer", maskBuffer);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
+            Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
 
             // Set textures
-            Shader_VoxelEncocder.SetTexture(0, "positionTexture", positionTexture);
-            Shader_VoxelEncocder.SetTexture(0, "lightingTexture", lightingTexture);
-            Shader_VoxelEncocder.SetTexture(0, "lightingTexture2", lightingTexture2);
+            Shader_VoxelEncoder.SetTexture(0, "positionTexture", positionTexture);
+            Shader_VoxelEncoder.SetTexture(0, "lightingTexture", lightingTexture);
+            Shader_VoxelEncoder.SetTexture(0, "lightingTexture2", lightingTexture2);
 
             // Set values
-            Shader_VoxelEncocder.SetFloat("_emissiveIntensity", Emissive_Intensity);
-            Shader_VoxelEncocder.SetFloat("_shadowStrength", Shadow_Strength);
-            Shader_VoxelEncocder.SetFloat("_occlusionGain", Occlusion_Gain);
-            Shader_VoxelEncocder.SetFloat("_giAreaSize", GI_Area_Size);
-            Shader_VoxelEncocder.SetInt("_maxDepth", Max_Depth);
+            Shader_VoxelEncoder.SetFloat("_emissiveIntensity", Emissive_Intensity);
+            Shader_VoxelEncoder.SetFloat("_shadowStrength", Shadow_Strength);
+            Shader_VoxelEncoder.SetFloat("_occlusionGain", Occlusion_Gain);
+            Shader_VoxelEncoder.SetFloat("_giAreaSize", GI_Area_Size);
+            Shader_VoxelEncoder.SetInt("_maxDepth", Max_Depth);
 
             // Dispatch
-            Shader_VoxelEncocder.Dispatch(0, sampleCount / 16, 1, 1);
+            Shader_VoxelEncoder.Dispatch(0, sampleCount / 96, 1, 1);
 
             // We're done here
             return true;
@@ -138,7 +138,7 @@ namespace NKLI.Nigiri.SVO
                 // We don't want to run again till there is something to do
                 SVO_Tree.AbleToSplit = false;
 
-                //Debug.Log("Nodes split successfully!");
+                Debug.Log("Nodes split successfully!");
 
                 // We're done here
                 return true;

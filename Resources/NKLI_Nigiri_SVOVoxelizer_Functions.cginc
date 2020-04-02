@@ -1,4 +1,5 @@
 /// <summary>
+// Upgrade NOTE: excluded shader from DX11, OpenGL ES 2.0 because it uses unsized arrays
 /// NKLI     : Nigiri - SVO Voxelization CGINC 
 /// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
@@ -12,11 +13,11 @@
 /// </summary>
 inline uint3 GetGridPosition(float4 worldPosition, uint resolution, uint giAreaSize)
 {   
-    float3 encodedPosition = worldPosition / giAreaSize;
+    float3 encodedPosition = worldPosition.xyz / giAreaSize;
     encodedPosition += float3(1.0f, 1.0f, 1.0f);
     encodedPosition /= 2.0f;
-    uint3 voxelPosition = (uint3) (encodedPosition * resolution);
-    return voxelPosition;
+    encodedPosition *= resolution;
+    return encodedPosition;
 }
 
 /// <summary>
@@ -67,21 +68,56 @@ inline SVONode SetNodeColour(SVONode node, float4 colour)
 /// Appends to the queue of nodes to be split
 /// </summary>
 inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> counterBuffer, uint offset)
-{
+{   
     // Only if within bounds
     if (counterBuffer[2] < counterBuffer[1])
     {
-        // Lazy test against filling with runs of identical offsets
-        if ((queueBuffer[counterBuffer[2]] + 1) != (offset + 1))
-        {
-            //  Get write index
-            uint index_SplitQueue;
-            InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
+        //  Get write index
+        uint index_SplitQueue;
+        InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
          
-            // Append to split queue it within bounds
-            //  offset is +1 because zero signifies null value
-            if (index_SplitQueue < counterBuffer[1])
-                queueBuffer[index_SplitQueue] = offset + 1;
+        // Append to split queue it within bounds
+        //  offset is +1 because zero signifies null value
+        if (index_SplitQueue < counterBuffer[1])
+            queueBuffer[index_SplitQueue] = offset;
+    }
+}
+
+/// <summary>
+/// Appends upto 8 nodes to the split queue without duplicates
+/// </summary>
+void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuffer<uint> _SVO_SplitQueue, RWStructuredBuffer<uint> _SVO_Counters)
+{
+    uint seenOffset[4];
+    uint seenCount = 0;
+        
+    // Search thread group for highest offset
+    int row;
+    for (row = 0; row < 96; row++)
+    {
+        if (splitOffsets[row] != 0)
+        {
+            uint seen = 0;
+            int rowSeen;
+            for (rowSeen = 0; rowSeen < 4; rowSeen++)
+            {
+                if (splitOffsets[row] == seenOffset[rowSeen])
+                {
+                    if (row != 0) seen = 1;
+                }
+            }
+            if (seen == 0)
+            {
+                // Append to the node split queue
+                AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splitOffsets[row]);
+                    
+                // Append to list of seen offsets
+                seenOffset[seenCount] = splitOffsets[row];
+                seenCount++;
+                    
+                if (seenCount > 3)
+                    return;
+            }
         }
     }
 }
@@ -89,21 +125,19 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
 /// <summary>
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
-void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
+uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
     float4 worldPosition, float4 colour, float giAreaSize)
 {
     // Traverse tree
-    uint maxDepth = counterBuffer[0];
     uint currentDepth = 0;
-    uint done = 0;
     uint offset = 0;
     uint emergencyExit = 0;
-    while (done == 0)
+    while (true)
     {
         // Ejector seat
         emergencyExit++;
         if (emergencyExit > 8192)
-            return;
+            return 0;
         
         // Unpack node
         SVONode node = svoBuffer[offset];
@@ -124,7 +158,7 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             svoBuffer[offset] = SetNodeColour(node, colour);
                        
             // We're done here
-            done = 1;
+            return 0;
         }
         else
         {
@@ -133,15 +167,11 @@ void SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             //  resolution = 1
             
             if (node.referenceOffset == 0)
-            {
-                // Here we split the node
-                AppendSVOSplitQueue(queueBuffer, counterBuffer, offset);
-                
+            {       
                 // Just here for debugging purposes
                 svoBuffer[offset] = SetNodeColour(node, colour);
                 
-                // We're done here
-                done = 1;
+                return offset + 1;
             }
             else
             {               
