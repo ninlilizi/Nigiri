@@ -35,13 +35,14 @@ uniform Texture2D<float4> lightingTexture2;
 uniform Texture2D _CameraDepthTexture;
 
 // Groupshared array of node split offsets
-groupshared uint splitOffsets[96];
+//groupshared uint splitOffsets[96];
+groupshared SplitRequest splits[64];
 groupshared uint ableToSplit = 0;
 
 /// <summary>
 /// Encodes samples into tree
 /// </summary>
-[numthreads(96, 1, 1)]
+[numthreads(64, 1, 1)]
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
     // Get mask position
@@ -57,13 +58,19 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     float depth = _CameraDepthTexture[orderedCoord].r;
    
     // Traverse the SVO, splitting and writing the sampled colour as required
-    splitOffsets[thread] = SplitInsertSVO(
+    splits[thread] = SplitInsertSVO(
         _SVO, _SVO_SplitQueue, _SVO_Counters, (positionTexture[orderedCoord]),
         colour, depth,
         _giAreaSize);
+    
+    //if (split.TTL > highestTTL)
+    //{
+     //   highestTTL = split.TTL;
+    //
+    //}
        
     // Only append to split queue if non-zero offset returned
-    if (splitOffsets[thread] != 0)
+    if (splits[thread].offset != 0)
         ableToSplit = 1;
     
     // Syncronise threads
@@ -71,6 +78,6 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     
     // Append upto 8 nodes to the split queue after checking for dupes
     if ((thread == 0) && (ableToSplit == 1))
-        DeDupeAppendSplitQueue(thread, splitOffsets, _SVO_SplitQueue, _SVO_Counters);
+        DeDupeAppendSplitQueue(thread, splits, _SVO_SplitQueue, _SVO_Counters);
 
 }

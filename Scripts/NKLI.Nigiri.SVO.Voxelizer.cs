@@ -107,7 +107,7 @@ namespace NKLI.Nigiri.SVO
             Shader_VoxelEncoder.SetInt("_maxDepth", Max_Depth);
 
             // Dispatch
-            Shader_VoxelEncoder.Dispatch(0, sampleCount / 96, 1, 1);
+            Shader_VoxelEncoder.Dispatch(0, sampleCount / 64, 1, 1);
 
             // We're done here
             return true;

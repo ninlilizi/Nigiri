@@ -13,6 +13,12 @@
 #define LUMA_DEPTH_FACTOR 100.0f 	// Higher = lesser variation with depth
 #define LUMA_FACTOR 1.9632107f
 
+struct SplitRequest
+{
+    uint offset;
+    uint TTL;
+};
+
 
 /// <summary>
 /// Returns position within a grid, given specific resolution and area size.
@@ -108,37 +114,56 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
 /// <summary>
 /// Appends upto 8 nodes to the split queue without duplicates
 /// </summary>
-void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuffer<uint> _SVO_SplitQueue, RWStructuredBuffer<uint> _SVO_Counters)
+void DeDupeAppendSplitQueue(uint thread, SplitRequest splits[64], RWStructuredBuffer<uint> _SVO_SplitQueue, RWStructuredBuffer<uint> _SVO_Counters)
 {
-    uint seenOffset[8];
-    uint seenCount = 0;
+    //uint seenOffset[4];
+    //uint seenCount = 0;
+    uint highestTTL = 0;
         
     // Search thread group for highest offset
     int row;
-    for (row = 0; row < 96; row++)
+    for (row = 0; row < 64; row++)
     {
-        if (splitOffsets[row] != 0)
+        if (splits[row].offset != 0)
         {
-            uint seen = 0;
-            int rowSeen;
-            for (rowSeen = 0; rowSeen < 8; rowSeen++)
+            if (splits[row].TTL >= highestTTL)
             {
-                if (splitOffsets[row] == seenOffset[rowSeen])
-                {
-                    if (row != 0) seen = 1;
-                }
-            }
-            if (seen == 0)
-            {
+                if (splits[row].TTL > highestTTL)
+                    highestTTL = splits[row].TTL;
+                    
                 // Append to the node split queue
-                AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splitOffsets[row]);
+                AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splits[row].offset);
+                
+                /*uint seen = 0;
+                int rowSeen;
+                for (rowSeen = 0; rowSeen < 4; rowSeen++)
+                {
+                    if (splits[row].offset == seenOffset[rowSeen])
+                    {
+                        if (row != 0)
+                            seen = 1;
+                    }
+                }
+                if (seen == 0)
+                {
+
+                    // Append to the node split queue
+                    AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splits[row].offset);
+                
+                    if (splits[row].TTL > highestTTL)
+                    {
+                        highestTTL = splits[row].TTL;
+                        seenCount = 0;
+                    }
                     
-                // Append to list of seen offsets
-                seenOffset[seenCount] = splitOffsets[row];
-                seenCount++;
+                    // Append to list of seen offsets
+                    seenOffset[seenCount] = splits[row].offset;
+                    seenCount++;
                     
-                if (seenCount > 7)
-                    return;
+                    if (seenCount > 3)
+                        seenCount = 0;
+                
+                }*/
             }
         }
     }
@@ -147,14 +172,16 @@ void DeDupeAppendSplitQueue(uint thread, uint splitOffsets[96], RWStructuredBuff
 /// <summary>
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
-uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer, 
+SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer,
     float4 worldPosition, float4 colour, float depth, float giAreaSize)
 {
     /// Calculate initial values
     // AABB Min/Max x,y,z
     float halfArea = giAreaSize / 2;
     float3 t0 = float3(-halfArea, -halfArea, -halfArea);
-    float3 t1 = float3(halfArea, halfArea, halfArea);    
+    float3 t1 = float3(halfArea, halfArea, halfArea);  
+    
+    SplitRequest split;
     
     // Traverse tree
     uint currentDepth = 0;
@@ -165,7 +192,11 @@ uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
         // Ejector seat
         emergencyExit++;
         if (emergencyExit > 8192)
-            return 0;
+        {
+            split.offset = 0;
+            split.TTL = 0;
+            return split;
+        }
                 
         // Unpack node
         SVONode node = svoBuffer[offset];
@@ -186,7 +217,9 @@ uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             svoBuffer[offset] = SetNodeColour(node, colour, depth);
                        
             // We're done here
-            return 0;
+            split.offset = 0;
+            split.TTL = 0;
+            return split;
         }
         else
         {
@@ -194,9 +227,20 @@ uint SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<ui
             if (node.referenceOffset == 0)
             {       
                 // Just here for debugging purposes
-                svoBuffer[offset] = SetNodeColour(node, colour, depth);
+                float4 newColour = lerp(
+                    float4(node.value_R, node.value_G, node.value_B, node.value_A),
+                    float4(colour.r, colour.g, colour.b, colour.a), 0.05f);
                 
-                return offset + 1;
+                float mono = (newColour.r + newColour.g + newColour.b) / 6.0f;
+                
+                svoBuffer[offset] = 
+
+
+                    SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
+                
+                split.offset = offset + 1;
+                split.TTL = ttl;
+                return split;
             }
             else
             {           
