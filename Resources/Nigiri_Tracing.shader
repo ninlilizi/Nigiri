@@ -24,11 +24,11 @@
 			float4 value;
 		};
 
-		uniform sampler3D				voxelGrid1;
-		uniform sampler3D				voxelGrid2;
-		uniform sampler3D				voxelGrid3;
-		uniform sampler3D				voxelGrid4;
-		uniform sampler3D				voxelGrid5;
+		//uniform sampler3D				voxelGrid1;
+		//uniform sampler3D				voxelGrid2;
+		//uniform sampler3D				voxelGrid3;
+		//uniform sampler3D				voxelGrid4;
+		//uniform sampler3D				voxelGrid5;
 
 		uniform sampler2D 				_MainTex;
 		uniform sampler2D				_IndirectTex;
@@ -362,7 +362,7 @@ inline float3 GetVoxelPosition(float3 worldPosition)
 	voxelPosition /= 2.0f;
 	return voxelPosition;
 }
-
+/*
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfo1(float3 voxelPosition)
 {
@@ -458,6 +458,7 @@ inline float4 GetVoxelInfo5(float3 voxelPosition)
 	}
 	return tex;
 }
+*/
 
 /// <summary>
 /// Returns the node offset calculated from spatial relation
@@ -627,25 +628,25 @@ float4 frag_debug(v2f i) : SV_Target
 	float3 voxelPosition = (0).xxx;
 
 	#if defined(GRID_1)
-	voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
+	//voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
 	#endif
 
 	#if defined(GRID_2)
-	voxelPosition = GetVoxelPosition(worldPos);
-	voxelInfo = GetVoxelInfo2(voxelPosition);
+	//voxelPosition = GetVoxelPosition(worldPos);
+	//voxelInfo = GetVoxelInfo2(voxelPosition);
 	#endif
 
 	#if defined(GRID_3)
-	voxelPosition = GetVoxelPosition(worldPos);
-	voxelInfo = GetVoxelInfo3(voxelPosition);
+	//voxelPosition = GetVoxelPosition(worldPos);
+	//voxelInfo = GetVoxelInfo3(voxelPosition);
 	#endif
 
 	#if defined(GRID_4)
-	voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
+	//voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
 	#endif
 
 	#if defined(GRID_5)
-	voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
+	//voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
 	#endif
 
 
@@ -683,10 +684,10 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 
 		//info = tex3D(voxelGrid1, worldPosition);
 		info = GetVoxelInfoSVO(worldPosition);
-		info += tex3D(voxelGrid2, worldPosition);
-		info += tex3D(voxelGrid3, worldPosition);
-		info += tex3D(voxelGrid4, worldPosition);
-		info += tex3D(voxelGrid5, worldPosition);
+		//info += tex3D(voxelGrid2, worldPosition);
+		//info += tex3D(voxelGrid3, worldPosition);
+		//info += tex3D(voxelGrid4, worldPosition);
+		//info += tex3D(voxelGrid5, worldPosition);
 	}
 
 	return info;
@@ -791,11 +792,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 				if (currentVoxelInfo.a > 0.0f)
 				{
 					if (depthStopOptimization) hitFound = 1.0f;
-					/*if (coordSet == 0)
-					{
-						coordSet = 1;
-						voxelBufferCoord = voxelPosition * (coneDistance * 1.72);
-					}*/
 				}
 				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 			}
@@ -815,6 +811,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 	}
 
+	/*
 	// Sample voxel grid 2
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -837,11 +834,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (currentVoxelInfo.a > 0.0f)
 			{
 				if (depthStopOptimization) hitFound = 1.0f;
-				/*if (coordSet == 0)
-				{
-					coordSet = 1;
-					voxelBufferCoord = voxelPosition * (coneDistance * 1.72);
-				}*/
 			}
 			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
@@ -859,7 +851,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	}
 	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
 	else computedColor += gi;
+	*/
 
+	/*
 	// Sample voxel grid 3
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -898,7 +892,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	}
 	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
 	else computedColor += gi;
+	*/
 
+	/*
 	// Sample voxel grid 4
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -937,7 +933,9 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	}
 	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
 	else computedColor += gi;
+	*/
 
+	/*
 	// Sample voxel grid 5
 	if (skipLastMipLevel == 0)
 	{
@@ -957,7 +955,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 			if (hitFound < 0.9f)
 			{
 				voxelPosition = GetVoxelPosition(currentPosition);
-				currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+				//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 				if (currentVoxelInfo.a > 0.0f)
 				{
 					if (depthStopOptimization) hitFound = 1.0f;
@@ -978,6 +976,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
 		else computedColor += gi;
 	}
+	*/
 
 	//Calculate lighting attribution
 	if (!visualizeOcclusion)
@@ -1239,7 +1238,8 @@ Pass
 	CGPROGRAM
 	#pragma vertex vert
 	#pragma fragment frag_debug
-	#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5 GRID_SVO
+	//#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5 GRID_SVO
+	#pragma multi_compile GRID_SVO
 	#pragma target 5.0
 	ENDCG
 }

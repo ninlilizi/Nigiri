@@ -19,11 +19,11 @@ namespace NKLI.Nigiri
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
         // Grid Textures
-        public RenderTexture voxelGrid1;
-        public RenderTexture voxelGrid2;
-        public RenderTexture voxelGrid3;
-        public RenderTexture voxelGrid4;
-        public RenderTexture voxelGrid5;
+        //public RenderTexture voxelGrid1;
+        //public RenderTexture voxelGrid2;
+        //public RenderTexture voxelGrid3;
+        //public RenderTexture voxelGrid4;
+        //public RenderTexture voxelGrid5;
 
         // Render Textures
         public RenderTexture lightingTexture;
@@ -72,37 +72,37 @@ namespace NKLI.Nigiri
             voxelGridDescriptorFloat4.msaaSamples = 1;
             voxelGridDescriptorFloat4.sRGB = true;
 
-            voxelGrid1 = new RenderTexture(voxelGridDescriptorFloat4);
+            //voxelGrid1 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 2;
             voxelGridDescriptorFloat4.height = resolution / 2;
             voxelGridDescriptorFloat4.volumeDepth = resolution / 2;
 
-            voxelGrid2 = new RenderTexture(voxelGridDescriptorFloat4);
+            //voxelGrid2 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 4;
             voxelGridDescriptorFloat4.height = resolution / 4;
             voxelGridDescriptorFloat4.volumeDepth = resolution / 4;
 
-            voxelGrid3 = new RenderTexture(voxelGridDescriptorFloat4);
+            //voxelGrid3 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 8;
             voxelGridDescriptorFloat4.height = resolution / 8;
             voxelGridDescriptorFloat4.volumeDepth = resolution / 8;
 
-            voxelGrid4 = new RenderTexture(voxelGridDescriptorFloat4);
+            //voxelGrid4 = new RenderTexture(voxelGridDescriptorFloat4);
 
             voxelGridDescriptorFloat4.width = resolution / 16;
             voxelGridDescriptorFloat4.height = resolution / 16;
             voxelGridDescriptorFloat4.volumeDepth = resolution / 16;
 
-            voxelGrid5 = new RenderTexture(voxelGridDescriptorFloat4);
+            //voxelGrid5 = new RenderTexture(voxelGridDescriptorFloat4);
 
-            voxelGrid1.Create();
-            voxelGrid2.Create();
-            voxelGrid3.Create();
-            voxelGrid4.Create();
-            voxelGrid5.Create();
+            //voxelGrid1.Create();
+            //voxelGrid2.Create();
+            //voxelGrid3.Create();
+            //voxelGrid4.Create();
+            //voxelGrid5.Create();
         }
 
         /// <summary>
@@ -200,11 +200,11 @@ namespace NKLI.Nigiri
         public void DisposeGridTextures(bool destroy)
         {
             // Dispose voxel grid textures
-            Helpers.DisposeTextureRef(ref voxelGrid1, destroy);
-            Helpers.DisposeTextureRef(ref voxelGrid2, destroy);
-            Helpers.DisposeTextureRef(ref voxelGrid3, destroy);
-            Helpers.DisposeTextureRef(ref voxelGrid4, destroy);
-            Helpers.DisposeTextureRef(ref voxelGrid5, destroy);
+            //Helpers.DisposeTextureRef(ref voxelGrid1, destroy);
+            //Helpers.DisposeTextureRef(ref voxelGrid2, destroy);
+            //Helpers.DisposeTextureRef(ref voxelGrid3, destroy);
+            //Helpers.DisposeTextureRef(ref voxelGrid4, destroy);
+            //Helpers.DisposeTextureRef(ref voxelGrid5, destroy);
         }
 
         #region IDisposable + Unity Scriped Destruction support
