@@ -15,14 +15,18 @@ namespace NKLI.Nigiri
     /// </summary>
     public class ComputeBuffers : ScriptableObject, IDisposable
     {
+        // Read-only properties
+        public long RAM_Usage { get; private set; } // RAM usage
+        public long VRAM_Usage { get; private set; } // VRAM usage
+
         // Buffers
         public ComputeBuffer RenderCountBuffer;
 
-        public ComputeBuffer voxelUpdateSampleCount;
+        //public ComputeBuffer voxelUpdateSampleCount;
         public ComputeBuffer voxelUpdateMaskBufferNaive;
         public ComputeBuffer voxelUpdateMaskBuffer;
-        public ComputeBuffer voxelUpdateSampleBuffer;
-        public ComputeBuffer voxelUpdateSampleCountBuffer;
+        //public ComputeBuffer voxelUpdateSampleBuffer;
+        //public ComputeBuffer voxelUpdateSampleCountBuffer;
 
         /// <summary>
         /// Generic create method
@@ -48,24 +52,30 @@ namespace NKLI.Nigiri
             DisposeBuffers();
 
             // Voxel Primary
-            if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
-            voxelUpdateSampleCount = new ComputeBuffer(resolution * resolution * resolution, 4, ComputeBufferType.Default);
+            //if (voxelUpdateSampleCount != null) voxelUpdateSampleCount.Release();
+            //voxelUpdateSampleCount = new ComputeBuffer(resolution * resolution * resolution, 4, ComputeBufferType.Default);
+            //VRAM_Usage += Convert.ToInt64(resolution * resolution * resolution * 4 * 8);
 
             if (voxelUpdateMaskBufferNaive != null) voxelUpdateMaskBufferNaive.Release();
             voxelUpdateMaskBufferNaive = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Append);
+            VRAM_Usage += Convert.ToInt64(injectionTextureResolution.x * injectionTextureResolution.y * sizeof(uint) * 8);
 
             if (voxelUpdateMaskBuffer != null) voxelUpdateMaskBuffer.Release();
             voxelUpdateMaskBuffer = new ComputeBuffer(injectionTextureResolution.x * injectionTextureResolution.y, sizeof(uint), ComputeBufferType.Default);
+            VRAM_Usage += Convert.ToInt64(injectionTextureResolution.x * injectionTextureResolution.y * sizeof(uint) * 8);
 
-            if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
-            voxelUpdateSampleBuffer = new ComputeBuffer(resolution * resolution * resolution, sizeof(float) * 4, ComputeBufferType.Default);
+            //if (voxelUpdateSampleBuffer != null) voxelUpdateSampleBuffer.Release();
+            //voxelUpdateSampleBuffer = new ComputeBuffer(resolution * resolution * resolution, sizeof(float) * 4, ComputeBufferType.Default);
+            //VRAM_Usage += Convert.ToInt64(injectionTextureResolution.x * injectionTextureResolution.y * sizeof(float) * 4 * 8);
 
-            if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
-            voxelUpdateSampleCountBuffer = new ComputeBuffer(resolution * resolution * resolution, sizeof(uint), ComputeBufferType.Default);
+            //if (voxelUpdateSampleCountBuffer != null) voxelUpdateSampleCountBuffer.Release();
+            //voxelUpdateSampleCountBuffer = new ComputeBuffer(resolution * resolution * resolution, sizeof(uint), ComputeBufferType.Default);
+            //VRAM_Usage += Convert.ToInt64(injectionTextureResolution.x * injectionTextureResolution.y * sizeof(uint) * 8);
             ///END Voxel Primary
 
             if (RenderCountBuffer != null) RenderCountBuffer.Release();
             RenderCountBuffer = new ComputeBuffer(renderCounterMax, sizeof(int), ComputeBufferType.IndirectArguments);
+            VRAM_Usage += Convert.ToInt64(renderCounterMax * sizeof(int) * 8);
 
             //if (MaskCountBuffer != null) MaskCountBuffer.Release();
             //MaskCountBuffer = new ComputeBuffer(1, sizeof(int), ComputeBufferType.IndirectArguments);
@@ -77,11 +87,14 @@ namespace NKLI.Nigiri
         /// </summary>
         public void DisposeBuffers()
         {
-            Helpers.ReleaseBufferRef(ref voxelUpdateSampleCount);
+            // Zero VRAM usage meter
+            VRAM_Usage = 0;
+
+            //Helpers.ReleaseBufferRef(ref voxelUpdateSampleCount);
             Helpers.ReleaseBufferRef(ref voxelUpdateMaskBufferNaive);
             Helpers.ReleaseBufferRef(ref voxelUpdateMaskBuffer);
-            Helpers.ReleaseBufferRef(ref voxelUpdateSampleBuffer);
-            Helpers.ReleaseBufferRef(ref voxelUpdateSampleCountBuffer);
+            //Helpers.ReleaseBufferRef(ref voxelUpdateSampleBuffer);
+            //Helpers.ReleaseBufferRef(ref voxelUpdateSampleCountBuffer);
             Helpers.ReleaseBufferRef(ref RenderCountBuffer);
         }
 

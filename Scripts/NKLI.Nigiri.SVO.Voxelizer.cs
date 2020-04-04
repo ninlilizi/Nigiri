@@ -71,6 +71,19 @@ namespace NKLI.Nigiri.SVO
         }
 
         /// <summary>
+        /// Updates voxelization parameters
+        /// </summary>
+        /// <param name="emissiveIntensity"></param>
+        /// <param name="shadowStrength"></param>
+        /// <param name="occlusionGain"></param>
+        public void UpdateParameters(float emissiveIntensity, float shadowStrength, float occlusionGain)
+        {
+            Emissive_Intensity = emissiveIntensity;
+            Shadow_Strength = shadowStrength;
+            Occlusion_Gain = occlusionGain;
+        }
+
+        /// <summary>
         /// Voxelizes the scene
         /// </summary>
         public bool VoxelizeScene(int sampleCount, RenderTexture positionTexture, RenderTexture lightingTexture, RenderTexture lightingTexture2, ComputeBuffer maskBuffer)

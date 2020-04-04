@@ -343,6 +343,7 @@ public class Nigiri : MonoBehaviour {
     ///END Performance counters
 
     [Header("Debug Settings")]
+    public string ramUsed;
     public string vramUsed;
     public bool VisualiseGI = false;
     //private bool VisualiseCache = false;
@@ -628,8 +629,8 @@ public class Nigiri : MonoBehaviour {
         emissiveCamera.orthographicSize = (int)(GIAreaSize / 2);
         emissiveCamera.farClipPlane = GIAreaSize;
 
-        FilterMode filterMode = FilterMode.Point;
-        if (bilinearFiltering) filterMode = FilterMode.Bilinear;
+        //FilterMode filterMode = FilterMode.Point;
+        //if (bilinearFiltering) filterMode = FilterMode.Bilinear;
 
         //renderTextures.voxelGrid1.filterMode = filterMode;
         //renderTextures.voxelGrid2.filterMode = filterMode;
@@ -640,6 +641,7 @@ public class Nigiri : MonoBehaviour {
         UpdateVoxelGrid();
 
         // This line goes at the end of update or OnRender 
+        ramUsed = "RAM Usage: " + ramUsage.ToString("F2") + " M";
         vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " M";
 
         
@@ -737,7 +739,7 @@ public class Nigiri : MonoBehaviour {
         SVO.Create(this.GetComponent<Camera>(), 10, 16777216, 250000);
 
         // Instantiate voxelizer
-        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 1, 0.9f, 1, 100, 10);
+        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, 100, 10);
 
         Setup();
 
@@ -820,6 +822,8 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary0);
         maskcount = renderCounts.VoxelSamplesPrimary0;
 
+        voxelizer.UpdateParameters(EmissiveIntensity, shadowStrength, occlusionGain);
+
         nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
         nigiri_VoxelMask.SetTexture(0, "positionTexture", renderTextures.positionTexture);
         nigiri_VoxelMask.Dispatch(0, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
@@ -836,11 +840,11 @@ public class Nigiri : MonoBehaviour {
         //int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids        
-        Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
-        Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
-        Shader.SetGlobalFloat("_occlusionGain", occlusionGain);
-        Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
-        Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
+        //Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
+        //Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
+        //Shader.SetGlobalFloat("_occlusionGain", occlusionGain);
+        //Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
+        //Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
         Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
@@ -1255,7 +1259,7 @@ public class Nigiri : MonoBehaviour {
 		} else {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
-            Graphics.SetRandomWriteTarget(1, computeBuffers.voxelUpdateSampleCountBuffer, true);
+            //Graphics.SetRandomWriteTarget(1, computeBuffers.voxelUpdateSampleCountBuffer, true);
             Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
@@ -1501,6 +1505,27 @@ public class Nigiri : MonoBehaviour {
         return bit;
     }
 
+    ///// <summary> 
+    ///// Estimates the RAM usage.
+    ///// </summary> 
+    public float ramUsage  //TODO: Update vram usage calculation 
+    {
+        get
+        {
+            if (!enabled)
+            {
+                return 0.0f;
+            }
+            long v = 0;
+
+            // SVO Tree
+            v += SVO.RAM_Usage;
+
+            float vram = (v / 8388608.0f);
+
+            return vram;
+        }
+    }
 
     ///// <summary> 
     ///// Estimates the VRAM usage of all the render textures used to render GI. 
@@ -1515,23 +1540,11 @@ public class Nigiri : MonoBehaviour {
             }
             long v = 0;
 
-            if (renderTextures.lightingTexture != null)
-                v += renderTextures.lightingTexture.width * renderTextures.lightingTexture.height * bitValue(renderTextures.lightingTexture);
+            // Render Textures
+            v += renderTextures.VRAM_Usage;
 
-            if (renderTextures.lightingTextureMono != null)
-                v += renderTextures.lightingTextureMono.width * renderTextures.lightingTextureMono.height * bitValue(renderTextures.lightingTextureMono); ;
-
-            if (renderTextures.positionTexture != null)
-                v += renderTextures.positionTexture.width * renderTextures.positionTexture.height * bitValue(renderTextures.positionTexture);
-
-            if (renderTextures.depthTexture != null)
-                v += renderTextures.depthTexture.width * renderTextures.depthTexture.height * renderTextures.depthTexture.volumeDepth * bitValue(renderTextures.depthTexture);
-
-            if (renderTextures.gi != null)
-                v += renderTextures.gi.width * renderTextures.gi.height * bitValue(renderTextures.gi);
-
-            if (renderTextures.blur != null)
-                v += renderTextures.blur.width * renderTextures.blur.height * bitValue(renderTextures.blur);
+            // Compute Buffers
+            v += computeBuffers.VRAM_Usage;
 
             /*if (renderTextures.voxelGrid1 != null)
                 v += renderTextures.voxelGrid1.width * renderTextures.voxelGrid1.height * renderTextures.voxelGrid1.volumeDepth * bitValue(renderTextures.voxelGrid1);
@@ -1543,6 +1556,9 @@ public class Nigiri : MonoBehaviour {
                 v += renderTextures.voxelGrid4.width * renderTextures.voxelGrid4.height * renderTextures.voxelGrid4.volumeDepth * bitValue(renderTextures.voxelGrid4);
             if (renderTextures.voxelGrid5 != null)
                 v += renderTextures.voxelGrid5.width * renderTextures.voxelGrid5.height * renderTextures.voxelGrid5.volumeDepth * bitValue(renderTextures.voxelGrid5);*/
+
+            // SVO Tree
+            v += SVO.VRAM_Usage;
 
             float vram = (v / 8388608.0f);
 

@@ -19,6 +19,8 @@ namespace NKLI.Nigiri.SVO
     public class Tree : ScriptableObject, IDisposable
     {
         // Read-only properties
+        public long RAM_Usage { get; private set; } // RAM usage
+        public long VRAM_Usage { get; private set; } // VRAM usage
         public int Buffer_SVO_ByteLength { get; private set; } // Byte length of buffer
         public int Buffer_SVO_Count { get; private set; } // Max possible nodes
         public uint MaxDepth { get; private set; } // Default starting depth TTL of the tree
@@ -78,21 +80,27 @@ namespace NKLI.Nigiri.SVO
             Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 4, ComputeBufferType.Default);
             Buffer_SVO_ByteLength = maxNodes * sizeof(uint) * 4;
             Buffer_SVO_Count = maxNodes;
+            VRAM_Usage += Convert.ToInt64(maxNodes) * sizeof(uint) * 4 * 8;
 
             // Synchronisation counter buffer
             Buffer_Counters = new ComputeBuffer(Buffer_Counters_Count, sizeof(uint), ComputeBufferType.Default);
+            VRAM_Usage += Convert.ToInt64(Buffer_Counters_Count) * sizeof(uint) * 8;
 
             // Internal position counter buffer
             Buffer_Counters_Internal = new ComputeBuffer(1, sizeof(uint), ComputeBufferType.Default);
+            VRAM_Usage += 1 * sizeof(uint) * 8;
 
             // Temporary PTR storage buffer
             Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
+            VRAM_Usage += Convert.ToInt64(SplitQueueMaxLength) * sizeof(uint) * 8;
 
             // CPU readback storage for the split queue
             splitQueue = new byte[SplitQueueMaxLength * 4];
+            RAM_Usage += splitQueue.LongLength * 8;
 
             // Processed split queue for feeding to compute
             SplitQueueSparse = new byte[SplitQueueMaxLength * 4];
+            RAM_Usage += SplitQueueSparse.LongLength * 8;
 
             // Target array for async counters readback
             //Counters = new uint[Buffer_Counters_Count];
@@ -189,7 +197,9 @@ namespace NKLI.Nigiri.SVO
         public void SetSplitQueue(byte[] _splitQueue)
         {
             splitQueue = _splitQueue;
-            //ThreadedNodeSplit();
+
+            // Tell the thread there's work to do
+            thread_SplitPreProcessor_HasWork = true;
         }
 
         /// <summary> 

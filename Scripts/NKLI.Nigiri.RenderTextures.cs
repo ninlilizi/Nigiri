@@ -15,6 +15,10 @@ namespace NKLI.Nigiri
     /// </summary>
     public class RenderTextures : ScriptableObject, IDisposable
     {
+        // Read-only properties
+        public long RAM_Usage { get; private set; } // RAM usage
+        public long VRAM_Usage { get; private set; } // VRAM usage
+
         // Descriptors
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
@@ -163,6 +167,50 @@ namespace NKLI.Nigiri
             depthTexture.Create();
             blur.Create();
             gi.Create();
+
+
+
+            // VRAM estimation
+            if (lightingTexture != null)
+                VRAM_Usage += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
+
+            if (lightingTexture2 != null)
+                VRAM_Usage += lightingTexture2.width * lightingTexture2.height * bitValue(lightingTexture2);
+
+            if (positionTexture != null)
+                VRAM_Usage += positionTexture.width * positionTexture.height * bitValue(positionTexture);
+
+            if (depthTexture != null)
+                VRAM_Usage += depthTexture.width * depthTexture.height * bitValue(depthTexture);
+
+            if (blur != null)
+                VRAM_Usage += blur.width * blur.height * bitValue(blur);
+
+            if (gi != null)
+                VRAM_Usage += gi.width * gi.height * bitValue(gi);
+        }
+
+        int bitValue(RenderTexture x)
+        {
+
+            int bit = 0;
+            switch (x.format)
+            {
+                case RenderTextureFormat.ARGBHalf:
+                    bit = 16 * 4;
+                    break;
+                case RenderTextureFormat.RFloat:
+                    bit = 32;
+                    break;
+                case RenderTextureFormat.RHalf:
+                    bit = 16;
+                    break;
+                default:
+                    break;
+            }
+            if (bit == 0)
+                Debug.Log(bit + " " + x.name + " bit Value is 0, resolve");
+            return bit;
         }
 
         /// <summary>
@@ -181,6 +229,9 @@ namespace NKLI.Nigiri
         /// <param name="destroy"></param>
         public void DisposeRenderTextures(bool destroy)
         {
+            // Zero VRAM usage meter
+            VRAM_Usage = 0;
+
             // Dispose render textures
             Helpers.DisposeTextureRef(ref lightingTexture, destroy);
             Helpers.DisposeTextureRef(ref lightingTexture2, destroy);
