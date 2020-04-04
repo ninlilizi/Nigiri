@@ -487,93 +487,65 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 	float3 t1 = float3(halfArea, halfArea, halfArea);
 
 	// Traverse tree
-	uint currentDepth = 0;
 	uint offset = 0;
-	uint emergencyExit = 0;
 	while (true)
 	{
-		// Ejector seat
-		emergencyExit++;
-		if (emergencyExit > 8192)
-			return (0).xxxx;
-
-		// Unpack node
+		// Retrieve node
 		SVONode node = _SVO[offset];
-		uint bitfieldOccupancy;
-		uint runLength;
-		uint ttl;
-		uint isLeaf;
-		node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
 
-		// At max depth we just write out the voxel and quit
-		if (ttl == 0)
+		// If no children then tag for split queue consideration
+		if (node.referenceOffset == 0)
 		{
-			// Write back to buffer
-			// TODO - This is not threadsafe and will result in a
-			//          race condition characterized by flicking GI
-			//          This will be replaced with an atomic rolling
-			//          average to fix this problem in the future
+			// If no child then return colour
 			return node.UnPackColour();
 		}
 		else
 		{
-			// If no children then output this nodes colour
-			if (node.referenceOffset == 0)
+			// Middle of node coordiates
+			float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
+
+			// Child node offset index
+			uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
+
+			// Set extents of child node
+			switch (childIndex)
 			{
-				// Return colour
-				return node.UnPackColour();
+			case 0:
+				t0 = float3(t0.x, t0.y, t0.z);
+				t1 = float3(tM.x, tM.y, tM.z);
+				break;
+			case 4:
+				t0 = float3(t0.x, t0.y, tM.z);
+				t1 = float3(tM.x, tM.y, t1.z);
+				break;
+			case 2:
+				t0 = float3(t0.x, tM.y, t0.z);
+				t1 = float3(tM.x, t1.y, tM.z);
+				break;
+			case 6:
+				t0 = float3(t0.x, tM.y, tM.z);
+				t1 = float3(tM.x, t1.y, t1.z);
+				break;
+			case 1:
+				t0 = float3(tM.x, t0.y, t0.z);
+				t1 = float3(t1.x, tM.y, tM.z);
+				break;
+			case 5:
+				t0 = float3(tM.x, t0.y, tM.z);
+				t1 = float3(t1.x, tM.y, t1.z);
+				break;
+			case 3:
+				t0 = float3(tM.x, tM.y, t0.z);
+				t1 = float3(t1.x, t1.y, tM.z);
+				break;
+			case 7:
+				t0 = float3(tM.x, tM.y, tM.z);
+				t1 = float3(t1.x, t1.y, t1.z);
+				break;
 			}
-			else
-			{
-				// Middle of node coordiates
-				float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
 
-				// Child node offset index
-				uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
-
-				// Set extents of child node
-				switch (childIndex)
-				{
-				case 0:
-					t0 = float3(t0.x, t0.y, t0.z);
-					t1 = float3(tM.x, tM.y, tM.z);
-					break;
-				case 4:
-					t0 = float3(t0.x, t0.y, tM.z);
-					t1 = float3(tM.x, tM.y, t1.z);
-					break;
-				case 2:
-					t0 = float3(t0.x, tM.y, t0.z);
-					t1 = float3(tM.x, t1.y, tM.z);
-					break;
-				case 6:
-					t0 = float3(t0.x, tM.y, tM.z);
-					t1 = float3(tM.x, t1.y, t1.z);
-					break;
-				case 1:
-					t0 = float3(tM.x, t0.y, t0.z);
-					t1 = float3(t1.x, tM.y, tM.z);
-					break;
-				case 5:
-					t0 = float3(tM.x, t0.y, tM.z);
-					t1 = float3(t1.x, tM.y, t1.z);
-					break;
-				case 3:
-					t0 = float3(tM.x, tM.y, t0.z);
-					t1 = float3(t1.x, t1.y, tM.z);
-					break;
-				case 7:
-					t0 = float3(tM.x, tM.y, tM.z);
-					t1 = float3(t1.x, t1.y, t1.z);
-					break;
-				}
-
-				// Offet is reference + the node offset index
-				offset = node.referenceOffset + childIndex;
-
-				// We setup to search next depth
-				currentDepth++;
-			}
+			// Offet is reference + the node offset index
+			offset = node.referenceOffset + childIndex;
 		}
 	}
 	return float4(0, 0, 0, 0);

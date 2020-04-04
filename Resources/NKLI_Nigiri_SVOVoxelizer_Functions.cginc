@@ -181,112 +181,110 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
     SplitRequest split;
     
     // Traverse tree
-    uint currentDepth = 0;
     uint offset = 0;
     uint emergencyExit = 0;
     while (true)
     {
         // Ejector seat
+        //  TODO: Discover why this is even needed.
+        //          Without it splits fine but doesn't write into TTL==0
         emergencyExit++;
-        if (emergencyExit > 8192)
+        if (emergencyExit > 15)
         {
             split.offset = 0;
             split.TTL = 0;
             return split;
         }
                 
-        // Unpack node
+        // Retrieve node
         SVONode node = svoBuffer[offset];
-        uint bitfieldOccupancy;
-        uint runLength;
-        uint ttl;
-        uint isLeaf;
-        node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
                 
-        // At max depth we just write out the voxel and quit
-        if (ttl == 0)
-        {                     
-            // Write back to buffer
-            // TODO - This is not threadsafe and will result in a
-            //          race condition characterized by flicking GI
-            //          This will be replaced with an atomic rolling
-            //          average to fix this problem in the future
-            svoBuffer[offset] = SetNodeColour(node, colour, depth);
-                       
-            // We're done here
-            split.offset = 0;
-            split.TTL = 0;
-            return split;
-        }
-        else
+        // If no children then tag for split queue consideration
+        if (node.referenceOffset == 0)
         {
-            // If no children then tag for split queue consideration
-            if (node.referenceOffset == 0)
-            {       
+            // Unpack node
+            uint bitfieldOccupancy;
+            uint runLength;
+            uint ttl;
+            uint isLeaf;
+            node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
+            
+            // At max depth we just write out the voxel and quit
+            if (ttl == 0)
+            {
+                // Write back to buffer
+                // TODO - This is not threadsafe and will result in a
+                //          race condition characterized by flicking GI
+                //          This will be replaced with an atomic rolling
+                //          average to fix this problem in the future
+                svoBuffer[offset] = SetNodeColour(node, colour, depth);
+                       
+                // We're done here
+                split.offset = 0;
+                split.TTL = 0;
+                return split;
+            }
+            else
+            {
                 // Just here for debugging purposes
-                float4 newColour = lerp(
-                    node.UnPackColour(),
-                    float4(colour.r, colour.g, colour.b, colour.a), 0.05f);
-                
-                float mono = (newColour.r + newColour.g + newColour.b) / 6.0f;
-                
-                svoBuffer[offset] = SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
+                //float4 newColour = lerp(
+                //node.UnPackColour(),
+                //float4(colour.r, colour.g, colour.b, colour.a), 0.05f);
+                //float mono = (newColour.r + newColour.g + newColour.b);
+                //svoBuffer[offset] = SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
                 
                 split.offset = offset + 1;
                 split.TTL = ttl;
                 return split;
             }
-            else
-            {           
-                // Middle of node coordiates
-                float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
+        }
+        else
+        {
+            // Middle of node coordiates
+            float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
                 
-                // Child node offset index
-                uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
+            // Child node offset index
+            uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
                 
-                // Set extents of child node
-                switch (childIndex)
-                {
-                    case 0:
-                        t0 = float3(t0.x, t0.y, t0.z);
-                        t1 = float3(tM.x, tM.y, tM.z);
-                        break;
-                    case 4:
-                        t0 = float3(t0.x, t0.y, tM.z);
-                        t1 = float3(tM.x, tM.y, t1.z);
-                        break;
-                    case 2:
-                        t0 = float3(t0.x, tM.y, t0.z);
-                        t1 = float3(tM.x, t1.y, tM.z);
-                        break;
-                    case 6:
-                        t0 = float3(t0.x, tM.y, tM.z);
-                        t1 = float3(tM.x, t1.y, t1.z);
-                        break;
-                    case 1:
-                        t0 = float3(tM.x, t0.y, t0.z);
-                        t1 = float3(t1.x, tM.y, tM.z);
-                        break;
-                    case 5:
-                        t0 = float3(tM.x, t0.y, tM.z);
-                        t1 = float3(t1.x, tM.y, t1.z);
-                        break;
-                    case 3:
-                        t0 = float3(tM.x, tM.y, t0.z);
-                        t1 = float3(t1.x, t1.y, tM.z);
-                        break;
-                    case 7:
-                        t0 = float3(tM.x, tM.y, tM.z);
-                        t1 = float3(t1.x, t1.y, t1.z);
-                        break;
-                }
-                
-                // Offet is reference + the node offset index
-                offset = node.referenceOffset + childIndex;
-                
-                // We setup to search next depth
-                currentDepth++;
+            // Set extents of child node
+            switch (childIndex)
+            {
+                case 0:
+                    t0 = float3(t0.x, t0.y, t0.z);
+                    t1 = float3(tM.x, tM.y, tM.z);
+                    break;
+                case 4:
+                    t0 = float3(t0.x, t0.y, tM.z);
+                    t1 = float3(tM.x, tM.y, t1.z);
+                    break;
+                case 2:
+                    t0 = float3(t0.x, tM.y, t0.z);
+                    t1 = float3(tM.x, t1.y, tM.z);
+                    break;
+                case 6:
+                    t0 = float3(t0.x, tM.y, tM.z);
+                    t1 = float3(tM.x, t1.y, t1.z);
+                    break;
+                case 1:
+                    t0 = float3(tM.x, t0.y, t0.z);
+                    t1 = float3(t1.x, tM.y, tM.z);
+                    break;
+                case 5:
+                    t0 = float3(tM.x, t0.y, tM.z);
+                    t1 = float3(t1.x, tM.y, t1.z);
+                    break;
+                case 3:
+                    t0 = float3(tM.x, tM.y, t0.z);
+                    t1 = float3(t1.x, t1.y, tM.z);
+                    break;
+                case 7:
+                    t0 = float3(tM.x, tM.y, tM.z);
+                    t1 = float3(t1.x, t1.y, t1.z);
+                    break;
             }
+                
+            // Offet is reference + the node offset index
+            offset = node.referenceOffset + childIndex;
         }
     }
 }

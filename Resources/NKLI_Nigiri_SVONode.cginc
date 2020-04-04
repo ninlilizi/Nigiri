@@ -117,6 +117,5 @@ struct SVONode
         encodedColour.r = (packedColour >> 24) & 0xFF;
         
         return float4(RGBMDecode(encodedColour / 255), colour_A);
-
     }
 };

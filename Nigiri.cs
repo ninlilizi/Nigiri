@@ -847,7 +847,7 @@ public class Nigiri : MonoBehaviour {
         //Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
-        Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
+        //Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
         //Shader.SetGlobalBuffer("_sampleBuffer", computeBuffers.voxelUpdateSampleBuffer);
         //Shader.SetGlobalBuffer("_sampleCountBuffer", computeBuffers.voxelUpdateSampleCountBuffer);
         
