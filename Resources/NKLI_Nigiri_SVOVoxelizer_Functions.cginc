@@ -75,17 +75,14 @@ inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
     float pixelLuma = GetLuma(colour.rgb);
     
     // Calculate difference between voxel and pixel luma
-    float currentVoxelLuma = GetLuma(float3(node.value_R, node.value_G, node.value_B));
+    float currentVoxelLuma = GetLuma(node.UnPackColour().rgb);
     float lumaDiff = saturate(currentVoxelLuma - pixelLuma);
     
     // Only inject if currently voxel is either 1. unoccupied or 2. of a lesser depth and passes luma test
-    if ((node.value_A == 0.0f) || ((depth < node.value_A) && (lumaDiff < lumaThreshold)))
+    if ((node.colour_A == 0.0f) || ((depth < node.colour_A) && (lumaDiff < lumaThreshold)))
     {
         // Set values
-        node.value_A = colour.a;
-        node.value_R = colour.r;
-        node.value_G = colour.g;
-        node.value_B = colour.b;
+        node.PackColour(colour);       
     }
     
     // return node
@@ -228,15 +225,12 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
             {       
                 // Just here for debugging purposes
                 float4 newColour = lerp(
-                    float4(node.value_R, node.value_G, node.value_B, node.value_A),
+                    node.UnPackColour(),
                     float4(colour.r, colour.g, colour.b, colour.a), 0.05f);
                 
                 float mono = (newColour.r + newColour.g + newColour.b) / 6.0f;
                 
-                svoBuffer[offset] = 
-
-
-                    SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
+                svoBuffer[offset] = SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
                 
                 split.offset = offset + 1;
                 split.TTL = ttl;

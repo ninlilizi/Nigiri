@@ -1,4 +1,8 @@
-﻿// Each #kernel tells which function to compile; you can have many kernels
+﻿/// <summary>
+/// NKLI     : Nigiri - SVO Node split queue processor
+/// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
+/// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
+/// </summary>
 #pragma kernel CSMain
 
 // Include

@@ -513,15 +513,15 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 			//          race condition characterized by flicking GI
 			//          This will be replaced with an atomic rolling
 			//          average to fix this problem in the future
-			return float4(node.value_R, node.value_G, node.value_B, node.value_A);
+			return node.UnPackColour();
 		}
 		else
 		{
-			// If no children then tag for split queue consideration
+			// If no children then output this nodes colour
 			if (node.referenceOffset == 0)
 			{
 				// Return colour
-				return float4(node.value_R, node.value_G, node.value_B, node.value_A);
+				return node.UnPackColour();
 			}
 			else
 			{

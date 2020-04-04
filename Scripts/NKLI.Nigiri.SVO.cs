@@ -75,8 +75,8 @@ namespace NKLI.Nigiri.SVO
 
 
             // Output buffer to contain final SVO
-            Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 8, ComputeBufferType.Default);
-            Buffer_SVO_ByteLength = maxNodes * sizeof(uint) * 8;
+            Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 4, ComputeBufferType.Default);
+            Buffer_SVO_ByteLength = maxNodes * sizeof(uint) * 4;
             Buffer_SVO_Count = maxNodes;
 
             // Synchronisation counter buffer
