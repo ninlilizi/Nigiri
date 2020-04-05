@@ -38,6 +38,7 @@ uniform Texture2D _CameraDepthTexture;
 //groupshared uint splitOffsets[96];
 groupshared SplitRequest splits[64];
 groupshared uint ableToSplit = 0;
+groupshared uint lastOffset = 0;
 
 /// <summary>
 /// Encodes samples into tree
@@ -71,7 +72,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
        
     // Only append to split queue if non-zero offset returned
     if (splits[thread].offset != 0)
-        ableToSplit = 1;
+        if (splits[thread].offset != lastOffset)
+        {
+            lastOffset = splits[thread].offset;
+            ableToSplit = 1;
+        }
     
     // Syncronise threads
     GroupMemoryBarrierWithGroupSync();

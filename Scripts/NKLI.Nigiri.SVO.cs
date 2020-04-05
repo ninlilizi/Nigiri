@@ -25,22 +25,33 @@ namespace NKLI.Nigiri.SVO
         public int Buffer_SVO_Count { get; private set; } // Max possible nodes
         public uint MaxDepth { get; private set; } // Default starting depth TTL of the tree
         public uint SplitQueueMaxLength { get; private set; } // Max length of the spit queue
+        public uint MipmapQueueMaxLength { get; private set; } // Max length of the spit queue
         public byte[] SplitQueueSparse { get; private set; } // Processed list of nodes to split
+        public byte[] MipmapQueueSparse { get; private set; } // Processed list of nodes to split
         public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
+        public int MipmapQueueSparseCount { get; private set; } // Number of processed nodes
         public bool AbleToSplit { get; set; } // If there are nodes to split
+        public bool AbleToMipmap { get; set; } // If there are nodes to mipmap
 
-        private byte[] splitQueue;
+        private byte[] queue_NodeSplit;
         // Worker thread to preprocesses the split queue
         private Thread thread_SplitPreProcessor;
         // Does the preprocessor have work to do?
         private bool thread_SplitPreProcessor_HasWork;
+
+        private byte[] queue_Mipmap;
+        // Worker thread to preprocesses the split queue
+        private Thread thread_MipmapPreProcessor;
+        // Does the preprocessor have work to do?
+        private bool thread_MipmapPreProcessor_HasWork;
 
 
         // Buffers
         public ComputeBuffer Buffer_SVO;
         public ComputeBuffer Buffer_Counters;
         public ComputeBuffer Buffer_Counters_Internal;
-        public ComputeBuffer Buffer_SplitQueue;
+        public ComputeBuffer Buffer_Queue_Split;
+        public ComputeBuffer Buffer_Queue_Mipmap;
 
         // Readback queue
         public Queue<AsyncGPUReadbackRequest> gPU_Requests_Buffer_Counters = new Queue<AsyncGPUReadbackRequest>();
@@ -49,32 +60,36 @@ namespace NKLI.Nigiri.SVO
         private CommandBuffer CB_Nigiri_SVO;
 
         // static consts
-        //public static readonly uint maxDepth = 8;
-        //public static readonly int maxNodes = 128;
-        //public static readonly uint split_MaxQueueLength = 10;
         public static readonly int Buffer_Counters_Count = 9;
-
-        // Compute
-        ComputeShader shader_SVOBuilder;
 
         // Attached camera
         private Camera attachedCamera;
 
         // Constructor
-        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength)
+        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength, uint mipmapQueueMaxLength)
         {
+            // Zero ram counters
+            VRAM_Usage = 0;
+            RAM_Usage = 0;
+
             // Set properties
             MaxDepth = maxDepth;
 
             // Rounds split queue length to nearest mul of 8 
             //  to match dispatch thread group size
-            int factor = 8;
             SplitQueueMaxLength =
                     Math.Max(Convert.ToUInt32(Math.Round(
-                         (Convert.ToInt32(splitQueueMaxLength) / (double)factor),
+                         (Convert.ToInt32(splitQueueMaxLength) / (double)8),
                          MidpointRounding.AwayFromZero
-                     ) * factor), 8);
+                     ) * 8), 8);
 
+            // Rounds mipmap queue length to nearest mul of 8 
+            //  to match dispatch thread group size
+            MipmapQueueMaxLength =
+                    Math.Max(Convert.ToUInt32(Math.Round(
+                         (Convert.ToInt32(mipmapQueueMaxLength) / (double)8),
+                         MidpointRounding.AwayFromZero
+                     ) * 8), 8);
 
             // Output buffer to contain final SVO
             Buffer_SVO = new ComputeBuffer(maxNodes, sizeof(uint) * 4, ComputeBufferType.Default);
@@ -90,20 +105,29 @@ namespace NKLI.Nigiri.SVO
             Buffer_Counters_Internal = new ComputeBuffer(1, sizeof(uint), ComputeBufferType.Default);
             VRAM_Usage += 1 * sizeof(uint) * 8;
 
-            // Temporary PTR storage buffer
-            Buffer_SplitQueue = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
+            // Temporary PTR storage buffer - Split queue
+            Buffer_Queue_Split = new ComputeBuffer(Convert.ToInt32(SplitQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
             VRAM_Usage += Convert.ToInt64(SplitQueueMaxLength) * sizeof(uint) * 8;
 
+            // Temporary PTR storage buffer - Mipmap queue
+            Buffer_Queue_Mipmap = new ComputeBuffer(Convert.ToInt32(MipmapQueueMaxLength), sizeof(uint), ComputeBufferType.Default);
+            VRAM_Usage += Convert.ToInt64(MipmapQueueMaxLength) * sizeof(uint) * 8;
+
             // CPU readback storage for the split queue
-            splitQueue = new byte[SplitQueueMaxLength * 4];
-            RAM_Usage += splitQueue.LongLength * 8;
+            queue_NodeSplit = new byte[SplitQueueMaxLength * 4];
+            RAM_Usage += queue_NodeSplit.LongLength * 8;
+
+            // CPU readback storage for the mipmap queue
+            queue_Mipmap = new byte[MipmapQueueMaxLength * 4];
+            RAM_Usage += queue_Mipmap.LongLength * 8;
 
             // Processed split queue for feeding to compute
             SplitQueueSparse = new byte[SplitQueueMaxLength * 4];
             RAM_Usage += SplitQueueSparse.LongLength * 8;
 
-            // Target array for async counters readback
-            //Counters = new uint[Buffer_Counters_Count];
+            // Processed mipmap queue for feeding to compute
+            MipmapQueueSparse = new byte[MipmapQueueMaxLength * 4];
+            RAM_Usage += MipmapQueueSparse.LongLength * 8;
 
             // Set counter buffer
             SetCounterBuffer();
@@ -130,14 +154,17 @@ namespace NKLI.Nigiri.SVO
                 {
                     name = "Nigiri Asynchronous SVO"
                 };
-                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_SplitQueue, HandleSplitQueueReadback);
+                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Split, HandleSplitQueueReadback);
+                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Mipmap, HandleMipmapQueueReadback);
 
                 attachedCamera = _camera;
                 attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
 
-                // Start worker thread
+                // Start worker threads
                 thread_SplitPreProcessor = new Thread(ThreadedNodeSplitPreProcessor);
+                thread_MipmapPreProcessor = new Thread(ThreadedNodeMipmapPreProcessor);
                 thread_SplitPreProcessor.Start();
+                thread_MipmapPreProcessor.Start();
             }
         }
 
@@ -150,11 +177,27 @@ namespace NKLI.Nigiri.SVO
             if (obj.hasError) Debug.Log("SVO split queue readback error");
             else if (obj.done)
             {
-                obj.GetData<byte>().CopyTo(splitQueue);
+                obj.GetData<byte>().CopyTo(queue_NodeSplit);
             }
 
             // Tell the thread there's work to do
             thread_SplitPreProcessor_HasWork = true;
+        }
+
+        /// <summary>
+        /// Handles completed async readback of mipmap queue buffer
+        /// </summary>
+        /// <param name="obj"></param>
+        private void HandleMipmapQueueReadback(AsyncGPUReadbackRequest obj)
+        {
+            if (obj.hasError) Debug.Log("SVO mipmap queue readback error");
+            else if (obj.done)
+            {
+                obj.GetData<byte>().CopyTo(queue_Mipmap);
+            }
+
+            // Tell the thread there's work to do
+            thread_MipmapPreProcessor_HasWork = true;
         }
 
         /// <summary>
@@ -173,10 +216,13 @@ namespace NKLI.Nigiri.SVO
                     if (thread_SplitPreProcessor_HasWork)
                     {
                         // Process the node split queue to remove duplicates
-                        SplitQueueSparse = DeDupeUintByteArray(splitQueue, out bool contentsFound);
+                        SplitQueueSparse = DeDupeUintByteArray(queue_NodeSplit, out bool contentsFound, out int sparseCount);
 
                         // Allow nodes to be split if applicable
                         AbleToSplit = contentsFound;
+
+                        // Store count to detemine GPU thread count later
+                        SplitQueueSparseCount = sparseCount;
 
                         // We're done here
                         thread_SplitPreProcessor_HasWork = false;
@@ -189,6 +235,41 @@ namespace NKLI.Nigiri.SVO
             }
         }
 
+        /// <summary>
+        /// Worker thread - Preprocesses the node mipmap queue for later dispatch
+        /// </summary>
+        private void ThreadedNodeMipmapPreProcessor()
+        {
+            // Permanent worker
+            while (true)
+            {
+                // Only check for work every 4ms
+                Thread.Sleep(1);
+
+                try
+                {
+                    if (thread_MipmapPreProcessor_HasWork)
+                    {
+                        // Process the node split queue to remove duplicates
+                        MipmapQueueSparse = DeDupeUintByteArray(queue_Mipmap, out bool contentsFound, out int sparseCount);
+
+                        // Allow nodes to be split if applicable
+                        AbleToMipmap = contentsFound;
+
+                        // Store count to detemine GPU thread count later
+                        MipmapQueueSparseCount = sparseCount;
+
+                        // We're done here
+                        thread_MipmapPreProcessor_HasWork = false;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning("<Nigiri> Exception occured in the SVO mipmap queue preprocessor thread!" + Environment.NewLine + ex);
+                }
+            }
+        }
+
 
         /// <summary>
         /// Set custom split queue
@@ -196,10 +277,22 @@ namespace NKLI.Nigiri.SVO
         /// <param name="_splitQueue"></param>
         public void SetSplitQueue(byte[] _splitQueue)
         {
-            splitQueue = _splitQueue;
+            queue_NodeSplit = _splitQueue;
 
             // Tell the thread there's work to do
             thread_SplitPreProcessor_HasWork = true;
+        }
+
+        /// <summary>
+        /// Set custom mipmap queue
+        /// </summary>
+        /// <param name="_splitQueue"></param>
+        public void SetMipMapQueue(byte[] _mipmapQueue)
+        {
+            queue_Mipmap = _mipmapQueue;
+
+            // Tell the thread there's work to do
+            thread_MipmapPreProcessor_HasWork = true;
         }
 
         /// <summary> 
@@ -208,7 +301,7 @@ namespace NKLI.Nigiri.SVO
         /// <param name="targetArray"></param> 
         /// <param name="contentsFound"></param> 
         /// <returns></returns> 
-        private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound)
+        private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound, out int sparseCount)
         {
             // Copy split queue to hashset to remove dupes
             HashSet<UInt32> arraySet = new HashSet<uint>();
@@ -221,9 +314,9 @@ namespace NKLI.Nigiri.SVO
             }
 
             // Keep track of how many sparse nodes in the queue
-            SplitQueueSparseCount = arraySet.Count;
+            sparseCount = arraySet.Count;
 
-            if (SplitQueueSparseCount > 0)
+            if (sparseCount > 0)
             {
                 // Copy hashset back to array
                 int queueWriteBackIndex = 0;
@@ -267,6 +360,9 @@ namespace NKLI.Nigiri.SVO
             // [2] Current split queue items
             // [3] Split queue position counter
             // [4] Mask buffer position
+            // [5] Max mipmap queue items
+            // [6] Current mipmap queue items
+            // [7] Mipmap queue position counter
 
             // Set buffer variables
             uint[] Counters = new uint[Buffer_Counters_Count];
@@ -275,6 +371,8 @@ namespace NKLI.Nigiri.SVO
             Counters[2] = 0;
             Counters[3] = 0;
             Counters[4] = 0;
+            Counters[5] = 0;
+            Counters[6] = 0;
 
             // Send buffer to GPU
             Buffer_Counters.SetData(Counters);
@@ -296,7 +394,7 @@ namespace NKLI.Nigiri.SVO
             queue_Counters.Enqueue(AsyncGPUReadback.Request(Buffer_Counters));
             queue_Counters_Internal.Enqueue(AsyncGPUReadback.Request(Buffer_Counters_Internal));
             queue_SVO.Enqueue(AsyncGPUReadback.Request(Buffer_SVO));
-            queue_SplitQueue.Enqueue(AsyncGPUReadback.Request(Buffer_SplitQueue));
+            queue_SplitQueue.Enqueue(AsyncGPUReadback.Request(Buffer_Queue_Split));
 
 
             var req_Counters = queue_Counters.Peek();
@@ -315,7 +413,8 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         public void ReleaseBuffers()
         {
-            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SplitQueue);
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Queue_Split);
+            Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Queue_Mipmap);
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Counters);
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_Counters_Internal);
             Nigiri.Helpers.ReleaseBufferRef(ref Buffer_SVO);
@@ -330,8 +429,9 @@ namespace NKLI.Nigiri.SVO
             {
                 if (disposing)
                 {
-                    // Stop worker thread
+                    // Stop worker threads
                     if (thread_SplitPreProcessor != null) thread_SplitPreProcessor.Abort();
+                    if (thread_MipmapPreProcessor != null) thread_MipmapPreProcessor.Abort();
 
                     // Attempt to dispose any existing buffers
                     ReleaseBuffers();

@@ -736,7 +736,7 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, 250000);
+        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, 250000, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
 
         // Instantiate voxelizer
         voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, 100, 10);
@@ -843,7 +843,7 @@ public class Nigiri : MonoBehaviour {
         //Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
         //Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
         //Shader.SetGlobalFloat("_occlusionGain", occlusionGain);
-        //Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
+        Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
         //Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);

@@ -110,7 +110,7 @@ namespace NKLI.Nigiri.SVO
                 // Set buffers
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
-                Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
+                Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_Queue_Split);
                 Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
 
                 // Set textures
@@ -142,7 +142,7 @@ namespace NKLI.Nigiri.SVO
             if (SVO_Tree.AbleToSplit && (SVO_Tree.SplitQueueSparseCount > 0))
             {
                 // Send buffer to GPU
-                SVO_Tree.Buffer_SplitQueue.SetData(SVO_Tree.SplitQueueSparse);
+                SVO_Tree.Buffer_Queue_Split.SetData(SVO_Tree.SplitQueueSparse);
 
                 // Rounds split queue length to nearest mul of 8 
                 //  to match dispatch thread group size
@@ -152,7 +152,7 @@ namespace NKLI.Nigiri.SVO
                 Shader_SVOSplitter.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
                 Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
                 Shader_SVOSplitter.SetBuffer(0, "_SVO_Counters_Internal", SVO_Tree.Buffer_Counters_Internal);
-                Shader_SVOSplitter.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_SplitQueue);
+                Shader_SVOSplitter.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_Queue_Split);
 
                 // Set values
                 Shader_SVOSplitter.SetFloat("_SVO_MaxNodes", SVO_Tree.Buffer_SVO_Count);

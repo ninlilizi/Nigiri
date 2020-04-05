@@ -1,0 +1,33 @@
+﻿/// <summary>
+/// NKLI     : Nigiri - SVO Node mipmap queue processor
+/// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
+/// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
+/// </summary>
+#pragma kernel CSMain
+
+// Include
+#include "NKLI_Nigiri_SVOVoxelizer_Functions.cginc"
+
+// SVO
+uniform RWStructuredBuffer<SVONode> _SVO;
+// SVO Counters
+uniform RWStructuredBuffer<uint> _SVO_Counters;
+// SVO Queue of nodes to split
+uniform RWStructuredBuffer<uint> _SVO_MipmapQueue;
+
+// Max SVO depth
+uniform const uint _SVO_MaxNodes;
+
+[numthreads(8, 1, 1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+    // Get queue position
+    uint counter;
+    InterlockedAdd(_SVO_Counters[7], 1, counter);
+    
+    // Get index of cell to split
+    uint splitIndex = _SVO_MipmapQueue[counter];
+    
+
+
+}
