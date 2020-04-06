@@ -8,35 +8,19 @@
 * Depth buffer based voxelisation is less GPU intensive that other methods.
 * Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
 
-# Roadmap
-https://github.com/ninlilizi/Nigiri/wiki/Roadmap
-
-# Installation
-Check the [Releases](https://github.com/ninlilizi/Nigiri/releases) section above to download a version of Nigiri that is a simple .unitypackage file which is ready for you to import into your project. 
-
-You can also click the "Clone or Download" button and select "Download Zip", then extract the contents to "Assets/Plugins/Nigiri" in your project to test out the latest unreleased versions of Nigiri.
-
-Some of the files are store using LFS and some resources in SubModules. For now please checkout using git commandline or github desktop app to ensure git lfs is initiated and can download those files.
-
-#### To clone using Git command line
-```
-git clone --recurse-submodules git@github.com:ninlilizi/Nigiri.git
-```
-* Quick start instructions pending in this space...
+## Development updates
+[**Roadmap**](https://github.com/ninlilizi/Nigiri/wiki/Roadmap)  
 
 
-# Using Nigiri
-Ensure your player settings are set to linear color space. 
-Create or select a camera. Make sure the camera is set to deferred rendering path.
-Add Nigiri component to the camera.
-Tweak your almost realtime gi.
+## Getting started
+[How to download and correctly setup both your project and scene.](https://github.com/ninlilizi/Nigiri/wiki/Getting-started)  
 
 
-# Community
+## Community
 If you need some help, feel free to ask any questions in the [Discord](https://discord.gg/QQspUgm).   
 A Unity Forum thread will also be available at a later time.
 
-# Licence
+## Licence
 All code contributions and inclusions are to the best of my knowledge, MIT.
 
 Nigiri as a whole, is also provided under standard MIT licence terms. With a simple request, that as I am a disabled person, struggling to attain suitable employment due to my health issues making a 9-5 commitment unviable. That if you profit from this work, donations are appreciated, but offers of actual paid work would make so much difference to my life. I'm dying of exposure out here!</br>
