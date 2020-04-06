@@ -6,9 +6,11 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using UnityEngine;
 using UnityEngine.Rendering;
+using Debug = UnityEngine.Debug;
 
 namespace NKLI.Nigiri.SVO
 {
@@ -32,6 +34,8 @@ namespace NKLI.Nigiri.SVO
         public int MipmapQueueSparseCount { get; private set; } // Number of processed nodes
         public bool AbleToSplit { get; set; } // If there are nodes to split
         public bool AbleToMipmap { get; set; } // If there are nodes to mipmap
+        public double Runtime_Thread_NodeSplit { get; private set; } // Execution time of node split worker thread
+        public double Runtime_Thread_NodeMipmap { get; private set; } // Execution time of node mipmap worker thread
 
         private byte[] queue_NodeSplit;
         // Worker thread to preprocesses the split queue
@@ -64,6 +68,10 @@ namespace NKLI.Nigiri.SVO
 
         // Attached camera
         private Camera attachedCamera;
+
+        // Performance stopwatches
+        private Stopwatch stopwatch_Thread_NodeSplit;
+        private Stopwatch stopwatch_Thread_NodeMipmap;
 
         // Constructor
         public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength, uint mipmapQueueMaxLength)
@@ -205,6 +213,9 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         private void ThreadedNodeSplitPreProcessor()
         {
+            // Instantiate execution runtime stopwatch
+            stopwatch_Thread_NodeSplit = new Stopwatch();
+
             // Permanent worker
             while (true)
             {
@@ -215,6 +226,9 @@ namespace NKLI.Nigiri.SVO
                 {
                     if (thread_SplitPreProcessor_HasWork)
                     {
+                        // Start execution runtime stopwatch
+                        stopwatch_Thread_NodeSplit.Start();
+
                         // Process the node split queue to remove duplicates
                         SplitQueueSparse = DeDupeUintByteArray(queue_NodeSplit, out bool contentsFound, out int sparseCount);
 
@@ -224,13 +238,19 @@ namespace NKLI.Nigiri.SVO
                         // Store count to detemine GPU thread count later
                         SplitQueueSparseCount = sparseCount;
 
+                        // Update thread execution time counter
+                        stopwatch_Thread_NodeSplit.Stop();
+                        Runtime_Thread_NodeSplit = stopwatch_Thread_NodeSplit.Elapsed.TotalMilliseconds;
+                        stopwatch_Thread_NodeSplit.Reset();
+
                         // We're done here
                         thread_SplitPreProcessor_HasWork = false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
+                    if (!ex.Message.Contains("System.Threading.ThreadAbortException"))
+                        Debug.LogWarning("<Nigiri> Exception occured in the SVO split queue preprocessor thread!" + Environment.NewLine + ex);
                 }
             }
         }
@@ -240,6 +260,9 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         private void ThreadedNodeMipmapPreProcessor()
         {
+            // Instantiate execution runtime stopwatch
+            stopwatch_Thread_NodeMipmap = new Stopwatch();
+
             // Permanent worker
             while (true)
             {
@@ -250,6 +273,9 @@ namespace NKLI.Nigiri.SVO
                 {
                     if (thread_MipmapPreProcessor_HasWork)
                     {
+                        // Start execution runtime stopwatch
+                        stopwatch_Thread_NodeMipmap.Start();
+
                         // Process the node split queue to remove duplicates
                         MipmapQueueSparse = DeDupeUintByteArray(queue_Mipmap, out bool contentsFound, out int sparseCount);
 
@@ -259,13 +285,19 @@ namespace NKLI.Nigiri.SVO
                         // Store count to detemine GPU thread count later
                         MipmapQueueSparseCount = sparseCount;
 
+                        // Update thread execution time counter
+                        stopwatch_Thread_NodeMipmap.Stop();
+                        Runtime_Thread_NodeMipmap = stopwatch_Thread_NodeMipmap.Elapsed.TotalMilliseconds;
+                        stopwatch_Thread_NodeMipmap.Reset();
+
                         // We're done here
                         thread_MipmapPreProcessor_HasWork = false;
                     }
                 }
                 catch (Exception ex)
                 {
-                    Debug.LogWarning("<Nigiri> Exception occured in the SVO mipmap queue preprocessor thread!" + Environment.NewLine + ex);
+                    if (!ex.Message.Contains("System.Threading.ThreadAbortException"))
+                        Debug.LogWarning("<Nigiri> Exception occured in the SVO mipmap queue preprocessor thread!" + Environment.NewLine + ex);
                 }
             }
         }

@@ -289,6 +289,8 @@ public class Nigiri : MonoBehaviour {
         public double UpdatePrimaryEncode;
         public double UpdateSecondaryEncode;
         public double UpdateMipMaps;
+        public double Thread_SVOSplitPreProcessor;
+        public double Thread_SVOMipmapPreProcessor;
         public double RenderTotal;
         public double RenderTrace;
         public double RenderVoxelUpdate;
@@ -833,6 +835,11 @@ public class Nigiri : MonoBehaviour {
 
         // Split nodes
         voxelizer.SplitNodes();
+
+
+        // Update execution time of worker threads
+        renderTimes.Thread_SVOSplitPreProcessor = SVO.Runtime_Thread_NodeSplit;
+        renderTimes.Thread_SVOMipmapPreProcessor = SVO.Runtime_Thread_NodeMipmap;
 
 
         /// Naive
