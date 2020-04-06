@@ -47,9 +47,21 @@ namespace NKLI.Nigiri
         /// <param name="refereceObject"></param>
         public static void DestroyScriptableObject<T>(ref T refereceObject)
         {
-            var scriptableOject = Convert.ChangeType(refereceObject, typeof(T));
-            if (Application.isEditor) DestroyImmediate((ScriptableObject)scriptableOject);
-            else Destroy((ScriptableObject)scriptableOject);
+            var scriptableObject = Convert.ChangeType(refereceObject, typeof(T));
+            if (Application.isEditor) DestroyImmediate((ScriptableObject)scriptableObject);
+            else Destroy((ScriptableObject)scriptableObject);
+        }
+
+        /// <summary>
+        /// Destroy a game object using optimal method
+        /// </summary>
+        /// <typeparam name="T"></typeparam>
+        /// <param name="refereceObject"></param>
+        public static void DestroyGameObject<T>(ref T refereceObject)
+        {
+            var gameObject = Convert.ChangeType(refereceObject, typeof(T));
+            if (Application.isEditor) DestroyImmediate((GameObject)gameObject);
+            else Destroy((GameObject)gameObject);
         }
 
         /// <summary>

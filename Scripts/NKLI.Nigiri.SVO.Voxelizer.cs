@@ -106,7 +106,6 @@ namespace NKLI.Nigiri.SVO
                 // Set counter buffer to initial values
                 SVO_Tree.SetCounterBuffer();
 
-
                 // Set buffers
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
@@ -127,7 +126,7 @@ namespace NKLI.Nigiri.SVO
                 Shader_VoxelEncoder.SetInt("_maxDepth", Max_Depth);
 
                 // Dispatch
-                Shader_VoxelEncoder.Dispatch(0, sampleCount / 64, 1, 1);
+                Shader_VoxelEncoder.Dispatch(0, sampleCount / 1024, 1, 1);
 
             }
             else WarmUp++;
@@ -142,7 +141,7 @@ namespace NKLI.Nigiri.SVO
             if (SVO_Tree.AbleToSplit && (SVO_Tree.SplitQueueSparseCount > 0))
             {
                 // Send buffer to GPU
-                SVO_Tree.Buffer_Queue_Split.SetData(SVO_Tree.SplitQueueSparse);
+                SVO_Tree.Buffer_Queue_Split.SetData(SVO_Tree.queue_Split_Sparse);
 
                 // Rounds split queue length to nearest mul of 8 
                 //  to match dispatch thread group size

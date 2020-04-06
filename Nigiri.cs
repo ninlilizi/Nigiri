@@ -402,7 +402,7 @@ public class Nigiri : MonoBehaviour {
     int voxelizationSliceDispatch;
 
     private int frameSwitch = 0;
-    private int mipSwitch = 0;
+    //private int mipSwitch = 0;
     int emissiveCameraLocationSwitch;
 
     private Vector3 prevPosition;
@@ -838,8 +838,8 @@ public class Nigiri : MonoBehaviour {
 
 
         // Update execution time of worker threads
-        renderTimes.Thread_SVOSplitPreProcessor = SVO.Runtime_Thread_NodeSplit;
-        renderTimes.Thread_SVOMipmapPreProcessor = SVO.Runtime_Thread_NodeMipmap;
+        renderTimes.Thread_SVOSplitPreProcessor = SVO.Runtime_Thread_Split;
+        renderTimes.Thread_SVOMipmapPreProcessor = SVO.Runtime_Thread_Mipmap;
 
 
         /// Naive
@@ -1436,7 +1436,7 @@ public class Nigiri : MonoBehaviour {
         clearComputeCache.SetInt("Resolution", 256);
         clearComputeCache.Dispatch(0, highestVoxelResolution / 16, highestVoxelResolution / 16, 1);*/
 
-        mipSwitch = 0;
+        //mipSwitch = 0;
         prevPosition = GetComponent<Camera>().transform.position;
     }
 

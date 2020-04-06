@@ -27,6 +27,9 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     uint counter;
     InterlockedAdd(_SVO_Counters[3], 1, counter);
     
+    // Offset index by one as zero stores append count
+    counter++;
+    
     // Get index of cell to split
     uint splitIndex = _SVO_SplitQueue[counter];
     

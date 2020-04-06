@@ -93,76 +93,18 @@ inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
 /// Appends to the queue of nodes to be split
 /// </summary>
 inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> counterBuffer, uint offset)
-{   
+{
     // Only if within bounds
-    if (counterBuffer[2] < counterBuffer[1])
+    if (queueBuffer[0] < counterBuffer[1])
     {
         //  Get write index
         uint index_SplitQueue;
-        InterlockedAdd(counterBuffer[2], 1, index_SplitQueue);
+        InterlockedAdd(queueBuffer[0], 1, index_SplitQueue);
          
         // Append to split queue it within bounds
         //  offset is +1 because zero signifies null value
         if (index_SplitQueue < counterBuffer[1])
-            queueBuffer[index_SplitQueue] = offset;
-    }
-}
-
-/// <summary>
-/// Appends upto 8 nodes to the split queue without duplicates
-/// </summary>
-void DeDupeAppendSplitQueue(uint thread, SplitRequest splits[64], RWStructuredBuffer<uint> _SVO_SplitQueue, RWStructuredBuffer<uint> _SVO_Counters)
-{
-    //uint seenOffset[4];
-    //uint seenCount = 0;
-    uint highestTTL = 0;
-        
-    // Search thread group for highest offset
-    int row;
-    for (row = 0; row < 64; row++)
-    {
-        if (splits[row].offset != 0)
-        {
-            if (splits[row].TTL >= highestTTL)
-            {
-                if (splits[row].TTL > highestTTL)
-                    highestTTL = splits[row].TTL;
-                    
-                // Append to the node split queue
-                AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splits[row].offset);
-                
-                /*uint seen = 0;
-                int rowSeen;
-                for (rowSeen = 0; rowSeen < 4; rowSeen++)
-                {
-                    if (splits[row].offset == seenOffset[rowSeen])
-                    {
-                        if (row != 0)
-                            seen = 1;
-                    }
-                }
-                if (seen == 0)
-                {
-
-                    // Append to the node split queue
-                    AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, splits[row].offset);
-                
-                    if (splits[row].TTL > highestTTL)
-                    {
-                        highestTTL = splits[row].TTL;
-                        seenCount = 0;
-                    }
-                    
-                    // Append to list of seen offsets
-                    seenOffset[seenCount] = splits[row].offset;
-                    seenCount++;
-                    
-                    if (seenCount > 3)
-                        seenCount = 0;
-                
-                }*/
-            }
-        }
+            queueBuffer[index_SplitQueue + 1] = offset;
     }
 }
 
@@ -218,21 +160,14 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                 //          This will be replaced with an atomic rolling
                 //          average to fix this problem in the future
                 svoBuffer[offset] = SetNodeColour(node, colour, depth);
-                       
+                
                 // We're done here
                 split.offset = 0;
                 split.TTL = 0;
                 return split;
             }
             else
-            {
-                // Just here for debugging purposes
-                //float4 newColour = lerp(
-                //node.UnPackColour(),
-                //float4(colour.r, colour.g, colour.b, colour.a), 0.05f);
-                //float mono = (newColour.r + newColour.g + newColour.b);
-                //svoBuffer[offset] = SetNodeColour(node, float4(mono, mono, mono, newColour.a), depth);
-                
+            {               
                 split.offset = offset + 1;
                 split.TTL = ttl;
                 return split;

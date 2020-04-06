@@ -5,6 +5,7 @@
 /// </summary>
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -26,28 +27,36 @@ namespace NKLI.Nigiri.SVO
         public int Buffer_SVO_ByteLength { get; private set; } // Byte length of buffer
         public int Buffer_SVO_Count { get; private set; } // Max possible nodes
         public uint MaxDepth { get; private set; } // Default starting depth TTL of the tree
-        public uint SplitQueueMaxLength { get; private set; } // Max length of the spit queue
-        public uint MipmapQueueMaxLength { get; private set; } // Max length of the spit queue
-        public byte[] SplitQueueSparse { get; private set; } // Processed list of nodes to split
-        public byte[] MipmapQueueSparse { get; private set; } // Processed list of nodes to split
+        public int SplitQueueMaxLength { get; private set; } // Max length of the spit queue
+        public int MipmapQueueMaxLength { get; private set; } // Max length of the spit queue
         public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
         public int MipmapQueueSparseCount { get; private set; } // Number of processed nodes
         public bool AbleToSplit { get; set; } // If there are nodes to split
         public bool AbleToMipmap { get; set; } // If there are nodes to mipmap
-        public double Runtime_Thread_NodeSplit { get; private set; } // Execution time of node split worker thread
-        public double Runtime_Thread_NodeMipmap { get; private set; } // Execution time of node mipmap worker thread
+        public double Runtime_Thread_Split { get; private set; } // Execution time of node split worker thread
+        public double Runtime_Thread_Mipmap { get; private set; } // Execution time of node mipmap worker thread
 
-        private byte[] queue_NodeSplit;
+        // Node split buffer copied from GPU
+        private byte[] queue_Split;
+        // Sparsified split buffer for copying back to GPU
+        public byte[] queue_Split_Sparse;
         // Worker thread to preprocesses the split queue
         private Thread thread_SplitPreProcessor;
+        //true makes the thread start as "running", false makes it wait on _event.Set()
+        private ManualResetEvent thread_SplitPreProcessor_Scaling_Event = new ManualResetEvent(true);
         // Does the preprocessor have work to do?
-        private bool thread_SplitPreProcessor_HasWork;
+        private ManualResetEvent thread_SplitPreProcessor_HasWork_Event = new ManualResetEvent(false);
 
+        // Mipmap buffer copied from GPU
         private byte[] queue_Mipmap;
+        // Sparsified mipmap buffer for copying back to GPU
+        public byte[] queue_Mipmap_Sparse;
         // Worker thread to preprocesses the split queue
         private Thread thread_MipmapPreProcessor;
+        //true makes the thread start as "running", false makes it wait on _event.Set()
+        private ManualResetEvent thread_MipmapPreProcessor_Scaling_Event = new ManualResetEvent(true);
         // Does the preprocessor have work to do?
-        private bool thread_MipmapPreProcessor_HasWork;
+        private ManualResetEvent thread_MipmapPreProcessor_HasWork_Event = new ManualResetEvent(false);
 
 
         // Buffers
@@ -69,9 +78,13 @@ namespace NKLI.Nigiri.SVO
         // Attached camera
         private Camera attachedCamera;
 
+        // Main thread dispatcher
+        Tools.MainThreadDispatcher threadDispatch;
+        GameObject threadDispatchObject;
+
         // Performance stopwatches
-        private Stopwatch stopwatch_Thread_NodeSplit;
-        private Stopwatch stopwatch_Thread_NodeMipmap;
+        private Stopwatch stopwatch_Thread_Split;
+        private Stopwatch stopwatch_Thread_Mipmap;
 
         // Constructor
         public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength, uint mipmapQueueMaxLength)
@@ -86,16 +99,16 @@ namespace NKLI.Nigiri.SVO
             // Rounds split queue length to nearest mul of 8 
             //  to match dispatch thread group size
             SplitQueueMaxLength =
-                    Math.Max(Convert.ToUInt32(Math.Round(
-                         (Convert.ToInt32(splitQueueMaxLength) / (double)8),
+                    Math.Max(Convert.ToInt32(Math.Round(
+                         (splitQueueMaxLength / (double)8),
                          MidpointRounding.AwayFromZero
                      ) * 8), 8);
 
             // Rounds mipmap queue length to nearest mul of 8 
             //  to match dispatch thread group size
             MipmapQueueMaxLength =
-                    Math.Max(Convert.ToUInt32(Math.Round(
-                         (Convert.ToInt32(mipmapQueueMaxLength) / (double)8),
+                    Math.Max(Convert.ToInt32(Math.Round(
+                         (mipmapQueueMaxLength / (double)8),
                          MidpointRounding.AwayFromZero
                      ) * 8), 8);
 
@@ -122,20 +135,20 @@ namespace NKLI.Nigiri.SVO
             VRAM_Usage += Convert.ToInt64(MipmapQueueMaxLength) * sizeof(uint) * 8;
 
             // CPU readback storage for the split queue
-            queue_NodeSplit = new byte[SplitQueueMaxLength * 4];
-            RAM_Usage += queue_NodeSplit.LongLength * 8;
+            queue_Split = new byte[SplitQueueMaxLength * 4];
+            RAM_Usage += queue_Split.LongLength * 8;
 
             // CPU readback storage for the mipmap queue
             queue_Mipmap = new byte[MipmapQueueMaxLength * 4];
             RAM_Usage += queue_Mipmap.LongLength * 8;
 
             // Processed split queue for feeding to compute
-            SplitQueueSparse = new byte[SplitQueueMaxLength * 4];
-            RAM_Usage += SplitQueueSparse.LongLength * 8;
+            queue_Split_Sparse = new byte[SplitQueueMaxLength * 4];
+            RAM_Usage += queue_Split_Sparse.LongLength * 8;
 
             // Processed mipmap queue for feeding to compute
-            MipmapQueueSparse = new byte[MipmapQueueMaxLength * 4];
-            RAM_Usage += MipmapQueueSparse.LongLength * 8;
+            queue_Mipmap_Sparse = new byte[MipmapQueueMaxLength * 4];
+            RAM_Usage += queue_Mipmap_Sparse.LongLength * 8;
 
             // Set counter buffer
             SetCounterBuffer();
@@ -158,23 +171,61 @@ namespace NKLI.Nigiri.SVO
             if (_camera != null)
             {
                 // Setup commandbuffer
-                CB_Nigiri_SVO = new CommandBuffer
-                {
-                    name = "Nigiri Asynchronous SVO"
-                };
-                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Split, HandleSplitQueueReadback);
-                CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Mipmap, HandleMipmapQueueReadback);
+                BuildCommandBuffer();
 
                 attachedCamera = _camera;
                 attachedCamera.AddCommandBuffer(CameraEvent.AfterEverything, CB_Nigiri_SVO);
 
                 // Start worker threads
-                thread_SplitPreProcessor = new Thread(ThreadedNodeSplitPreProcessor);
-                thread_MipmapPreProcessor = new Thread(ThreadedNodeMipmapPreProcessor);
+                thread_SplitPreProcessor = new Thread(ThreadedSplitPreProcessor);
+                thread_MipmapPreProcessor = new Thread(ThreadedMipmapPreProcessor);
                 thread_SplitPreProcessor.Start();
                 thread_MipmapPreProcessor.Start();
             }
+
+            CreateThreadDispatcher();
         }
+
+        private void BuildCommandBuffer()
+        {
+            // Instantiate if null
+            if (CB_Nigiri_SVO == null)
+            {
+                CB_Nigiri_SVO = new CommandBuffer
+                {
+                    name = "Nigiri Asynchronous SVO"
+                };
+            }
+
+            // Clear any existing contents
+            CB_Nigiri_SVO.Clear();
+
+            // Add commands
+            CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Split, HandleSplitQueueReadback);
+            CB_Nigiri_SVO.RequestAsyncReadback(Buffer_Queue_Mipmap, HandleMipmapQueueReadback);
+        }
+
+        private void CreateThreadDispatcher()
+        {
+            // Destroy stale objects
+            GameObject[] allObjects = FindObjectsOfType<GameObject>();
+            foreach (GameObject obj in allObjects)
+            {
+                if (obj.transform.name == "SVO_THREADDISPATCH_fc41258a")
+                {
+                    DestroyImmediate(obj);
+                }
+            }
+            threadDispatch = null;
+            threadDispatchObject = null;
+
+            // Create new object
+            threadDispatchObject = new GameObject("SVO_THREADDISPATCH_fc41258a");
+            threadDispatchObject.transform.parent = attachedCamera.transform;
+            threadDispatchObject.hideFlags = HideFlags.HideAndDontSave;
+            threadDispatch = threadDispatchObject.AddComponent<Tools.MainThreadDispatcher>();
+        }
+
 
         /// <summary>
         /// Handles completed async readback of split queue buffer
@@ -182,14 +233,20 @@ namespace NKLI.Nigiri.SVO
         /// <param name="obj"></param>
         private void HandleSplitQueueReadback(AsyncGPUReadbackRequest obj)
         {
+            // Check for successful readback
             if (obj.hasError) Debug.Log("SVO split queue readback error");
             else if (obj.done)
             {
-                obj.GetData<byte>().CopyTo(queue_NodeSplit);
+                // Sanity check to avoid race-condition with performance auto-scaling
+                if (obj.GetData<byte>().Length == queue_Split.Length)
+                {
+                    // Copy data to local array
+                    obj.GetData<byte>().CopyTo(queue_Split);
+                }
             }
 
             // Tell the thread there's work to do
-            thread_SplitPreProcessor_HasWork = true;
+            thread_SplitPreProcessor_HasWork_Event.Set();
         }
 
         /// <summary>
@@ -198,54 +255,85 @@ namespace NKLI.Nigiri.SVO
         /// <param name="obj"></param>
         private void HandleMipmapQueueReadback(AsyncGPUReadbackRequest obj)
         {
+            // Check for successful readback
             if (obj.hasError) Debug.Log("SVO mipmap queue readback error");
             else if (obj.done)
             {
-                obj.GetData<byte>().CopyTo(queue_Mipmap);
+                // Sanity check to avoid race-condition with performance auto-scaling
+                if (obj.GetData<byte>().Length == queue_Mipmap.Length)
+                {
+                    obj.GetData<byte>().CopyTo(queue_Mipmap);
+                }
             }
 
             // Tell the thread there's work to do
-            thread_MipmapPreProcessor_HasWork = true;
+            thread_MipmapPreProcessor_HasWork_Event.Set();
         }
 
         /// <summary>
         /// Worker thread - Preprocesses the node split queue for later dispatch
         /// </summary>
-        private void ThreadedNodeSplitPreProcessor()
+        private void ThreadedSplitPreProcessor()
         {
             // Instantiate execution runtime stopwatch
-            stopwatch_Thread_NodeSplit = new Stopwatch();
+            stopwatch_Thread_Split = new Stopwatch();
 
             // Permanent worker
             while (true)
             {
-                // Only check for work every 4ms
-                Thread.Sleep(1);
+                // Wait till thread is unlocked for available work
+                thread_SplitPreProcessor_HasWork_Event.WaitOne();
+
+                // Wait if thread locked by active performance scaling
+                thread_SplitPreProcessor_Scaling_Event.WaitOne();
 
                 try
                 {
-                    if (thread_SplitPreProcessor_HasWork)
+                    // Start execution runtime stopwatch
+                    stopwatch_Thread_Split.Start();
+
+                    // Process the node split queue to remove duplicates
+                    queue_Split_Sparse = DeDupeUintByteArray(queue_Split, out bool contentsFound, out int count, out int sparseCount);
+
+                    // Allow nodes to be split if applicable
+                    AbleToSplit = contentsFound;
+
+                    // Store count to detemine GPU thread count later
+                    SplitQueueSparseCount = sparseCount;
+
+                    // Update thread execution time counter
+                    stopwatch_Thread_Split.Stop();
+                    Runtime_Thread_Split = stopwatch_Thread_Split.Elapsed.TotalMilliseconds;
+                    stopwatch_Thread_Split.Reset();
+
+                    bool resize = false;
+                    // If thread execution exceeds 15ms
+                    if (Runtime_Thread_Split >= 14)
                     {
-                        // Start execution runtime stopwatch
-                        stopwatch_Thread_NodeSplit.Start();
-
-                        // Process the node split queue to remove duplicates
-                        SplitQueueSparse = DeDupeUintByteArray(queue_NodeSplit, out bool contentsFound, out int sparseCount);
-
-                        // Allow nodes to be split if applicable
-                        AbleToSplit = contentsFound;
-
-                        // Store count to detemine GPU thread count later
-                        SplitQueueSparseCount = sparseCount;
-
-                        // Update thread execution time counter
-                        stopwatch_Thread_NodeSplit.Stop();
-                        Runtime_Thread_NodeSplit = stopwatch_Thread_NodeSplit.Elapsed.TotalMilliseconds;
-                        stopwatch_Thread_NodeSplit.Reset();
-
-                        // We're done here
-                        thread_SplitPreProcessor_HasWork = false;
+                        resize = true;
                     }
+                    // If queue exceeds 50% of the total buffer but below CPU budget
+                    else if (Runtime_Thread_Split < 6)
+                    {
+                        if (count >= (SplitQueueMaxLength * 0.5)) resize = true;
+                    }
+
+                    // Resize buffers
+                    if (resize)
+                    {
+                        SplitQueueMaxLength = Math.Max((int)(Convert.ToDouble(count) / Runtime_Thread_Split) * 10, 128);
+                        threadDispatch.Enqueue(() => thread_SplitPreProcessor_Scaling_Event.Reset());
+                        threadDispatch.Enqueue(() => ResizeComputeBuffer(ref Buffer_Queue_Split, sizeof(uint), SplitQueueMaxLength));
+                        threadDispatch.Enqueue(() => queue_Split = ResizeByteArray(queue_Split, sizeof(uint) * SplitQueueMaxLength));
+                        threadDispatch.Enqueue(() => queue_Split_Sparse = ResizeByteArray(queue_Split_Sparse, sizeof(uint) * SplitQueueMaxLength));
+                        threadDispatch.Enqueue(() => SetCounterBuffer());
+                        threadDispatch.Enqueue(() => BuildCommandBuffer());
+                        threadDispatch.Enqueue(() => thread_SplitPreProcessor_Scaling_Event.Set());
+                    }
+
+                    // Suspends thread
+                    thread_SplitPreProcessor_HasWork_Event.Reset();
+
                 }
                 catch (Exception ex)
                 {
@@ -258,41 +346,59 @@ namespace NKLI.Nigiri.SVO
         /// <summary>
         /// Worker thread - Preprocesses the node mipmap queue for later dispatch
         /// </summary>
-        private void ThreadedNodeMipmapPreProcessor()
+        private void ThreadedMipmapPreProcessor()
         {
             // Instantiate execution runtime stopwatch
-            stopwatch_Thread_NodeMipmap = new Stopwatch();
+            stopwatch_Thread_Mipmap = new Stopwatch();
 
             // Permanent worker
             while (true)
             {
-                // Only check for work every 4ms
-                Thread.Sleep(1);
+                // Wait till thread is unlocked for available work
+                thread_SplitPreProcessor_HasWork_Event.WaitOne();
+
+                // Wait if thread locked by active performance scaling
+                thread_MipmapPreProcessor_Scaling_Event.WaitOne();
 
                 try
                 {
-                    if (thread_MipmapPreProcessor_HasWork)
+                    // Start execution runtime stopwatch
+                    stopwatch_Thread_Mipmap.Start();
+
+                    // Process the node split queue to remove duplicates
+                    queue_Mipmap_Sparse = DeDupeUintByteArray(queue_Mipmap, out bool contentsFound, out int count, out int sparseCount);
+
+                    // Allow nodes to be split if applicable
+                    AbleToMipmap = contentsFound;
+
+                    // Store count to detemine GPU thread count later
+                    MipmapQueueSparseCount = sparseCount;
+
+                    // Update thread execution time counter
+                    stopwatch_Thread_Mipmap.Stop();
+                    Runtime_Thread_Mipmap = stopwatch_Thread_Mipmap.Elapsed.TotalMilliseconds;
+                    stopwatch_Thread_Mipmap.Reset();
+
+                    // Send data to GPU
+                    // Send data to GPU
+                    if (MipmapQueueMaxLength == (queue_Mipmap_Sparse.Length / sizeof(uint)))
+                        threadDispatch.Enqueue(() => Buffer_Queue_Mipmap.SetData(queue_Mipmap_Sparse, 0, 0, queue_Mipmap_Sparse.Length));
+
+                    // Assess for performance scaling
+                    if (Runtime_Thread_Mipmap > 15)
                     {
-                        // Start execution runtime stopwatch
-                        stopwatch_Thread_NodeMipmap.Start();
-
-                        // Process the node split queue to remove duplicates
-                        MipmapQueueSparse = DeDupeUintByteArray(queue_Mipmap, out bool contentsFound, out int sparseCount);
-
-                        // Allow nodes to be split if applicable
-                        AbleToMipmap = contentsFound;
-
-                        // Store count to detemine GPU thread count later
-                        MipmapQueueSparseCount = sparseCount;
-
-                        // Update thread execution time counter
-                        stopwatch_Thread_NodeMipmap.Stop();
-                        Runtime_Thread_NodeMipmap = stopwatch_Thread_NodeMipmap.Elapsed.TotalMilliseconds;
-                        stopwatch_Thread_NodeMipmap.Reset();
-
-                        // We're done here
-                        thread_MipmapPreProcessor_HasWork = false;
+                        MipmapQueueMaxLength = Math.Max((int)(Convert.ToDouble(MipmapQueueMaxLength) / Runtime_Thread_Mipmap) * 10, 128);
+                        threadDispatch.Enqueue(() => thread_MipmapPreProcessor_Scaling_Event.Reset());
+                        threadDispatch.Enqueue(() => ResizeComputeBuffer(ref Buffer_Queue_Mipmap, sizeof(uint), MipmapQueueMaxLength));
+                        threadDispatch.Enqueue(() => queue_Mipmap = ResizeByteArray(queue_Mipmap, sizeof(uint) * MipmapQueueMaxLength));
+                        threadDispatch.Enqueue(() => queue_Mipmap_Sparse = ResizeByteArray(queue_Mipmap_Sparse, sizeof(uint) * MipmapQueueMaxLength));
+                        threadDispatch.Enqueue(() => MipmapQueueMaxLength--);
+                        threadDispatch.Enqueue(() => BuildCommandBuffer());
+                        threadDispatch.Enqueue(() => thread_MipmapPreProcessor_Scaling_Event.Set());
                     }
+
+                    // Suspends thread
+                    thread_SplitPreProcessor_HasWork_Event.Reset();
                 }
                 catch (Exception ex)
                 {
@@ -302,6 +408,37 @@ namespace NKLI.Nigiri.SVO
             }
         }
 
+        /// <summary>
+        /// Resize compute buffer
+        /// </summary>
+        /// <param name="target"></param>
+        /// <param name="stride"></param>
+        /// <param name="newCount"></param>
+        private void ResizeComputeBuffer(ref ComputeBuffer target, int stride, int newCount)
+        {
+            // Update VRAM usage
+            VRAM_Usage -= Convert.ToInt64(target.count) * stride * 8;
+            VRAM_Usage += Convert.ToInt64(newCount) * stride * 8;
+
+            // Resize buffer
+            target.Release();
+            target = new ComputeBuffer(newCount, stride, ComputeBufferType.Default);
+        }
+
+        /// <summary>
+        /// Resize array
+        /// </summary>
+        /// <param name="target"></param>
+        /// <param name="newLength"></param>
+        private byte[] ResizeByteArray(byte[] target, int newLength)
+        {
+            // Update RAM usage
+            RAM_Usage -= target.LongLength * 8;
+            RAM_Usage += Convert.ToInt64(newLength) * 8;
+
+            // Resize Array
+            return new byte[newLength];
+        }
 
         /// <summary>
         /// Set custom split queue
@@ -309,10 +446,10 @@ namespace NKLI.Nigiri.SVO
         /// <param name="_splitQueue"></param>
         public void SetSplitQueue(byte[] _splitQueue)
         {
-            queue_NodeSplit = _splitQueue;
+            queue_Split = _splitQueue;
 
             // Tell the thread there's work to do
-            thread_SplitPreProcessor_HasWork = true;
+            thread_SplitPreProcessor_Scaling_Event.Set();
         }
 
         /// <summary>
@@ -324,7 +461,7 @@ namespace NKLI.Nigiri.SVO
             queue_Mipmap = _mipmapQueue;
 
             // Tell the thread there's work to do
-            thread_MipmapPreProcessor_HasWork = true;
+            thread_SplitPreProcessor_Scaling_Event.Set();
         }
 
         /// <summary> 
@@ -333,50 +470,60 @@ namespace NKLI.Nigiri.SVO
         /// <param name="targetArray"></param> 
         /// <param name="contentsFound"></param> 
         /// <returns></returns> 
-        private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound, out int sparseCount)
+        private byte[] DeDupeUintByteArray(byte[] targetArray, out bool contentsFound, out int count, out int sparseCount)
         {
-            // Copy split queue to hashset to remove dupes
-            HashSet<UInt32> arraySet = new HashSet<uint>();
-            for (int i = 0; i < (targetArray.Length / 4); i++)
-            {
-                byte[] queueByte = new byte[4];
-                Buffer.BlockCopy(targetArray, (i * 4), queueByte, 0, 4);
-                uint queueValue = BitConverter.ToUInt32(queueByte, 0);
-                if (queueValue != 0)  arraySet.Add(queueValue);
-            }
+            // Get appended count
+            byte[] countByte = new byte[4];
+            Buffer.BlockCopy(targetArray, 0, countByte, 0, 4);
+            // Clamp count to max buffer size
+            count = Math.Min(BitConverter.ToInt32(countByte, 0), targetArray.Length / 4);
 
-            // Keep track of how many sparse nodes in the queue
-            sparseCount = arraySet.Count;
-
-            if (sparseCount > 0)
+            // We only do this if there's actually anything to do
+            if (count > 0)
             {
-                // Copy hashset back to array
-                int queueWriteBackIndex = 0;
-                HashSet<uint>.Enumerator queueEnum = arraySet.GetEnumerator();
-                while (queueEnum.MoveNext())
+                // Copy split queue to hashset to remove dupes
+                HashSet<UInt32> arraySet = new HashSet<uint>();
+                for (int i = 1; i < count; i++)
                 {
                     byte[] queueByte = new byte[4];
-                    queueByte = BitConverter.GetBytes(queueEnum.Current);
-                    Buffer.BlockCopy(queueByte, 0, targetArray, queueWriteBackIndex * 4, 4);
-                    queueWriteBackIndex++;
+                    Buffer.BlockCopy(targetArray, (i * 4), queueByte, 0, 4);
+                    uint queueValue = BitConverter.ToUInt32(queueByte, 0);
+                    if (queueValue != 0) arraySet.Add(queueValue);
                 }
 
-                // Zeros rest of array
-                int queueStartIndex = arraySet.Count * 4;
-                Array.Clear(targetArray, queueStartIndex, (targetArray.Length - queueStartIndex));
+                // Keep track of how many sparse nodes in the queue
+                sparseCount = arraySet.Count;
 
-                // There's work to do!
-                contentsFound = true;
+                if (sparseCount > 0)
+                {
+                    // Copy hashset back to array
+                    int queueWriteBackIndex = 1;
+                    HashSet<uint>.Enumerator queueEnum = arraySet.GetEnumerator();
+                    while (queueEnum.MoveNext())
+                    {
+                        byte[] queueByte = new byte[4];
+                        queueByte = BitConverter.GetBytes(queueEnum.Current);
+                        Buffer.BlockCopy(queueByte, 0, targetArray, queueWriteBackIndex * 4, 4);
+                        queueWriteBackIndex++;
+                    }
+
+                    // There's work to do!
+                    contentsFound = true;
+                }
+                else
+                {
+                    // Nothing to do.
+                    contentsFound = false;
+                }
             }
             else
             {
-                // Zeros entire array
-                int queueStartIndex = arraySet.Count * 4;
-                Array.Clear(targetArray, 0, targetArray.Length);
-
-                // Nothing to do.
                 contentsFound = false;
+                sparseCount = 0;
             }
+
+            // Zero append counter
+            Array.Clear(targetArray, 0, 4);
 
             // We're done here
             return targetArray;
@@ -389,7 +536,7 @@ namespace NKLI.Nigiri.SVO
         {
             // [0] Max depth
             // [1] Max split queue items
-            // [2] Current split queue items
+            // [2] --- UNUSED
             // [3] Split queue position counter
             // [4] Mask buffer position
             // [5] Max mipmap queue items
@@ -399,7 +546,7 @@ namespace NKLI.Nigiri.SVO
             // Set buffer variables
             uint[] Counters = new uint[Buffer_Counters_Count];
             Counters[0] = MaxDepth;
-            Counters[1] = SplitQueueMaxLength;
+            Counters[1] = (uint) SplitQueueMaxLength;
             Counters[2] = 0;
             Counters[3] = 0;
             Counters[4] = 0;
@@ -461,6 +608,10 @@ namespace NKLI.Nigiri.SVO
             {
                 if (disposing)
                 {
+                    // Destroy thread dispatcher
+                    Nigiri.Helpers.DestroyGameObject(ref threadDispatchObject);
+                    threadDispatch = null;
+
                     // Stop worker threads
                     if (thread_SplitPreProcessor != null) thread_SplitPreProcessor.Abort();
                     if (thread_MipmapPreProcessor != null) thread_MipmapPreProcessor.Abort();
