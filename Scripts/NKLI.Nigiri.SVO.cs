@@ -28,7 +28,7 @@ namespace NKLI.Nigiri.SVO
         public int Buffer_SVO_Count { get; private set; } // Max possible nodes
         public uint MaxDepth { get; private set; } // Default starting depth TTL of the tree
         public int SplitQueueMaxLength { get; private set; } // Max length of the spit queue
-        public int MipmapQueueMaxLength { get; private set; } // Max length of the spit queue
+        public int MipmapQueueMaxLength { get; private set; } // Max length of the mipmap queue
         public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
         public int MipmapQueueSparseCount { get; private set; } // Number of processed nodes
         public bool AbleToSplit { get; set; } // If there are nodes to split
@@ -74,6 +74,7 @@ namespace NKLI.Nigiri.SVO
 
         // static consts
         public static readonly int Buffer_Counters_Count = 9;
+        private static readonly int initial_SplitQueueMaxLength = 250000;
 
         // Attached camera
         private Camera attachedCamera;
@@ -87,7 +88,7 @@ namespace NKLI.Nigiri.SVO
         private Stopwatch stopwatch_Thread_Mipmap;
 
         // Constructor
-        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint splitQueueMaxLength, uint mipmapQueueMaxLength)
+        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint mipmapQueueMaxLength)
         {
             // Zero ram counters
             VRAM_Usage = 0;
@@ -100,7 +101,7 @@ namespace NKLI.Nigiri.SVO
             //  to match dispatch thread group size
             SplitQueueMaxLength =
                     Math.Max(Convert.ToInt32(Math.Round(
-                         (splitQueueMaxLength / (double)8),
+                         (initial_SplitQueueMaxLength / (double)8),
                          MidpointRounding.AwayFromZero
                      ) * 8), 8);
 
@@ -281,6 +282,7 @@ namespace NKLI.Nigiri.SVO
             // Permanent worker
             while (true)
             {
+                Thread.Sleep(2);
                 // Wait till thread is unlocked for available work
                 thread_SplitPreProcessor_HasWork_Event.WaitOne();
 
@@ -308,12 +310,12 @@ namespace NKLI.Nigiri.SVO
 
                     bool resize = false;
                     // If thread execution exceeds 15ms
-                    if (Runtime_Thread_Split >= 14)
+                    if (Runtime_Thread_Split > 14)
                     {
                         resize = true;
                     }
                     // If queue exceeds 50% of the total buffer but below CPU budget
-                    else if (Runtime_Thread_Split < 6)
+                    else if (Runtime_Thread_Split < 4)
                     {
                         if (count >= (SplitQueueMaxLength * 0.5)) resize = true;
                     }
@@ -326,7 +328,6 @@ namespace NKLI.Nigiri.SVO
                         threadDispatch.Enqueue(() => ResizeComputeBuffer(ref Buffer_Queue_Split, sizeof(uint), SplitQueueMaxLength));
                         threadDispatch.Enqueue(() => queue_Split = ResizeByteArray(queue_Split, sizeof(uint) * SplitQueueMaxLength));
                         threadDispatch.Enqueue(() => queue_Split_Sparse = ResizeByteArray(queue_Split_Sparse, sizeof(uint) * SplitQueueMaxLength));
-                        threadDispatch.Enqueue(() => SetCounterBuffer());
                         threadDispatch.Enqueue(() => BuildCommandBuffer());
                         threadDispatch.Enqueue(() => thread_SplitPreProcessor_Scaling_Event.Set());
                     }
@@ -348,6 +349,8 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         private void ThreadedMipmapPreProcessor()
         {
+            Thread.Sleep(2);
+
             // Instantiate execution runtime stopwatch
             stopwatch_Thread_Mipmap = new Stopwatch();
 
@@ -449,7 +452,7 @@ namespace NKLI.Nigiri.SVO
             queue_Split = _splitQueue;
 
             // Tell the thread there's work to do
-            thread_SplitPreProcessor_Scaling_Event.Set();
+            thread_SplitPreProcessor_HasWork_Event.Set();
         }
 
         /// <summary>
@@ -461,7 +464,7 @@ namespace NKLI.Nigiri.SVO
             queue_Mipmap = _mipmapQueue;
 
             // Tell the thread there's work to do
-            thread_SplitPreProcessor_Scaling_Event.Set();
+            thread_MipmapPreProcessor_HasWork_Event.Set();
         }
 
         /// <summary> 

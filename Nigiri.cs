@@ -738,10 +738,10 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate SVO Tree
         SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, 250000, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
+        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
 
         // Instantiate voxelizer
-        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, 100, 10);
+        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, 100);
 
         Setup();
 

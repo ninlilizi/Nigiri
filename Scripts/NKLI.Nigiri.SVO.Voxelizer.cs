@@ -20,13 +20,15 @@ namespace NKLI.Nigiri.SVO
         public float Shadow_Strength { get; private set; }
         public float Occlusion_Gain { get; private set; }
         public float GI_Area_Size { get; private set; }
-        public int Max_Depth { get; private set; }
         public Vector3 GridOffset { get; private set; }
 
         // Let a few frames render before kicking off,
         //  Dirty fix for the built-in depth texture being
         //  unabsilable till after a camera tender
         private uint WarmUp = 0;
+
+        // Max depth of SVO
+        private int max_depth;
 
         // Compute
         readonly private ComputeShader Shader_VoxelEncoder;
@@ -35,7 +37,7 @@ namespace NKLI.Nigiri.SVO
         /// <summary>
         /// Constructor
         /// </summary>
-        public Voxelizer(Tree SVO, float emissiveIntensity, float shadowStrength, float occlusionGain, float giAreaSize, int maxDepth)
+        public Voxelizer(Tree SVO, float emissiveIntensity, float shadowStrength, float occlusionGain, float giAreaSize)
         {
             // Sanity check input
             if (SVO == null)
@@ -66,7 +68,7 @@ namespace NKLI.Nigiri.SVO
             Shadow_Strength = shadowStrength;
             Occlusion_Gain = occlusionGain;
             GI_Area_Size = giAreaSize;
-            Max_Depth = maxDepth;
+            max_depth = (int)SVO_Tree.MaxDepth;
 
         }
 
@@ -123,7 +125,7 @@ namespace NKLI.Nigiri.SVO
                 Shader_VoxelEncoder.SetFloat("_shadowStrength", Shadow_Strength);
                 Shader_VoxelEncoder.SetFloat("_occlusionGain", Occlusion_Gain);
                 Shader_VoxelEncoder.SetFloat("_giAreaSize", GI_Area_Size);
-                Shader_VoxelEncoder.SetInt("_maxDepth", Max_Depth);
+                Shader_VoxelEncoder.SetInt("_maxDepth", max_depth);
 
                 // Dispatch
                 Shader_VoxelEncoder.Dispatch(0, sampleCount / 1024, 1, 1);
