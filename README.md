@@ -3,10 +3,21 @@
 ### A dynamic, sparse voxel octree based global illumination system for Unity.
 
 # Features.
-* 2D, Single Pass Stereo Rendering
+* 2D & Single Pass Stereo Rendering
 * Runs on Unity version 2018.4 ONLY (Will update, time permitting.)
-* Depth buffer based voxelisation is less GPU intensive that other methods.
+* Depth buffer based voxelisation is less GPU intensive than other methods.
 * Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
+* Multi-threaded to minimise use of the main thread.
+* Asynchronous GPU reads throughout.
+* Sparse octree based data storage and tracing.
+* Sparse octree voxelizer is desiged as a [plugable module](https://github.com/ninlilizi/Nigiri/wiki/Module:-SVO-Voxelizer) to allow pain free custom integrations
+
+# Compatibility
+* The standard render pipeline is supported, only.
+* Compatible with Windows and DirectX, only.  
+
+Full policy on update and compatibility support is supplied on [the Wiki](https://github.com/ninlilizi/Nigiri/wiki)
+
 
 ## Development updates
 [**Roadmap**](https://github.com/ninlilizi/Nigiri/wiki/Roadmap)  
