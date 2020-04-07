@@ -73,7 +73,7 @@ namespace NKLI.Nigiri.SVO
         private CommandBuffer CB_Nigiri_SVO;
 
         // static consts
-        public static readonly int Buffer_Counters_Count = 9;
+        private static readonly int Buffer_Counters_Count = 8;
         private static readonly int initial_SplitQueueMaxLength = 250000;
 
         // Attached camera
@@ -282,7 +282,6 @@ namespace NKLI.Nigiri.SVO
             // Permanent worker
             while (true)
             {
-                Thread.Sleep(2);
                 // Wait till thread is unlocked for available work
                 thread_SplitPreProcessor_HasWork_Event.WaitOne();
 

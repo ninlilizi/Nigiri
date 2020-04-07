@@ -120,7 +120,7 @@ namespace Tests.Nigiri.SVO
 
                 // Readback counters to CPU
                 var req_Counters = queue_Counters.Peek();
-                uint[] test_Buffer_Counters = new uint[NKLI.Nigiri.SVO.Tree.Buffer_Counters_Count];
+                uint[] test_Buffer_Counters = new uint[16];
                 if (req_Counters.hasError) Debug.Log("GPU readback error detected.");
                 else
                 {
