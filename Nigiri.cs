@@ -25,14 +25,25 @@ public class Nigiri : MonoBehaviour {
     public float indirectLightingStrength = 1.0f;
     [Range(0.0f, 8)]
     public float EmissiveIntensity = 1.0f;
+    [Range(0, 1)]
+    public float shadowStrength = 1.0f;
 
     [Header("Voxelization Settings")]
     public LayerMask dynamicPlusEmissiveLayer;
 
-    public float GIAreaSize = 50;
+    
     public int highestVoxelResolution = 256;
-    [Range(0, 1)]
-    public float shadowStrength = 1.0f;
+    [Range(10.0f, 4096f)]
+    [Tooltip("Width of a single axis of the worldspace size of the GI covered area, centered on zero")]
+    public float OctreeAreaSize = 50;
+    private float OctreeAreaSize_Cached = 50;
+    [Range(2, 14)]
+    [Tooltip("Max traversal depth of the SVO")]
+    public uint OctreeMaxDepth = 10;
+    private uint OctreeMaxDepth_Cached = 10;
+    [Range(16, 1024)]
+    public int OctreeVRAMSizeMB = 256;
+    private int OctreeVRAMSizeMB_Cached;
     //[Range(0.0f, 0.999f)]
     //public float temporalStablityVsRefreshRate = 0.975f;
     [Tooltip("A higher speed, but lower quality light propagation")]
@@ -404,6 +415,7 @@ public class Nigiri : MonoBehaviour {
     private int frameSwitch = 0;
     //private int mipSwitch = 0;
     int emissiveCameraLocationSwitch;
+    private bool doSetupNextFrame = false;
 
     private Vector3 prevPosition;
     private Vector3 prevGridPosition;
@@ -510,6 +522,8 @@ public class Nigiri : MonoBehaviour {
 
     void Update()
     {
+        if (doSetupNextFrame) Setup(false);
+
         renderTimes.UpdateStopwatch.Start();
 
         // Handle completed async read-back for GPU Render Counters
@@ -623,13 +637,13 @@ public class Nigiri : MonoBehaviour {
         else if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 25);
         else if (emissiveCameraLocationSwitch == 2) emissiveCameraGO.transform.localPosition = new Vector3(-25, 0, 0);
         else if (emissiveCameraLocationSwitch == 3) emissiveCameraGO.transform.localPosition = new Vector3(25, 0, 0);*/
-        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(GIAreaSize / 2), 0);
-        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(GIAreaSize / 2), 0);
+        if (emissiveCameraLocationSwitch == 0) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(OctreeAreaSize / 2), 0);
+        if (emissiveCameraLocationSwitch == 1) emissiveCameraGO.transform.localPosition = new Vector3(0, (int)(OctreeAreaSize / 2), 0);
         //else if (emissiveCameraLocationSwitch == 4) emissiveCameraGO.transform.localPosition = new Vector3(0, 0, 0);
         emissiveCameraGO.transform.LookAt(localCam.transform);
 
-        emissiveCamera.orthographicSize = (int)(GIAreaSize / 2);
-        emissiveCamera.farClipPlane = GIAreaSize;
+        emissiveCamera.orthographicSize = (int)(OctreeAreaSize / 2);
+        emissiveCamera.farClipPlane = OctreeAreaSize;
 
         //FilterMode filterMode = FilterMode.Point;
         //if (bilinearFiltering) filterMode = FilterMode.Bilinear;
@@ -726,7 +740,7 @@ public class Nigiri : MonoBehaviour {
         if (stereo2MonoMaterial == null) stereo2MonoMaterial = new Material(stereo2MonoShader);
 
         //gridOffset = localCam.transform.position; -- Removed due to no grid-offsetting.
-        gridOffset = new Vector3(-(GIAreaSize / 2), -(GIAreaSize / 2), -(GIAreaSize / 2));
+        gridOffset = new Vector3(-(OctreeAreaSize / 2), -(OctreeAreaSize / 2), -(OctreeAreaSize / 2));
 
         // Instantiate render textures
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
@@ -737,13 +751,14 @@ public class Nigiri : MonoBehaviour {
         computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
 
         // Instantiate SVO Tree
-        SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-        SVO.Create(this.GetComponent<Camera>(), 10, 16777216, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
+        //SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+        //SVO.Create(this.GetComponent<Camera>(), 10, (OctreeVRAMSizeMB * 1024 * 1024) / 16, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
+        //OctreeVRAMSizeMB_Cached = OctreeVRAMSizeMB;
 
         // Instantiate voxelizer
-        voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, 100);
+        //voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, GIAreaSize);
 
-        Setup();
+        Setup(true);
 
         //Get blue noise textures
         blueNoise = new Texture2D[8];
@@ -798,13 +813,13 @@ public class Nigiri : MonoBehaviour {
 
     void OnValidate()
     {
-        Setup();
+        doSetupNextFrame = true;
         UpdateLUT();
     }
 
     void Reset()
     {
-        Setup();
+        Setup(true);
         UpdateLUT();
     }
 
@@ -850,7 +865,7 @@ public class Nigiri : MonoBehaviour {
         //Shader.SetGlobalFloat("_shadowStrength", shadowStrength);
         //Shader.SetGlobalFloat("_emissiveIntensity", EmissiveIntensity);
         //Shader.SetGlobalFloat("_occlusionGain", occlusionGain);
-        Shader.SetGlobalFloat("_giAreaSize", GIAreaSize);
+        Shader.SetGlobalFloat("_giAreaSize", OctreeAreaSize);
         //Shader.SetGlobalInt("_voxelResolution", highestVoxelResolution);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
@@ -1069,12 +1084,12 @@ public class Nigiri : MonoBehaviour {
         //Fix stereo rendering matrix/
 
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
-        lengthOfCone = GIAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+        lengthOfCone = OctreeAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         //Color Settings
         var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
 
-        Setup();
+        //Setup(false);
 
         if (linear)
             _colorMaterial.EnableKeyword("COLORSPACE_LINEAR");
@@ -2500,8 +2515,9 @@ public class Nigiri : MonoBehaviour {
 
 
     // Set up the temporary assets.
-    void Setup()
+    void Setup(bool forceRebuild)
     {
+        // Colour grading
         if (_colorMaterial == null)
         {
             if (colorShader == null) colorShader = Shader.Find("Hidden/Nigiri_Color");
@@ -2515,6 +2531,32 @@ public class Nigiri : MonoBehaviour {
             _lutTexture.hideFlags = HideFlags.DontSave;
             _lutTexture.wrapMode = TextureWrapMode.Clamp;
             UpdateLUT();
+        }
+
+        bool rebuildTree = false;
+        if (forceRebuild) rebuildTree = true;
+
+        // SVO
+        if (OctreeVRAMSizeMB_Cached != OctreeVRAMSizeMB) rebuildTree = true;
+        if (OctreeAreaSize_Cached != OctreeAreaSize) rebuildTree = true;
+        if (OctreeMaxDepth_Cached != OctreeMaxDepth) rebuildTree = true;
+
+        if (rebuildTree)
+        {
+            // Dispose voxelizer if exists
+            if (voxelizer != null) voxelizer.Dispose();
+            // Destroy SVO if exists
+            if (SVO != null) Helpers.DestroyScriptableObject(ref SVO);
+
+            // Instantiate SVO Tree
+            SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
+            SVO.Create(this.GetComponent<Camera>(), OctreeMaxDepth, (OctreeVRAMSizeMB * 1024 * 1024) / 16, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
+            OctreeVRAMSizeMB_Cached = OctreeVRAMSizeMB;
+            OctreeAreaSize_Cached = OctreeAreaSize;
+            OctreeMaxDepth_Cached = OctreeMaxDepth;
+
+            // Instantiate voxelizer
+            voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, OctreeAreaSize);
         }
     }
 
