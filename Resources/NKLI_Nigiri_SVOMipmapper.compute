@@ -52,9 +52,9 @@ void CSMain (uint3 id : SV_DispatchThreadID)
             filteredColour += _SVO[nodeToMipmap.referenceOffset + i].UnPackColour();
         }
         
-       filteredColour /= 8;
+        filteredColour /= 8;
         
-       filteredColour = float4(1, 1, 1, 1);
+        //filteredColour = float4(1, 1, 1, 1);
         
         nodeToMipmap.PackColour(filteredColour, 0);
         

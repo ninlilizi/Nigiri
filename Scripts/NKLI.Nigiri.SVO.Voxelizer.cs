@@ -217,8 +217,6 @@ namespace NKLI.Nigiri.SVO
                 // Dispatch
                 Shader_SVOMipmapper.Dispatch(0, queueLength / 8, 1, 1);
 
-                Debug.Log("Nodes mipmap successfully, sparse:" + SVO_Tree.MipmapQueueSparseCount + ", queue:" + queueLength);
-
                 // Resume thread
                 SVO_Tree.ResumeMipmapWorker();
 

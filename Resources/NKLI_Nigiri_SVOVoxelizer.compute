@@ -74,7 +74,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     // Syncronise threads
     GroupMemoryBarrierWithGroupSync();
     
-        // If thread zero and MinOffet is non-zero. Append offset to split queue
+    // If thread zero and MinOffet is non-zero. Append offset to split queue
     if ((thread == 0))
     {
         if (split_MinOffset != 0)

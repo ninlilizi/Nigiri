@@ -817,7 +817,7 @@ public class Nigiri : MonoBehaviour {
     void OnValidate()
     {
         doSetupNextFrame = true;
-        UpdateLUT();
+        //UpdateLUT();
     }
 
     void Reset()
