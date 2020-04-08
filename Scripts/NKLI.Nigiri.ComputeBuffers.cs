@@ -28,22 +28,20 @@ namespace NKLI.Nigiri
         /// <summary>
         /// Generic create method
         /// </summary>
-        /// <param name="resolution"></param>
         /// <param name="injectionTextureResolution"></param>
         /// <param name="renderCounterMax"></param>
-        public void Create(int resolution, Vector2Int injectionTextureResolution, int renderCounterMax)
+        public void Create(Vector2Int injectionTextureResolution, int renderCounterMax)
         {
             // Create buffers
-            CreateComputeBuffers(resolution, injectionTextureResolution, renderCounterMax);
+            CreateComputeBuffers(injectionTextureResolution, renderCounterMax);
         }
 
         /// <summary>
         /// Creates compute buffers
         /// </summary>
         /// <param name="resolution"></param>
-        /// <param name="injectionTextureResolution"></param>
         /// <param name="renderCounterMax"></param>
-        public void CreateComputeBuffers(int resolution, Vector2Int injectionTextureResolution, int renderCounterMax)
+        public void CreateComputeBuffers(Vector2Int injectionTextureResolution, int renderCounterMax)
         {
             // Release any existing buffers
             DisposeBuffers();

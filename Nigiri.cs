@@ -25,7 +25,6 @@ public class Nigiri : MonoBehaviour {
     public LayerMask dynamicPlusEmissiveLayer;
 
     
-    public int highestVoxelResolution = 256;
     [Range(10.0f, 4096f)]
     [Tooltip("Width of a single axis of the worldspace size of the GI covered area, centered on zero")]
     public float OctreeAreaSize = 50;
@@ -345,6 +344,7 @@ public class Nigiri : MonoBehaviour {
     public bool VisualiseGI = false;
     //private bool VisualiseCache = false;
     public bool VisualizeVoxels = false;
+    public bool VisualizeVoxelMipFiltering = false;
     public bool visualizeDepth = false;
     public bool visualizeOcclusion = false;
     public bool visualizeReflections = false;
@@ -630,8 +630,6 @@ public class Nigiri : MonoBehaviour {
         emissiveCamera.orthographicSize = (int)(OctreeAreaSize / 2);
         emissiveCamera.farClipPlane = OctreeAreaSize;
 
-        UpdateSVO();
-
         // This line goes at the end of update or OnRender 
         ramUsed = "RAM Usage: " + ramUsage.ToString("F2") + " M";
         vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " M";
@@ -716,7 +714,7 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate render textures
         renderTextures = ScriptableObject.CreateInstance<RenderTextures>();
-        renderTextures.Create(highestVoxelResolution, localCam, injectionTextureResolution, subsamplingRatio);
+        renderTextures.Create(localCam, injectionTextureResolution, subsamplingRatio);
 
         // Assign inspector debug RTs
         lightingTexture = renderTextures.lightingTexture;
@@ -725,7 +723,7 @@ public class Nigiri : MonoBehaviour {
 
         // Instantiate buffers
         computeBuffers = ScriptableObject.CreateInstance<ComputeBuffers>();
-        computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
+        computeBuffers.CreateComputeBuffers(injectionTextureResolution, RenderCounterMax);
 
         Setup(true);
 
@@ -767,7 +765,7 @@ public class Nigiri : MonoBehaviour {
         emissiveCameraGO.AddComponent<Nigiri_EmissiveCameraHelper>();
         emissiveCamera.enabled = false;
         emissiveCamera.stereoTargetEye = StereoTargetEyeMask.None;
-        Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(highestVoxelResolution, highestVoxelResolution);
+        Nigiri_EmissiveCameraHelper.injectionResolution = new Vector2Int(256, 256);
         ///END Create new Emissive Camera object
 
         UpdateForceGI();
@@ -847,8 +845,15 @@ public class Nigiri : MonoBehaviour {
 
         if (forceImmediateRefresh)
         {
+            // Store render texture dimensions
             injectionTextureResolution.x = source.width / subsamplingRatio;
             injectionTextureResolution.y = source.height / subsamplingRatio;
+
+            // Invalidate voxelization mask
+            maskGenerated = false;
+
+            // Recreate SVO
+            Setup(true);
 
             forceImmediateRefresh = false;
             UpdateForceGI();
@@ -862,7 +867,6 @@ public class Nigiri : MonoBehaviour {
             injectionTextureResolution.x = (int)source.width / subsamplingRatio;
             injectionTextureResolution.y = (int)source.height / subsamplingRatio;
             renderTextures.CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
-            computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
         }
 
         //Fix stereo rendering matrix
@@ -890,7 +894,7 @@ public class Nigiri : MonoBehaviour {
         //Fix stereo rendering matrix/
 
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
-        lengthOfCone = OctreeAreaSize / (highestVoxelResolution);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+        lengthOfCone = OctreeAreaSize / (256);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         //Color Settings
         var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
@@ -1151,6 +1155,11 @@ public class Nigiri : MonoBehaviour {
 
             computeBuffers.maskGenerated = true;
         }
+
+
+        // Voxelization happens after the scene render
+        // as we need the output render buffers.
+        UpdateSVO();
     }
 
     private void OnDisable()
@@ -1185,7 +1194,7 @@ public class Nigiri : MonoBehaviour {
         Debug.Log("<Nigiri> Clearing cache");
 
         // Recreate compute buffers
-        computeBuffers.CreateComputeBuffers(highestVoxelResolution, injectionTextureResolution, RenderCounterMax);
+        computeBuffers.CreateComputeBuffers(injectionTextureResolution, RenderCounterMax);
 
         prevPosition = GetComponent<Camera>().transform.position;
     }
@@ -2282,6 +2291,9 @@ public class Nigiri : MonoBehaviour {
             // Instantiate voxelizer
             voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, OctreeAreaSize);
         }
+
+        // Propagate inspector values
+        voxelizer.Debug_Filtering = VisualizeVoxelMipFiltering;
     }
 
     // Update the LUT texture.

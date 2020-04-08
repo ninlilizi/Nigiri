@@ -22,10 +22,13 @@ namespace NKLI.Nigiri.SVO
         public float GI_Area_Size { get; private set; }
         public Vector3 GridOffset { get; private set; }
 
+        // Read-Write properties
+        public bool Debug_Filtering { get; set; }
+
         // Let a few frames render before kicking off,
         //  Dirty fix for the built-in depth texture being
         //  unabsilable till after a camera tender
-        private uint WarmUp = 0;
+        //private uint WarmUp = 0;
 
         // Max depth of SVO
         private int max_depth;
@@ -94,8 +97,8 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         public bool VoxelizeScene(int sampleCount, RenderTexture positionTexture, RenderTexture lightingTexture, RenderTexture lightingTexture2, ComputeBuffer maskBuffer)
         {
-            if (WarmUp > 4)
-            {
+            //if (WarmUp > 4)
+            //{
                 // Sanity check inputs
                 if (SVO_Tree == null || positionTexture == null || lightingTexture == null || lightingTexture2 == null)
                 {
@@ -136,8 +139,8 @@ namespace NKLI.Nigiri.SVO
                 // Dispatch
                 Shader_VoxelEncoder.Dispatch(0, sampleCount / 1024, 1, 1);
 
-            }
-            else WarmUp++;
+            //}
+            //else WarmUp++;
 
             // We're done here
             return true;
@@ -215,6 +218,9 @@ namespace NKLI.Nigiri.SVO
                 Shader_SVOMipmapper.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
                 Shader_SVOMipmapper.SetBuffer(0, "_SVO_MipmapQueue", SVO_Tree.Buffer_Queue_Mipmap);
 
+                // Set values
+                Shader_SVOMipmapper.SetInt("_debugFiltering", Debug_Filtering ? 1 : 0);
+
                 // Dispatch
                 Shader_SVOMipmapper.Dispatch(0, queueLength / 8, 1, 1);
 
@@ -229,6 +235,7 @@ namespace NKLI.Nigiri.SVO
                 // Resume thread
                 SVO_Tree.ResumeMipmapWorker();
 
+                // We're done here
                 return false;
             }
         }

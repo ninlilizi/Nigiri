@@ -15,6 +15,9 @@ uniform RWStructuredBuffer<uint> _SVO_Counters;
 // SVO Queue of nodes to split
 uniform RWStructuredBuffer<uint> _SVO_MipmapQueue;
 
+// Debug visualisation
+uniform const uint _debugFiltering;
+
 [numthreads(8, 1, 1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
@@ -34,25 +37,35 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         // Decrement by one to get adjusted index
         mipmapIndex--;
                
+        // Get the target node
         SVONode nodeToMipmap = _SVO[mipmapIndex];
                  
+        // Initialise accumumator
         float4 filteredColour = (0).xxxx;
         
+        // Do this for all child nodes
         [unroll]
         for (int i = 0; i < 8; i++)
         {
+            // Accumulate samples
             filteredColour += _SVO[nodeToMipmap.referenceOffset + i].UnPackColour();
+            
+            // Toggle off flag as child nodes are processed
             _SVO[nodeToMipmap.referenceOffset + i].SetIsWaitingForMipmap(0);
         }
         
+        // Average sampled nodes
         filteredColour /= 8;
         
-        // TODO - Add Debug toggle for this to inspector
-        //filteredColour = float4(1, 1, 1, 1);
+        // Debug visualisation
+        if (_debugFiltering)
+            filteredColour = float4(1, 1, 1, 1);
         
+        // Update node properties
         nodeToMipmap.PackColour(filteredColour);
         nodeToMipmap.SetIsWaitingForMipmap(1);
         
+        // Store node
         _SVO[mipmapIndex] = nodeToMipmap;
     }
 

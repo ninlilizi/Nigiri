@@ -35,11 +35,10 @@ namespace NKLI.Nigiri
         /// <summary>
         /// Generic create method
         /// </summary>
-        /// <param name="resolution"></param>
         /// <param name="localCam"></param>
         /// <param name="injectionTextureResolution"></param>
         /// <param name="subsamplingRatio"></param>
-        public void Create(int resolution, Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
+        public void Create(Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
         {
             // Create render textures
             CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
