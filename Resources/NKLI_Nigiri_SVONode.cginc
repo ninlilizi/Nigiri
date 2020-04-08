@@ -22,7 +22,7 @@ struct SVONode
 
     // Colour value (64b)
     uint packedColour;
-    float colour_A;
+    uint colour_A;
 
     // When used in shader, pad to fit 128 bit cache alignment
     //uint pad0;
@@ -92,7 +92,7 @@ struct SVONode
     /// <summary>
     /// Packs HDR RGBA into uint2
     /// </summary>
-    inline void PackColour(float4 colour)
+    inline void PackColour(float4 colour, uint isWaitingForMipmap)
     {
         // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
 	    //            R    R    R    R    R    R    R    R    G    G    G    G    G    G    G    G 
@@ -102,7 +102,8 @@ struct SVONode
         uint4 encodedColour = RGBMEncode(colour.rgb) * 255;
         
         packedColour = (encodedColour.r << 24) | (encodedColour.g << 16) | (encodedColour.b << 8) | (encodedColour.a);
-        colour_A = colour.a;
+        
+        colour_A = ((uint) (colour.a * 255) << 1) | isWaitingForMipmap;
     }
     
     /// <summary>
@@ -116,6 +117,25 @@ struct SVONode
         encodedColour.g = (packedColour >> 16) & 0xFF;
         encodedColour.r = (packedColour >> 24) & 0xFF;
         
-        return float4(RGBMDecode(encodedColour / 255), colour_A);
+        return float4(RGBMDecode(encodedColour / 255), (float) ((colour_A >> 31) & 0x7FFFFFFF) / 255.0);
+
     }
+    
+    inline float UnPackColourAlpha()
+    {
+        return (float) ((colour_A >> 1) & 0x7FFFFFFF) / 255.0;
+    }
+    
+    inline uint GetIsWaitingForMipmap()
+    {
+
+        return colour_A & 0x1;
+    }
+    
+    inline void SetIsWaitingForMipmap(uint value)
+    {
+        colour_A = ((colour_A << 1) & 0x7FFFFFFF) | value;
+
+    }
+
 };

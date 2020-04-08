@@ -10,7 +10,7 @@
 #include "NKLI_Nigiri_MortonOrder2D.cginc"
 
 // List of ordered pixels to sample
-uniform ConsumeStructuredBuffer<uint> _maskBuffer;
+uniform RWStructuredBuffer<uint> _maskBuffer;
 
 // SVO
 uniform RWStructuredBuffer<SVONode> _SVO;
@@ -18,6 +18,8 @@ uniform RWStructuredBuffer<SVONode> _SVO;
 uniform RWStructuredBuffer<uint> _SVO_Counters;
 // SVO Queue of nodes to split
 uniform RWStructuredBuffer<uint> _SVO_SplitQueue;
+// SVO Queue of nodes to mipmap
+uniform RWStructuredBuffer<uint> _SVO_MipmapQueue;
 
 // Max SVO depth
 uniform const uint _maxDepth;
@@ -35,8 +37,10 @@ uniform Texture2D<float4> lightingTexture2;
 uniform Texture2D _CameraDepthTexture;
 
 // Groupshared array of node split offsets
-groupshared uint MaxTTL = 0;
-groupshared uint MinOffset = 0;
+groupshared uint split_MaxTTL = 0;
+groupshared uint split_MinOffset = 0;
+groupshared uint mipmap_MaxTTL = 0;
+groupshared uint mipmap_MinOffset = 0;
 
 /// <summary>
 /// Encodes samples into tree
@@ -45,39 +49,35 @@ groupshared uint MinOffset = 0;
 void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
 {
     // Get mask position
-    //uint counter;
-    //InterlockedAdd(_SVO_Counters[4], 1, counter);
+    uint counter;
+    InterlockedAdd(_SVO_Counters[5], 1, counter);
     
     // Get morton ordered read index from mask buffer
-    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer.Consume());
-    //uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
-    //uint2 orderedCoord = oneD2twoD(counter, 1920);
+    uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
     
     float4 colour = GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain);
     float depth = _CameraDepthTexture[orderedCoord].r;
    
     // Traverse the SVO, splitting and writing the sampled colour as required
-    SplitRequest split = SplitInsertSVO(
-        _SVO, _SVO_SplitQueue, _SVO_Counters, (positionTexture[orderedCoord]),
+    TraversalResult traversalResult = SplitInsertSVO(
+        _SVO, _SVO_SplitQueue, _SVO_MipmapQueue, _SVO_Counters, (positionTexture[orderedCoord]),
         colour, depth,
         _giAreaSize);
     
-   
-    // Find highest TTL
-    InterlockedMax(MaxTTL, split.TTL);
-    
-    // If highest TTL
-    if (split.TTL == MaxTTL)
+    // Calculate priority split offset
+    InterlockedMax(split_MaxTTL, traversalResult.TTL);
+    if (traversalResult.TTL == split_MaxTTL)
     {
-        // Find highest offet
-        InterlockedMax(MinOffset, split.offset);
-        
+        InterlockedMax(split_MinOffset, traversalResult.offset);
     }
-
+    
     // Syncronise threads
     GroupMemoryBarrierWithGroupSync();
     
-    // If thread zero and MinOffet is non-zero. Append offset to split queue
-    if ((thread == 0) && MinOffset != 0)
-        AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, MinOffset);;
+        // If thread zero and MinOffet is non-zero. Append offset to split queue
+    if ((thread == 0))
+    {
+        if (split_MinOffset != 0)
+            AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MinOffset);
+    }
 }

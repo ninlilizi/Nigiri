@@ -13,7 +13,7 @@
 #define LUMA_DEPTH_FACTOR 100.0f 	// Higher = lesser variation with depth
 #define LUMA_FACTOR 1.9632107f
 
-struct SplitRequest
+struct TraversalResult
 {
     uint offset;
     uint TTL;
@@ -79,12 +79,11 @@ inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
     float lumaDiff = saturate(currentVoxelLuma - pixelLuma);
     
     // Only inject if currently voxel is either 1. unoccupied or 2. of a lesser depth and passes luma test
-    if ((node.colour_A == 0.0f) || ((depth < node.colour_A) && (lumaDiff < lumaThreshold)))
+    if ((node.colour_A == 0) || ((depth < node.UnPackColourAlpha()) && (lumaDiff < lumaThreshold)))
     {
-        // Set values
-        node.PackColour(colour);       
+        node.PackColour(colour, 1);
     }
-    
+          
     // return node
     return node;
 }
@@ -98,21 +97,40 @@ inline void AppendSVOSplitQueue(RWStructuredBuffer<uint> queueBuffer, RWStructur
     if (queueBuffer[0] < counterBuffer[1])
     {
         //  Get write index
-        uint index_SplitQueue;
-        InterlockedAdd(queueBuffer[0], 1, index_SplitQueue);
+        uint index;
+        InterlockedAdd(queueBuffer[0], 1, index);
          
         // Append to split queue it within bounds
         //  offset is +1 because zero signifies null value
-        if (index_SplitQueue < counterBuffer[1])
-            queueBuffer[index_SplitQueue + 1] = offset;
+        if (index < counterBuffer[1])
+            queueBuffer[index + 1] = offset;
+    }
+}
+
+/// <summary>
+/// Appends to the queue of nodes to be split
+/// </summary>
+inline void AppendSVOMipmapQueue(RWStructuredBuffer<uint> mipmapBuffer, RWStructuredBuffer<uint> counterBuffer, uint offset)
+{
+    // Only if within bounds
+    if (mipmapBuffer[0] < counterBuffer[3])
+    {
+        //  Get write index
+        uint index;
+        InterlockedAdd(mipmapBuffer[0], 1, index);
+         
+        // Append to split queue it within bounds
+        //  offset is +1 because index zero contains counter
+        if (index < counterBuffer[3])
+            mipmapBuffer[index + 1] = offset;
     }
 }
 
 /// <summary>
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
-SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, uniform RWStructuredBuffer<uint> counterBuffer,
-    float4 worldPosition, float4 colour, float depth, float giAreaSize)
+TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> mipmapBuffer,
+                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, float4 colour, float depth, float giAreaSize)
 {
     /// Calculate initial values
     // AABB Min/Max x,y,z
@@ -120,10 +138,19 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
     float3 t0 = float3(-halfArea, -halfArea, -halfArea);
     float3 t1 = float3(halfArea, halfArea, halfArea);  
     
-    SplitRequest split;
+    TraversalResult traversalResult;
+    
+    if ((worldPosition.x < t0.x || worldPosition.x > t1.x) || (worldPosition.y < t0.y || worldPosition.y > t1.y) || (worldPosition.z < t0.z || worldPosition.z > t1.z))
+    {
+        // We're done here
+        traversalResult.offset = 0;
+        traversalResult.TTL = 0;
+        return traversalResult;
+    }    
     
     // Traverse tree
     uint offset = 0;
+    uint prevOffset = 0;
     uint emergencyExit = 0;
     while (true)
     {
@@ -133,9 +160,9 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
         emergencyExit++;
         if (emergencyExit > 15)
         {
-            split.offset = 0;
-            split.TTL = 0;
-            return split;
+            traversalResult.offset = 0;
+            traversalResult.TTL = 0;
+            return traversalResult;
         }
                 
         // Retrieve node
@@ -159,18 +186,25 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                 //          race condition characterized by flicking GI
                 //          This will be replaced with an atomic rolling
                 //          average to fix this problem in the future
+                
                 svoBuffer[offset] = SetNodeColour(node, colour, depth);
                 
-                // We're done here
-                split.offset = 0;
-                split.TTL = 0;
-                return split;
+                if (node.GetIsWaitingForMipmap())
+                {
+                    //node.SetIsWaitingForMipmap(1);
+                    AppendSVOMipmapQueue(mipmapBuffer, counterBuffer, prevOffset + 1);
+                }
+                
+                traversalResult.offset = 0;
+                traversalResult.TTL = 0;
+                
+                return traversalResult;
             }
             else
-            {               
-                split.offset = offset + 1;
-                split.TTL = ttl;
-                return split;
+            {          
+                traversalResult.offset = offset + 1;
+                traversalResult.TTL = ttl;
+                return traversalResult;
             }
         }
         else
@@ -217,7 +251,10 @@ SplitRequest SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                     t1 = float3(t1.x, t1.y, t1.z);
                     break;
             }
-                
+            
+            // Store prev dev offset for mipmap queue
+            prevOffset = offset;
+            
             // Offet is reference + the node offset index
             offset = node.referenceOffset + childIndex;
         }

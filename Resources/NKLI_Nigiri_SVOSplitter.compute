@@ -25,7 +25,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 {
     // Get queue position
     uint counter;
-    InterlockedAdd(_SVO_Counters[3], 1, counter);
+    InterlockedAdd(_SVO_Counters[2], 1, counter);
     
     // Offset index by one as zero stores append count
     counter++;

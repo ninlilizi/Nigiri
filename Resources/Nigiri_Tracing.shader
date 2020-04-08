@@ -486,6 +486,8 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 	float3 t0 = float3(-halfArea, -halfArea, -halfArea);
 	float3 t1 = float3(halfArea, halfArea, halfArea);
 
+	float4 tempColour = (0).xxxx;
+
 	// Traverse tree
 	uint offset = 0;
 	while (true)
@@ -493,11 +495,16 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 		// Retrieve node
 		SVONode node = _SVO[offset];
 
+
+		tempColour += node.UnPackColour();
+
 		// If no children then tag for split queue consideration
 		if (node.referenceOffset == 0)
 		{
+
 			// If no child then return colour
-			return node.UnPackColour();
+			//return node.UnPackColour();
+			return tempColour;
 		}
 		else
 		{

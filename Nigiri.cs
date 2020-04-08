@@ -325,7 +325,7 @@ public class Nigiri : MonoBehaviour {
     [Serializable]
     public struct RenderCounts
     {
-        public uint VoxelSamplesPrimary0;
+        public uint VoxelMaskSamples;
         public uint VoxelSamplesPrimary1;
         public uint VoxelSamplesPrimary2;
         public uint VoxelSamplesSecondary;
@@ -336,7 +336,7 @@ public class Nigiri : MonoBehaviour {
         public int[] CounterTTL;
         public enum Counter
         {
-            VoxelisationSamplesPrimary0 = 0,
+            VoxelisationMaskSamples = 0,
             VoxelisationSamplesPrimary1 = 1,
             VoxelisationSamplesPrimary2 = 2,
             VoxelisationSamplesSecondary = 3,
@@ -416,6 +416,7 @@ public class Nigiri : MonoBehaviour {
     //private int mipSwitch = 0;
     int emissiveCameraLocationSwitch;
     private bool doSetupNextFrame = false;
+    bool maskGenerated = false;
 
     private Vector3 prevPosition;
     private Vector3 prevGridPosition;
@@ -511,7 +512,7 @@ public class Nigiri : MonoBehaviour {
         renderTimes.RenderVolumetric = 0;
         renderTimes.RenderToneMapping = 0;
         renderTimes.RenderFXAA = 0;
-        renderCounts.VoxelSamplesPrimary0 = 0;
+        //renderCounts.VoxelMaskSamples = 0;
         renderCounts.VoxelSamplesPrimary1 = 0;
         renderCounts.VoxelSamplesPrimary2 = 0;
         renderCounts.VoxelSamplesSecondary = 0;
@@ -538,18 +539,20 @@ public class Nigiri : MonoBehaviour {
             }
             else if (req.done)
             {
+                //Debug.Log("GPU readback COUNTERS");
+
                 var buffer = req.GetData<int>();
                 buffer.CopyTo(renderCounts.CounterData);
 
-                if ((renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0] != 0) ||
-                    (renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0] == 0))
+                if ((renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationMaskSamples] != 0) ||
+                    (renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationMaskSamples] == 0))
                 {
-                    renderCounts.VoxelSamplesPrimary0 = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0];
-                    renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0] = 5;
+                    renderCounts.VoxelMaskSamples = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationMaskSamples];
+                    renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationMaskSamples] = 5;
                 }
                 else
                 {
-                    renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0]--;
+                    renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationMaskSamples]--;
                 }
 
                 if ((renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary1] != 0) ||
@@ -590,7 +593,7 @@ public class Nigiri : MonoBehaviour {
                 //renderCounts.VoxelNeedDecay = (uint)renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationNeedDecay];
 
 
-                renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary0] = 0;
+                renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationMaskSamples] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary1] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesPrimary2] = 0;
                 renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationSamplesSecondary] = 0;
@@ -826,30 +829,24 @@ public class Nigiri : MonoBehaviour {
 	// Function to update data in the voxel grid
 	private void UpdateVoxelGrid()
     {
+        computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
+
+
         /// SVO
         /// 
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
-        Shader.SetGlobalBuffer("_maskBufferAC", computeBuffers.voxelUpdateMaskBufferNaive);
 
-        computeBuffers.voxelUpdateMaskBufferNaive.SetCounterValue(0);
-
-        // Update Mask
-        uint maskcount = 0;
-
-        nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationSamplesPrimary0);
-        maskcount = renderCounts.VoxelSamplesPrimary0;
-
+        // Update parameters
         voxelizer.UpdateParameters(EmissiveIntensity, shadowStrength, occlusionGain);
 
-        nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
-        nigiri_VoxelMask.SetTexture(0, "positionTexture", renderTextures.positionTexture);
-        nigiri_VoxelMask.Dispatch(0, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
-
         // Voxelize scene
-        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBufferNaive);
+        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBuffer);
 
         // Split nodes
         voxelizer.SplitNodes();
+
+        // Mipmap nodes
+        voxelizer.MipmapNodes();
 
 
         // Update execution time of worker threads
@@ -858,7 +855,8 @@ public class Nigiri : MonoBehaviour {
 
 
         /// Naive
-        computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
+        
+
         //int kernelHandle = nigiri_VoxelEntry.FindKernel("CSMain");
 
         // These apply to all grids        
@@ -1395,6 +1393,19 @@ public class Nigiri : MonoBehaviour {
         renderTimes.RenderStopwatch.Stop();
         renderTimes.RenderTotal = renderTimes.RenderStopwatch.Elapsed.TotalMilliseconds;
         renderTimes.RenderStopwatch.Reset();
+
+        // Generate sample mask
+        if (!computeBuffers.maskGenerated)
+        {
+            nigiri_VoxelMask.SetInt("CountIndex", (int)RenderCounts.Counter.VoxelisationMaskSamples);
+            nigiri_VoxelMask.SetInt("MaskIndex", (int)RenderCounts.Counter.voxelisationMaskUpdate);
+            nigiri_VoxelMask.SetTexture(1, "positionTexture", renderTextures.positionTexture);
+            nigiri_VoxelMask.SetBuffer(1, "_maskBufferRW", computeBuffers.voxelUpdateMaskBuffer);
+            nigiri_VoxelMask.SetBuffer(1, "_renderCountBuffer", computeBuffers.RenderCountBuffer);
+            nigiri_VoxelMask.Dispatch(1, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
+
+            computeBuffers.maskGenerated = true;
+        }
     }
 
     private void OnDisable()

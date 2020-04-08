@@ -33,6 +33,7 @@ namespace NKLI.Nigiri.SVO
         // Compute
         readonly private ComputeShader Shader_VoxelEncoder;
         readonly private ComputeShader Shader_SVOSplitter;
+        readonly private ComputeShader Shader_SVOMipmapper;
 
         /// <summary>
         /// Constructor
@@ -57,6 +58,9 @@ namespace NKLI.Nigiri.SVO
             Shader_SVOSplitter = Resources.Load("NKLI_Nigiri_SVOSplitter") as ComputeShader;
             if (Shader_SVOSplitter == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOSplitter'");
 
+            // Load mipmapper shader
+            Shader_SVOMipmapper = Resources.Load("NKLI_Nigiri_SVOMipmapper") as ComputeShader;
+            if (Shader_SVOMipmapper == null) throw new Exception("[Nigiri] failed to load compute shader 'NKLI_Nigiri_SVOMipmapper'");
 
             // Binds to SVO
             SVO_Tree = SVO;
@@ -112,6 +116,7 @@ namespace NKLI.Nigiri.SVO
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
                 Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_Queue_Split);
+                Shader_VoxelEncoder.SetBuffer(0, "_SVO_MipmapQueue", SVO_Tree.Buffer_Queue_Mipmap);
                 Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
 
                 // Set textures
@@ -137,11 +142,18 @@ namespace NKLI.Nigiri.SVO
             return true;
         }
 
+        /// <summary>
+        /// Processes split queue
+        /// </summary>
+        /// <returns></returns>
         public bool SplitNodes()
         {
             // Only if a successful readback has been completed and flagged for action
             if (SVO_Tree.AbleToSplit && (SVO_Tree.SplitQueueSparseCount > 0))
             {
+                // We don't want to run again till there is something to do
+                SVO_Tree.AbleToSplit = false;
+
                 // Send buffer to GPU
                 SVO_Tree.Buffer_Queue_Split.SetData(SVO_Tree.queue_Split_Sparse);
 
@@ -161,15 +173,65 @@ namespace NKLI.Nigiri.SVO
                 // Dispatch
                 Shader_SVOSplitter.Dispatch(0, queueLength / 8, 1, 1);
 
-                // We don't want to run again till there is something to do
-                SVO_Tree.AbleToSplit = false;
-
                 //Debug.Log("Nodes split successfully!");
+
+                // Resume thread
+                SVO_Tree.ResumeNodeWorker();
 
                 // We're done here
                 return true;
             }
-            else return false;
+            else
+            {
+                // Resume thread
+                SVO_Tree.ResumeNodeWorker();
+
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Processes mipmap queue
+        /// </summary>
+        /// <returns></returns>
+        public bool MipmapNodes()
+        {
+            // Only if a successful readback has been completed and flagged for action
+            if (SVO_Tree.AbleToMipmap && (SVO_Tree.MipmapQueueSparseCount > 0))
+            {
+                // We don't want to run again till there is something to do
+                SVO_Tree.AbleToMipmap = false;
+
+                // Send buffer to GPU
+                SVO_Tree.Buffer_Queue_Mipmap.SetData(SVO_Tree.queue_Mipmap_Sparse);
+
+                // Rounds mipmap queue length to nearest mul of 8 
+                //  to match dispatch thread group size
+                int queueLength = Math.Max(((SVO_Tree.MipmapQueueSparseCount + 8 - (8 / Math.Abs(8))) / 8) * 8, 8);
+
+                // Set buffers
+                Shader_SVOMipmapper.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
+                Shader_SVOMipmapper.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
+                Shader_SVOMipmapper.SetBuffer(0, "_SVO_MipmapQueue", SVO_Tree.Buffer_Queue_Mipmap);
+
+                // Dispatch
+                Shader_SVOMipmapper.Dispatch(0, queueLength / 8, 1, 1);
+
+                Debug.Log("Nodes mipmap successfully, sparse:" + SVO_Tree.MipmapQueueSparseCount + ", queue:" + queueLength);
+
+                // Resume thread
+                SVO_Tree.ResumeMipmapWorker();
+
+                // We're done here
+                return true;
+            }
+            else
+            {
+                // Resume thread
+                SVO_Tree.ResumeMipmapWorker();
+
+                return false;
+            }
         }
 
 
