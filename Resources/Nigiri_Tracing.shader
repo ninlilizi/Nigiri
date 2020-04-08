@@ -58,8 +58,6 @@
 		uniform int						StochasticSampling;
 		uniform float					stochasticSamplingScale;
 		uniform float					maximumIterations;
-		uniform int						skipFirstMipLevel;
-		uniform int						skipLastMipLevel;
 
 		//uniform int						usePathCache;
 
@@ -103,8 +101,6 @@
 		uniform int						depthStopOptimization;
 		uniform int						Stereo2Mono;
 		uniform int						stereoEnabled;
-		uniform int						neighbourSearch;
-		uniform int						highestValueSearch;
 		uniform uint					rng_state;
 		
 		uniform float3					gridOffset;
@@ -758,8 +754,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float3 voxelPosition = (0).xxx;
 
 	// Sample voxel grid 1
-	if (skipFirstMipLevel == 0)
-	{
 		for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
 		{
 			currentPosition += (coneStep * coneDirection);
@@ -794,7 +788,6 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		}
 		computedColor = gi;
 
-	}
 
 	/*
 	// Sample voxel grid 2

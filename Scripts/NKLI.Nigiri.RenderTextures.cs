@@ -22,13 +22,6 @@ namespace NKLI.Nigiri
         // Descriptors
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
-        // Grid Textures
-        //public RenderTexture voxelGrid1;
-        //public RenderTexture voxelGrid2;
-        //public RenderTexture voxelGrid3;
-        //public RenderTexture voxelGrid4;
-        //public RenderTexture voxelGrid5;
-
         // Render Textures
         public RenderTexture lightingTexture;
         public RenderTexture lightingTexture2;
@@ -48,65 +41,8 @@ namespace NKLI.Nigiri
         /// <param name="subsamplingRatio"></param>
         public void Create(int resolution, Camera localCam, Vector2Int injectionTextureResolution, int subsamplingRatio)
         {
-            // Create voxel grid textures
-            CreateVoxelGrid(resolution);
-
             // Create render textures
             CreateRenderTextures(localCam, injectionTextureResolution, subsamplingRatio);
-        }
-
-        /// <summary>
-        /// /// Create voxel grid textures
-        /// </summary>
-        /// <param name="resolution"></param>
-        private void CreateVoxelGrid(int resolution)
-        {
-            // First release any existing
-            DisposeGridTextures(false);
-
-            voxelGridDescriptorFloat4 = new RenderTextureDescriptor();
-            voxelGridDescriptorFloat4.bindMS = false;
-            voxelGridDescriptorFloat4.colorFormat = RenderTextureFormat.ARGBHalf;
-            voxelGridDescriptorFloat4.depthBufferBits = 0;
-            voxelGridDescriptorFloat4.dimension = UnityEngine.Rendering.TextureDimension.Tex3D;
-            voxelGridDescriptorFloat4.enableRandomWrite = true;
-            voxelGridDescriptorFloat4.width = resolution;
-            voxelGridDescriptorFloat4.height = resolution;
-            voxelGridDescriptorFloat4.volumeDepth = resolution;
-            voxelGridDescriptorFloat4.msaaSamples = 1;
-            voxelGridDescriptorFloat4.sRGB = true;
-
-            //voxelGrid1 = new RenderTexture(voxelGridDescriptorFloat4);
-
-            voxelGridDescriptorFloat4.width = resolution / 2;
-            voxelGridDescriptorFloat4.height = resolution / 2;
-            voxelGridDescriptorFloat4.volumeDepth = resolution / 2;
-
-            //voxelGrid2 = new RenderTexture(voxelGridDescriptorFloat4);
-
-            voxelGridDescriptorFloat4.width = resolution / 4;
-            voxelGridDescriptorFloat4.height = resolution / 4;
-            voxelGridDescriptorFloat4.volumeDepth = resolution / 4;
-
-            //voxelGrid3 = new RenderTexture(voxelGridDescriptorFloat4);
-
-            voxelGridDescriptorFloat4.width = resolution / 8;
-            voxelGridDescriptorFloat4.height = resolution / 8;
-            voxelGridDescriptorFloat4.volumeDepth = resolution / 8;
-
-            //voxelGrid4 = new RenderTexture(voxelGridDescriptorFloat4);
-
-            voxelGridDescriptorFloat4.width = resolution / 16;
-            voxelGridDescriptorFloat4.height = resolution / 16;
-            voxelGridDescriptorFloat4.volumeDepth = resolution / 16;
-
-            //voxelGrid5 = new RenderTexture(voxelGridDescriptorFloat4);
-
-            //voxelGrid1.Create();
-            //voxelGrid2.Create();
-            //voxelGrid3.Create();
-            //voxelGrid4.Create();
-            //voxelGrid5.Create();
         }
 
         /// <summary>
@@ -220,7 +156,6 @@ namespace NKLI.Nigiri
         public void DisposeTextures(bool destroy)
         {
             DisposeRenderTextures(destroy);
-            DisposeGridTextures(destroy);
         }
 
         /// <summary>
@@ -242,20 +177,6 @@ namespace NKLI.Nigiri
             Helpers.DisposeTextureRef(ref gi, destroy);
             Helpers.DisposeTextureRef(ref blur, destroy);
 
-        }
-
-        /// <summary>
-        /// Disposes all grid textures, optionally also Destroys
-        /// </summary>
-        /// <param name="destroy"></param>
-        public void DisposeGridTextures(bool destroy)
-        {
-            // Dispose voxel grid textures
-            //Helpers.DisposeTextureRef(ref voxelGrid1, destroy);
-            //Helpers.DisposeTextureRef(ref voxelGrid2, destroy);
-            //Helpers.DisposeTextureRef(ref voxelGrid3, destroy);
-            //Helpers.DisposeTextureRef(ref voxelGrid4, destroy);
-            //Helpers.DisposeTextureRef(ref voxelGrid5, destroy);
         }
 
         #region IDisposable + Unity Scriped Destruction support
