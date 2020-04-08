@@ -490,21 +490,27 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 
 	// Traverse tree
 	uint offset = 0;
+	uint colourCount = 0;
 	while (true)
 	{
 		// Retrieve node
 		SVONode node = _SVO[offset];
 
-
-		tempColour += node.UnPackColour();
+		// TODO - Add noise threshold slider to inspector
+		//			Noise threashold controlled by
+		//			adjusting the 0.5
+		if (node.colour_A > 0.5)
+		{
+			colourCount++;
+			tempColour += node.UnPackColour();
+		}
 
 		// If no children then tag for split queue consideration
 		if (node.referenceOffset == 0)
 		{
 
 			// If no child then return colour
-			//return node.UnPackColour();
-			return tempColour;
+			return tempColour / colourCount;
 		}
 		else
 		{

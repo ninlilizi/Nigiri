@@ -34,7 +34,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     uint splitIndex = _SVO_SplitQueue[counter];
     
     // If index == 0 then do nothing
-    if (splitIndex != 0)
+    if (splitIndex)
     {
         // Decrement by one to get adjusted index
         splitIndex--;

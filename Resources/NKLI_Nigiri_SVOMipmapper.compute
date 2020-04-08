@@ -29,39 +29,31 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     uint mipmapIndex = _SVO_MipmapQueue[counter];
     
     // If index == 0 then do nothing
-    if (mipmapIndex != 0)
+    if (mipmapIndex)
     {
         // Decrement by one to get adjusted index
         mipmapIndex--;
-        
-        // Unpack node to mipmap        
-        //SVONode nodeToSplit = _SVO[mipmapIndex];
-        //uint bitfieldOccupancy;
-        //uint runLength;
-        //uint ttl;
-        //uint isLeaf;
-        //nodeToSplit.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
-        
+               
         SVONode nodeToMipmap = _SVO[mipmapIndex];
                  
         float4 filteredColour = (0).xxxx;
         
+        [unroll]
         for (int i = 0; i < 8; i++)
         {
-            //filteredColour += _SVO[mipmapIndex + i].UnPackColour();
             filteredColour += _SVO[nodeToMipmap.referenceOffset + i].UnPackColour();
+            _SVO[nodeToMipmap.referenceOffset + i].SetIsWaitingForMipmap(0);
         }
         
         filteredColour /= 8;
         
+        // TODO - Add Debug toggle for this to inspector
         //filteredColour = float4(1, 1, 1, 1);
         
-        nodeToMipmap.PackColour(filteredColour, 0);
+        nodeToMipmap.PackColour(filteredColour);
+        nodeToMipmap.SetIsWaitingForMipmap(1);
         
         _SVO[mipmapIndex] = nodeToMipmap;
-        
-        //_SVO[mipmapIndex].PackColour(float4(1, 1, 1, 1));
-
     }
 
     // Zero value ready for next encode

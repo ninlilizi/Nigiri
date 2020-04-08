@@ -31,6 +31,7 @@ namespace NKLI.Nigiri.SVO
         public int MipmapQueueMaxLength { get; private set; } // Max length of the mipmap queue
         public int SplitQueueSparseCount { get; private set; } // Number of processed nodes
         public int MipmapQueueSparseCount { get; private set; } // Number of processed nodes
+        public bool MipmapQueueEmpty { get; set; } // If the mipmap queue is emepty
         public bool AbleToSplit { get; set; } // If there are nodes to split
         public bool AbleToMipmap { get; set; } // If there are nodes to mipmap
         public double Runtime_Thread_Split { get; private set; } // Execution time of node split worker thread
@@ -47,7 +48,7 @@ namespace NKLI.Nigiri.SVO
         // Does the preprocessor have work to do?
         private ManualResetEvent thread_SplitPreProcessor_HasWork_Event = new ManualResetEvent(false);
         // Is the processor waiting for output data to be processed?
-        public ManualResetEvent thread_SplitPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
+        private ManualResetEvent thread_SplitPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
 
         // Mipmap buffer copied from GPU
         private byte[] queue_Mipmap;
@@ -57,12 +58,10 @@ namespace NKLI.Nigiri.SVO
         private byte[] queue_Mipmap_Workingset;
         // Worker thread to preprocesses the split queue
         private Thread thread_MipmapPreProcessor;
-        //true makes the thread start as "running", false makes it wait on _event.Set()
-        private ManualResetEvent thread_MipmapPreProcessor_Scaling_Event = new ManualResetEvent(true);
         // Does the preprocessor have work to do?
         private ManualResetEvent thread_MipmapPreProcessor_HasWork_Event = new ManualResetEvent(false);
         // Is the processor waiting for output data to be processed?
-        public ManualResetEvent thread_MipmapPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
+        private ManualResetEvent thread_MipmapPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
 
 
         // Buffers
@@ -292,13 +291,13 @@ namespace NKLI.Nigiri.SVO
             while (true)
             {
                 // Wait if thread locked by active performance scaling
-                thread_SplitPreProcessor_AwaitingAction_Event.WaitOne(1000);
+                thread_SplitPreProcessor_AwaitingAction_Event.WaitOne(100);
 
                 // Wait till thread is unlocked for available work
                 thread_SplitPreProcessor_HasWork_Event.WaitOne(Timeout.Infinite);
 
                 // Wait if thread locked by active performance scaling
-                thread_SplitPreProcessor_Scaling_Event.WaitOne(Timeout.Infinite);
+                thread_SplitPreProcessor_Scaling_Event.WaitOne(100);
 
                 try
                 {
@@ -338,7 +337,7 @@ namespace NKLI.Nigiri.SVO
                         thread_SplitPreProcessor_Scaling_Event.Reset();
 
                         // Calculate new optimal queue length and Resize buffers on the main thread
-                        threadDispatch.Enqueue(() => SplitQueueMaxLength = Math.Max((int)(Convert.ToDouble(count) / Runtime_Thread_Split) * 10, 128));
+                        threadDispatch.Enqueue(() => SplitQueueMaxLength = Math.Max((int)(Convert.ToDouble((count * 0.01f)) / Runtime_Thread_Split) * 10, 128));
                         threadDispatch.Enqueue(() => ResizeComputeBuffer(ref Buffer_Queue_Split, sizeof(uint), SplitQueueMaxLength));
                         threadDispatch.Enqueue(() => queue_Split = ResizeByteArray(queue_Split, sizeof(uint) * SplitQueueMaxLength));
                         threadDispatch.Enqueue(() => queue_Split_Sparse = ResizeByteArray(queue_Split_Sparse, sizeof(uint) * SplitQueueMaxLength));
@@ -385,15 +384,13 @@ namespace NKLI.Nigiri.SVO
                 // Wait till thread is unlocked for available work
                 thread_MipmapPreProcessor_HasWork_Event.WaitOne(Timeout.Infinite);
 
-                // Wait if thread locked by active performance scaling
-                thread_MipmapPreProcessor_Scaling_Event.WaitOne(Timeout.Infinite);
-
                 try
                 {
                     // Get some more work if we have none already
                     if (!hasWork)
                     {
                         hasWork = true;
+                        MipmapQueueEmpty = false;
                         job_CurrentIndex = 0;
                         Buffer.BlockCopy(queue_Mipmap, 0, queue_Mipmap_Workingset, 0, queue_Mipmap.Length);
                         //queue_Mipmap_Workingset = queue_Mipmap;
@@ -433,6 +430,7 @@ namespace NKLI.Nigiri.SVO
                     if (!contentsFound)
                     {
                         hasWork = false;
+                        MipmapQueueEmpty = true;
 
                         // Suspend the thread till we have more work
                         thread_MipmapPreProcessor_HasWork_Event.Reset();
@@ -444,7 +442,7 @@ namespace NKLI.Nigiri.SVO
                     }
 
                     // If we're in the middle of an ongoing job. Then it's a good time to assess CPU load
-                    if ((Runtime_Thread_Mipmap > 6) || (Runtime_Thread_Mipmap < 4 && contentsFound))
+                    if ((Runtime_Thread_Mipmap > 8) || (Runtime_Thread_Mipmap < 2 && contentsFound))
                     {
                         job_MaxPerFrame = Math.Max((int)(Convert.ToDouble(job_MaxPerFrame) / Runtime_Thread_Mipmap) * 5, 128);
                     }

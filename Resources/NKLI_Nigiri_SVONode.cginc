@@ -22,7 +22,7 @@ struct SVONode
 
     // Colour value (64b)
     uint packedColour;
-    uint colour_A;
+    float colour_A;
 
     // When used in shader, pad to fit 128 bit cache alignment
     //uint pad0;
@@ -38,16 +38,16 @@ struct SVONode
 	//            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
 	//           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
 	//            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
-    void PackStruct(uint bitFieldOccupancy, uint runLength, uint ttl, uint isLeaf)
+    void PackStruct(uint bitFieldOccupancy, uint runLength, uint ttl, uint isWaitingForMipmap)
     {
-        packedBitfield = (bitFieldOccupancy << 24) | (runLength << 20) | (ttl << 16) | (isLeaf << 15);
+        packedBitfield = (bitFieldOccupancy << 24) | (runLength << 20) | (ttl << 16) | (isWaitingForMipmap << 15);
     }
 
 	// Unpack 32 bits
-    void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _ttl, out uint isLeaf)
+    void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _ttl, out uint isWaitingForMipmap)
     {
 		//ulong padding = (packedBitfield & 0x7FFF);
-        isLeaf = (packedBitfield >> 15) & 1;
+        isWaitingForMipmap = (packedBitfield >> 15) & 1;
         _ttl = (uint) (packedBitfield >> 16) & 0xF;
         _runLength = (uint) (packedBitfield >> 20) & 0xF;
         _bifFieldOccupancy = (uint) (packedBitfield >> 24) & 0xFF;
@@ -92,7 +92,7 @@ struct SVONode
     /// <summary>
     /// Packs HDR RGBA into uint2
     /// </summary>
-    inline void PackColour(float4 colour, uint isWaitingForMipmap)
+    inline void PackColour(float4 colour)
     {
         // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
 	    //            R    R    R    R    R    R    R    R    G    G    G    G    G    G    G    G 
@@ -103,7 +103,7 @@ struct SVONode
         
         packedColour = (encodedColour.r << 24) | (encodedColour.g << 16) | (encodedColour.b << 8) | (encodedColour.a);
         
-        colour_A = ((uint) (colour.a * 255) << 1) | isWaitingForMipmap;
+        colour_A = colour.a;
     }
     
     /// <summary>
@@ -117,25 +117,35 @@ struct SVONode
         encodedColour.g = (packedColour >> 16) & 0xFF;
         encodedColour.r = (packedColour >> 24) & 0xFF;
         
-        return float4(RGBMDecode(encodedColour / 255), (float) ((colour_A >> 31) & 0x7FFFFFFF) / 255.0);
+        return float4(RGBMDecode(encodedColour / 255), colour_A);
 
     }
-    
-    inline float UnPackColourAlpha()
-    {
-        return (float) ((colour_A >> 1) & 0x7FFFFFFF) / 255.0;
-    }
-    
+      
+    /// <summary>
+    /// Returns weather node needs mipmapping
+    /// </summary>
     inline uint GetIsWaitingForMipmap()
     {
 
-        return colour_A & 0x1;
+        return (packedBitfield >> 15) & 1;
     }
     
+    /// <summary>
+    /// Sets weather node needs mipmapping
+    /// </summary>
     inline void SetIsWaitingForMipmap(uint value)
     {
-        colour_A = ((colour_A << 1) & 0x7FFFFFFF) | value;
-
+        packedBitfield &= ~(1 << 15);
+        packedBitfield |= value << 15;
     }
+    
+    /// <summary>
+    /// Returns TTL
+    /// </summary>
+    inline uint GetTTL()
+    {
+        return (packedBitfield >> 16) & 0xF;
+    }
+    
 
 };

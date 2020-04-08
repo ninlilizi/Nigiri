@@ -15,6 +15,7 @@
 
 struct TraversalResult
 {
+    uint action;
     uint offset;
     uint TTL;
 };
@@ -79,9 +80,10 @@ inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
     float lumaDiff = saturate(currentVoxelLuma - pixelLuma);
     
     // Only inject if currently voxel is either 1. unoccupied or 2. of a lesser depth and passes luma test
-    if ((node.colour_A == 0) || ((depth < node.UnPackColourAlpha()) && (lumaDiff < lumaThreshold)))
+    if ((!node.colour_A) || ((depth < node.colour_A) && (lumaDiff < lumaThreshold)))
     {
-        node.PackColour(colour, 1);
+        node.PackColour(colour);
+        node.SetIsWaitingForMipmap(1);
     }
           
     // return node
@@ -122,15 +124,16 @@ inline void AppendSVOMipmapQueue(RWStructuredBuffer<uint> mipmapBuffer, RWStruct
         // Append to split queue it within bounds
         //  offset is +1 because index zero contains counter
         if (index < counterBuffer[3])
-            mipmapBuffer[index + 1] = offset;
+            if (mipmapBuffer[index] != offset)
+                mipmapBuffer[index + 1] = offset;
     }
 }
 
 /// <summary>
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
-TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> mipmapBuffer,
-                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, float4 colour, float depth, float giAreaSize)
+TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> mipmapBuffer,
+                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, float4 colour, float depth, float giAreaSize, int mipmapQueueEmpty)
 {
     /// Calculate initial values
     // AABB Min/Max x,y,z
@@ -139,15 +142,16 @@ TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructur
     float3 t1 = float3(halfArea, halfArea, halfArea);  
     
     TraversalResult traversalResult;
+    traversalResult.action = 0;
+    traversalResult.offset = 0;
+    traversalResult.TTL = 0;
     
     if ((worldPosition.x < t0.x || worldPosition.x > t1.x) || (worldPosition.y < t0.y || worldPosition.y > t1.y) || (worldPosition.z < t0.z || worldPosition.z > t1.z))
     {
         // We're done here
-        traversalResult.offset = 0;
-        traversalResult.TTL = 0;
         return traversalResult;
     }    
-    
+       
     // Traverse tree
     uint offset = 0;
     uint prevOffset = 0;
@@ -158,10 +162,8 @@ TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructur
         //  TODO: Discover why this is even needed.
         //          Without it splits fine but doesn't write into TTL==0
         emergencyExit++;
-        if (emergencyExit > 15)
+        if (emergencyExit > 16)
         {
-            traversalResult.offset = 0;
-            traversalResult.TTL = 0;
             return traversalResult;
         }
                 
@@ -169,17 +171,13 @@ TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructur
         SVONode node = svoBuffer[offset];
                 
         // If no children then tag for split queue consideration
-        if (node.referenceOffset == 0)
+        if (!node.referenceOffset)
         {
-            // Unpack node
-            uint bitfieldOccupancy;
-            uint runLength;
-            uint ttl;
-            uint isLeaf;
-            node.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
+            // Get TTL
+            uint ttl = node.GetTTL();
             
             // At max depth we just write out the voxel and quit
-            if (ttl == 0)
+            if (!ttl)
             {
                 // Write back to buffer
                 // TODO - This is not threadsafe and will result in a
@@ -189,19 +187,28 @@ TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructur
                 
                 svoBuffer[offset] = SetNodeColour(node, colour, depth);
                 
-                if (node.GetIsWaitingForMipmap())
+                // We only queue TTL zero for filtering if nothing of a higher depth.
+                // As this is the entry point for filtering. Will have the effect of
+                // organising the mip filtering into coherent waves that flow from
+                // the bottom up, to reduce the overall GPU workload of doing so
+                // for the entire tree.
+                if (mipmapQueueEmpty && !traversalResult.action)
                 {
-                    //node.SetIsWaitingForMipmap(1);
-                    AppendSVOMipmapQueue(mipmapBuffer, counterBuffer, prevOffset + 1);
+                    // Test if this node needs filtering
+                    if (node.GetIsWaitingForMipmap())
+                    {                       
+                        // We just want the lowest depth to prioritize mip filtering into waves
+                        traversalResult.action = 2;
+                        traversalResult.offset = prevOffset + 1;
+                        traversalResult.TTL = ttl;
+                    }
                 }
-                
-                traversalResult.offset = 0;
-                traversalResult.TTL = 0;
-                
+                               
                 return traversalResult;
             }
             else
             {          
+                traversalResult.action = 1;
                 traversalResult.offset = offset + 1;
                 traversalResult.TTL = ttl;
                 return traversalResult;
@@ -252,7 +259,20 @@ TraversalResult SplitInsertSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructur
                     break;
             }
             
-            // Store prev dev offset for mipmap queue
+            // If the queue is emtpy and we're not looking at the root node
+            if (mipmapQueueEmpty && (offset))
+            {
+                // Test if this node needs filtering
+                if (node.GetIsWaitingForMipmap())
+                {
+                    // We just want the lowest depth to prioritize mip filtering into waves
+                    traversalResult.action = 2;
+                    traversalResult.offset = prevOffset + 1;
+                    traversalResult.TTL = node.GetTTL();;
+                }
+            }
+            
+            // Store previous offset for mipmap queue
             prevOffset = offset;
             
             // Offet is reference + the node offset index

@@ -24,6 +24,9 @@ uniform RWStructuredBuffer<uint> _SVO_MipmapQueue;
 // Max SVO depth
 uniform const uint _maxDepth;
 
+// Is it safe to add to the mip queue?
+uniform const int _mipmapQueueEmpty;
+
 // Sample inputs
 uniform const float _emissiveIntensity;
 uniform const float _shadowStrength;
@@ -37,10 +40,11 @@ uniform Texture2D<float4> lightingTexture2;
 uniform Texture2D _CameraDepthTexture;
 
 // Groupshared array of node split offsets
+groupshared uint mipTTL = 0;
+groupshared uint split_MinTTL = 0;
 groupshared uint split_MaxTTL = 0;
 groupshared uint split_MinOffset = 0;
-groupshared uint mipmap_MaxTTL = 0;
-groupshared uint mipmap_MinOffset = 0;
+groupshared uint split_MaxOffset = 0;
 
 /// <summary>
 /// Encodes samples into tree
@@ -59,25 +63,43 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     float depth = _CameraDepthTexture[orderedCoord].r;
    
     // Traverse the SVO, splitting and writing the sampled colour as required
-    TraversalResult traversalResult = SplitInsertSVO(
+    TraversalResult traversalResult = TraverseSVO(
         _SVO, _SVO_SplitQueue, _SVO_MipmapQueue, _SVO_Counters, (positionTexture[orderedCoord]),
-        colour, depth,
-        _giAreaSize);
-    
-    // Calculate priority split offset
-    InterlockedMax(split_MaxTTL, traversalResult.TTL);
-    if (traversalResult.TTL == split_MaxTTL)
+        colour, depth, _giAreaSize, _mipmapQueueEmpty);
+      
+    // 1 = Split, 2 = Mipmap
+    switch (traversalResult.action)
     {
-        InterlockedMax(split_MinOffset, traversalResult.offset);
+        case 1:
+            // Calculate priority split offset
+            InterlockedMax(split_MaxTTL, traversalResult.TTL);
+            if (traversalResult.TTL == split_MaxTTL)
+            {
+                InterlockedMax(split_MinOffset, traversalResult.offset);
+            }
+            break;
+        case 2:
+            // Calculate priority mipmap offset
+            InterlockedMin(split_MinTTL, traversalResult.TTL);
+            if (traversalResult.TTL == split_MinTTL)
+            {
+                InterlockedMax(split_MaxOffset, traversalResult.offset);
+            }
+            break;
     }
     
     // Syncronise threads
     GroupMemoryBarrierWithGroupSync();
     
-    // If thread zero and MinOffet is non-zero. Append offset to split queue
-    if ((thread == 0))
+    // We only do this on thread zero of the group
+    if (!thread)
     {
-        if (split_MinOffset != 0)
+        // Write out chosen nodes, to be picked up by the cpu worker threads
+        if (split_MinOffset)
             AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MinOffset);
+        if (split_MaxOffset)
+            AppendSVOMipmapQueue(_SVO_MipmapQueue, _SVO_Counters, split_MaxOffset);
+        _SVO[split_MinOffset].SetIsWaitingForMipmap(0);
+        
     }
 }

@@ -126,6 +126,7 @@ namespace NKLI.Nigiri.SVO
                 Shader_VoxelEncoder.SetTexture(0, "lightingTexture2", lightingTexture2);
 
                 // Set values
+                Shader_VoxelEncoder.SetInt("_mipmapQueueEmpty", SVO_Tree.MipmapQueueEmpty ? 1 : 0);
                 Shader_VoxelEncoder.SetFloat("_emissiveIntensity", Emissive_Intensity);
                 Shader_VoxelEncoder.SetFloat("_shadowStrength", Shadow_Strength);
                 Shader_VoxelEncoder.SetFloat("_occlusionGain", Occlusion_Gain);
