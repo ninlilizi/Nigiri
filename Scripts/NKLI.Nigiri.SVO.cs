@@ -49,6 +49,8 @@ namespace NKLI.Nigiri.SVO
         private ManualResetEvent thread_SplitPreProcessor_HasWork_Event = new ManualResetEvent(false);
         // Is the processor waiting for output data to be processed?
         private ManualResetEvent thread_SplitPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
+        // Is the processor suspended
+        private ManualResetEvent thread_SplitPreProcessor_Suspend_Event = new ManualResetEvent(true);
 
         // Mipmap buffer copied from GPU
         private byte[] queue_Mipmap;
@@ -62,6 +64,8 @@ namespace NKLI.Nigiri.SVO
         private ManualResetEvent thread_MipmapPreProcessor_HasWork_Event = new ManualResetEvent(false);
         // Is the processor waiting for output data to be processed?
         private ManualResetEvent thread_MipmapPreProcessor_AwaitingAction_Event = new ManualResetEvent(true);
+        // Is the processor suspended
+        private ManualResetEvent thread_MipmapPreProcessor_Suspend_Event = new ManualResetEvent(true);
 
 
         // Buffers
@@ -80,6 +84,7 @@ namespace NKLI.Nigiri.SVO
         // static consts
         private static readonly int Buffer_Counters_Count = 8;
         private static readonly int initial_SplitQueueMaxLength = 250000;
+        private static readonly int initial_MipmapQueueMaxLength = 250000;
 
         // Attached camera
         private Camera attachedCamera;
@@ -93,7 +98,7 @@ namespace NKLI.Nigiri.SVO
         private Stopwatch stopwatch_Thread_Mipmap;
 
         // Constructor
-        public void Create(Camera _camera, uint maxDepth, int maxNodes, uint mipmapQueueMaxLength)
+        public void Create(Camera _camera, uint maxDepth, int maxNodes)
         {
             // Zero ram counters
             VRAM_Usage = 0;
@@ -114,7 +119,7 @@ namespace NKLI.Nigiri.SVO
             //  to match dispatch thread group size
             MipmapQueueMaxLength =
                     Math.Max(Convert.ToInt32(Math.Round(
-                         (mipmapQueueMaxLength / (double)8),
+                         (initial_MipmapQueueMaxLength / (double)8),
                          MidpointRounding.AwayFromZero
                      ) * 8), 8);
 
@@ -290,14 +295,17 @@ namespace NKLI.Nigiri.SVO
             // Permanent worker
             while (true)
             {
-                // Wait if thread locked by active performance scaling
-                thread_SplitPreProcessor_AwaitingAction_Event.WaitOne(100);
+                // Master thread control to respect SuspendWorkers()
+                thread_SplitPreProcessor_Suspend_Event.WaitOne(Timeout.Infinite);
+
+                // Wait if thread is waiting for it's output to be processed
+                thread_SplitPreProcessor_AwaitingAction_Event.WaitOne(60);
 
                 // Wait till thread is unlocked for available work
                 thread_SplitPreProcessor_HasWork_Event.WaitOne(Timeout.Infinite);
 
                 // Wait if thread locked by active performance scaling
-                thread_SplitPreProcessor_Scaling_Event.WaitOne(100);
+                thread_SplitPreProcessor_Scaling_Event.WaitOne(60);
 
                 try
                 {
@@ -378,8 +386,11 @@ namespace NKLI.Nigiri.SVO
             // Permanent worker
             while (true)
             {
-                // Wait if thread locked by active performance scaling
-                thread_MipmapPreProcessor_AwaitingAction_Event.WaitOne(1000);
+                // Master thread control to respect SuspendWorkers()
+                thread_MipmapPreProcessor_Suspend_Event.WaitOne(Timeout.Infinite);
+
+                // Wait if thread is waiting for it's output to be processed
+                thread_MipmapPreProcessor_AwaitingAction_Event.WaitOne(60);
 
                 // Wait till thread is unlocked for available work
                 thread_MipmapPreProcessor_HasWork_Event.WaitOne(Timeout.Infinite);
@@ -474,6 +485,24 @@ namespace NKLI.Nigiri.SVO
         public void ResumeMipmapWorker()
         {
             thread_MipmapPreProcessor_AwaitingAction_Event.Set();
+        }
+
+        /// <summary>
+        /// Suspend all worker threads
+        /// </summary>
+        public void SuspendWorkers()
+        {
+            thread_SplitPreProcessor_Suspend_Event.Reset();
+            thread_MipmapPreProcessor_Suspend_Event.Reset();
+        }
+
+        /// <summary>
+        /// Resume all worker threads
+        /// </summary>
+        public void ResumeWorkers()
+        {
+            thread_SplitPreProcessor_Suspend_Event.Set();
+            thread_MipmapPreProcessor_Suspend_Event.Set();
         }
 
         /// <summary>

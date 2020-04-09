@@ -192,6 +192,9 @@ public class Nigiri : MonoBehaviour {
     Material _colorMaterial;
     Texture2D _lutTexture;
 
+    // Linear colourspace test. Here to reduce GC
+    bool linearColourSpace;
+
 
     [Header("Volumetric Lighting")]
     public bool renderVolumetricLighting = false;
@@ -410,6 +413,7 @@ public class Nigiri : MonoBehaviour {
     Camera localCam;
 
     private Queue<AsyncGPUReadbackRequest> gPU_Requests_RenderCounterData = new Queue<AsyncGPUReadbackRequest>();
+    Unity.Collections.NativeArray<int> gPU_Requests_RenderCounterData_Buffer;
 
     void Start()
     {
@@ -523,8 +527,8 @@ public class Nigiri : MonoBehaviour {
             {
                 //Debug.Log("GPU readback COUNTERS");
 
-                var buffer = req.GetData<int>();
-                buffer.CopyTo(renderCounts.CounterData);
+                gPU_Requests_RenderCounterData_Buffer = req.GetData<int>();
+                gPU_Requests_RenderCounterData_Buffer.CopyTo(renderCounts.CounterData);
 
                 if ((renderCounts.CounterData[(int)RenderCounts.Counter.VoxelisationMaskSamples] != 0) ||
                     (renderCounts.CounterTTL[(int)RenderCounts.Counter.VoxelisationMaskSamples] == 0))
@@ -897,11 +901,11 @@ public class Nigiri : MonoBehaviour {
         lengthOfCone = OctreeAreaSize / (256);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         //Color Settings
-        var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
+        linearColourSpace = QualitySettings.activeColorSpace == ColorSpace.Linear;
 
         //Setup(false);
 
-        if (linear)
+        if (linearColourSpace)
             _colorMaterial.EnableKeyword("COLORSPACE_LINEAR");
         else
             _colorMaterial.DisableKeyword("COLORSPACE_LINEAR");
@@ -914,7 +918,7 @@ public class Nigiri : MonoBehaviour {
         else
             _colorMaterial.DisableKeyword("BALANCING_ON");
 
-        if (_toneMapping && linear)
+        if (_toneMapping && linearColourSpace)
         {
             _colorMaterial.EnableKeyword("TONEMAPPING_ON");
             _colorMaterial.SetFloat("_Exposure", _exposure);
@@ -1159,7 +1163,17 @@ public class Nigiri : MonoBehaviour {
 
         // Voxelization happens after the scene render
         // as we need the output render buffers.
-        UpdateSVO();
+        if (primaryVoxelization)
+        {
+            // Update the SVO
+            // Worker threads will auto resume when voxelizer called
+            UpdateSVO();
+        }
+        else
+        {
+            // Suspend the SVO worker threads
+            SVO.SuspendWorkers();
+        }
     }
 
     private void OnDisable()
@@ -2283,7 +2297,7 @@ public class Nigiri : MonoBehaviour {
 
             // Instantiate SVO Tree
             SVO = ScriptableObject.CreateInstance<NKLI.Nigiri.SVO.Tree>();
-            SVO.Create(this.GetComponent<Camera>(), OctreeMaxDepth, (OctreeVRAMSizeMB * 1024 * 1024) / 16, (uint)(injectionTextureResolution.x * injectionTextureResolution.y));
+            SVO.Create(this.GetComponent<Camera>(), OctreeMaxDepth, (OctreeVRAMSizeMB * 1024 * 1024) / 16);
             OctreeVRAMSizeMB_Cached = OctreeVRAMSizeMB;
             OctreeAreaSize_Cached = OctreeAreaSize;
             OctreeMaxDepth_Cached = OctreeMaxDepth;

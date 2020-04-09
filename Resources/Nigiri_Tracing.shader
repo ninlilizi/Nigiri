@@ -495,7 +495,7 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 		// TODO - Add noise threshold slider to inspector
 		//			Noise threashold controlled by
 		//			adjusting the 0.5
-		if (node.colour_A > 0.5)
+		if (node.colour_A)
 		{
 			colourCount++;
 			tempColour += node.UnPackColour();

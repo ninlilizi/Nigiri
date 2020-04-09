@@ -112,6 +112,10 @@ namespace NKLI.Nigiri.SVO
                     throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Null PTRs detected");
                 }
 
+                // If SVO worker threads are suspended,
+                // then wake then up.
+                SVO_Tree.ResumeWorkers();
+
                 // Set counter buffer to initial values
                 SVO_Tree.SetCounterBuffer();
 
