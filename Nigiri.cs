@@ -51,7 +51,7 @@ public class Nigiri : MonoBehaviour {
     public float GIGain = 1;
     [Range(0.1f, 4)]
     public float NearLightGain = 1.14f;
-    [Range(0.01f, 2)]
+    [Range(-1.0f, 1.0f)]
     public float coneTraceBias = 1;
     public bool depthStopOptimization = true;
     public bool stochasticSampling = true;
@@ -898,7 +898,8 @@ public class Nigiri : MonoBehaviour {
         //Fix stereo rendering matrix/
 
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
-        lengthOfCone = OctreeAreaSize / (256);// * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+        lengthOfCone = (32.0f * 1 * OctreeAreaSize) / (512 * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+        //lengthOfCone = OctreeAreaSize * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         //Color Settings
         linearColourSpace = QualitySettings.activeColorSpace == ColorSpace.Linear;

@@ -150,8 +150,8 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
     {
         // We're done here
         return traversalResult;
-    }    
-       
+    }   
+           
     // Traverse tree
     uint offset = 0;
     uint prevOffset = 0;
@@ -260,7 +260,7 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
             }
             
             // If the queue is emtpy and we're not looking at the root node
-            if (mipmapQueueEmpty && (offset))
+            if (mipmapQueueEmpty && offset)
             {
                 // Test if this node needs filtering
                 if (node.GetIsWaitingForMipmap())
@@ -268,7 +268,7 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                     // We just want the lowest depth to prioritize mip filtering into waves
                     traversalResult.action = 2;
                     traversalResult.offset = prevOffset + 1;
-                    traversalResult.TTL = node.GetTTL();;
+                    traversalResult.TTL = node.GetTTL();
                 }
             }
             

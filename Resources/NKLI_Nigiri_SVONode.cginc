@@ -120,7 +120,7 @@ struct SVONode
         return float4(RGBMDecode(encodedColour / 255), colour_A);
 
     }
-      
+         
     /// <summary>
     /// Returns weather node needs mipmapping
     /// </summary>

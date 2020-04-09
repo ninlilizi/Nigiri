@@ -474,8 +474,11 @@ inline uint GetSVOBitOffset(float3 tX, float3 tM)
 
 
 // Returns the voxel information from grid 1
-inline float4 GetVoxelInfoSVO(float3 worldPosition)
+inline float4 GetVoxelInfoSVO(float3 worldPosition, uint ttl)
 {
+	//worldPosition += _giAreaSize;
+	//worldPosition /= (2.0f * _giAreaSize);
+
 	/// Calculate initial values
 	// AABB Min/Max x,y,z
 	float halfArea = _giAreaSize / 2;
@@ -495,18 +498,21 @@ inline float4 GetVoxelInfoSVO(float3 worldPosition)
 		// TODO - Add noise threshold slider to inspector
 		//			Noise threashold controlled by
 		//			adjusting the 0.5
-		if (node.colour_A)
+		/*if (node.colour_A)
 		{
 			colourCount++;
 			tempColour += node.UnPackColour();
-		}
+		}*/
+
+		uint nodeTTL = node.GetTTL();
 
 		// If no children then tag for split queue consideration
-		if (node.referenceOffset == 0)
+		if (!node.referenceOffset || (nodeTTL == ttl))
 		{
 
 			// If no child then return colour
-			return tempColour / colourCount;
+			//return tempColour / colourCount;
+			return node.UnPackColour();
 		}
 		else
 		{
@@ -633,7 +639,7 @@ float4 frag_debug(v2f i) : SV_Target
 
 
 	#if defined(GRID_SVO)
-	voxelInfo = GetVoxelInfoSVO(worldPos);
+	voxelInfo = GetVoxelInfoSVO(worldPos, 0);
 	#endif
 
 	//return float4(worldPos, 1);
@@ -664,11 +670,18 @@ inline float4 GetVoxelInfo(float3 worldPosition)
 
 
 		//info = tex3D(voxelGrid1, worldPosition);
-		info = GetVoxelInfoSVO(worldPosition);
+		//info = GetVoxelInfoSVO(worldPosition, 0);
 		//info += tex3D(voxelGrid2, worldPosition);
 		//info += tex3D(voxelGrid3, worldPosition);
 		//info += tex3D(voxelGrid4, worldPosition);
 		//info += tex3D(voxelGrid5, worldPosition);
+
+		info = GetVoxelInfoSVO(worldPosition, 0);
+		info = GetVoxelInfoSVO(worldPosition, 1);
+		info = GetVoxelInfoSVO(worldPosition, 2);
+		info = GetVoxelInfoSVO(worldPosition, 3);
+		info = GetVoxelInfoSVO(worldPosition, 4);
+
 	}
 
 	return info;
@@ -754,42 +767,42 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	float3 voxelPosition = (0).xxx;
 
 	// Sample voxel grid 1
-		for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
+	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
+	{
+		currentPosition += (coneStep * coneDirection);
+
+		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
+		fi = lerp(fi, 1.0, 0.0);
+
+		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+		float coneSize = coneDistance * 63.6;
+
+		if (hitFound < 0.9f)
 		{
-			currentPosition += (coneStep * coneDirection);
-
-			float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration2;
-			fi = lerp(fi, 1.0, 0.0);
-
-			float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-			float coneSize = coneDistance * 63.6;
-
-			if (hitFound < 0.9f)
+			//voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 0) * GISampleWeight(voxelPosition);
+			if (currentVoxelInfo.a > 0.0f)
 			{
-				//voxelPosition = GetVoxelPosition(currentPosition);
-				currentVoxelInfo = GetVoxelInfoSVO(currentPosition);// *GISampleWeight(voxelPosition);
-				if (currentVoxelInfo.a > 0.0f)
-				{
-					if (depthStopOptimization) hitFound = 1.0f;
-				}
-				if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
+				if (depthStopOptimization) hitFound = 1.0f;
 			}
-			occlusion = skyVisibility * skyVisibility;
-			//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-			else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
 		}
-		computedColor = gi;
+		occlusion = skyVisibility * skyVisibility;
+		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+	}
+	computedColor = gi;
 
 
-	/*
+
 	// Sample voxel grid 2
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -807,7 +820,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			voxelPosition = GetVoxelPosition(currentPosition);
+			//voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 2) * GISampleWeight(voxelPosition);
 			//currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -823,15 +837,14 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
 	}
-	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
-	else computedColor += gi;
-	*/
+	computedColor += gi;
 
-	/*
+
+
 	// Sample voxel grid 3
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -849,7 +862,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			voxelPosition = GetVoxelPosition(currentPosition);
+			//voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 4) * GISampleWeight(voxelPosition);
 			//GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -864,15 +878,14 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
 	}
-	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
-	else computedColor += gi;
-	*/
+	computedColor += gi;
 
-	/*
+
+
 	// Sample voxel grid 4
 	hitFound = 0;
 	gi = (0.0f).xxxx;
@@ -890,7 +903,8 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 
 		if (hitFound < 0.9f)
 		{
-			voxelPosition = GetVoxelPosition(currentPosition);
+			//voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 6) * GISampleWeight(voxelPosition);
 			//currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -905,56 +919,53 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
 		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
 		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
 
 		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
 	}
-	if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
-	else computedColor += gi;
-	*/
+	computedColor += gi;
 
-	/*
+
+
 	// Sample voxel grid 5
-	if (skipLastMipLevel == 0)
+	hitFound = 0;
+	gi = (0.0f).xxxx;
+	currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
+	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
 	{
-		hitFound = 0;
-		gi = (0.0f).xxxx;
-		currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
-		for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
+		currentPosition += coneStep * coneDirection;
+
+		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / iteration5;
+		fi = lerp(fi, 1.0, 0.0);
+
+		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+		float coneSize = coneDistance * 63.6;
+
+		if (hitFound < 0.9f)
 		{
-			currentPosition += coneStep * coneDirection;
-
-			float fi = ((float)i5 + blueNoise.y * StochasticSampling) / iteration5;
-			fi = lerp(fi, 1.0, 0.0);
-
-			float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-			float coneSize = coneDistance * 63.6;
-
-			if (hitFound < 0.9f)
+			//voxelPosition = GetVoxelPosition(currentPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 8) * GISampleWeight(voxelPosition);
+			//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+			if (currentVoxelInfo.a > 0.0f)
 			{
-				voxelPosition = GetVoxelPosition(currentPosition);
-				//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-				if (currentVoxelInfo.a > 0.0f)
-				{
-					if (depthStopOptimization) hitFound = 1.0f;
-				}
+				if (depthStopOptimization) hitFound = 1.0f;
 			}
-			occlusion = skyVisibility * skyVisibility;
-			//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-
-			float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-			currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-			currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-			if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-			else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix;// *(1.0 - fi * fi);// / falloffFix;
-
-			skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
 		}
-		if (highestValueSearch) computedColor += lerp(computedColor, gi, 0.75);
-		else computedColor += gi;
+		occlusion = skyVisibility * skyVisibility;
+		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
+
+		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
 	}
-	*/
+	computedColor += gi;
+
+
 
 	//Calculate lighting attribution
 	if (!visualizeOcclusion)
@@ -980,7 +991,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 	}
 	else
 	{
-		// gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
+		//gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
 		computedColor *= GIGain;
 	}
 

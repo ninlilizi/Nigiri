@@ -40,11 +40,11 @@ uniform Texture2D<float4> lightingTexture2;
 uniform Texture2D _CameraDepthTexture;
 
 // Groupshared array of node split offsets
-groupshared uint mipTTL = 0;
-groupshared uint split_MinTTL = 0;
+groupshared uint mip_MaxTTL = 0;
 groupshared uint split_MaxTTL = 0;
-groupshared uint split_MinOffset = 0;
+groupshared uint mip_MaxOffset = 0;
 groupshared uint split_MaxOffset = 0;
+
 
 /// <summary>
 /// Encodes samples into tree
@@ -75,15 +75,15 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
             InterlockedMax(split_MaxTTL, traversalResult.TTL);
             if (traversalResult.TTL == split_MaxTTL)
             {
-                InterlockedMax(split_MinOffset, traversalResult.offset);
+                InterlockedMax(split_MaxOffset, traversalResult.offset);
             }
             break;
         case 2:
             // Calculate priority mipmap offset
-            InterlockedMin(split_MinTTL, traversalResult.TTL);
-            if (traversalResult.TTL == split_MinTTL)
+            InterlockedMax(mip_MaxTTL, traversalResult.TTL);
+            if (traversalResult.TTL == mip_MaxTTL)
             {
-                InterlockedMax(split_MaxOffset, traversalResult.offset);
+                InterlockedMax(mip_MaxOffset, traversalResult.offset);
             }
             break;
     }
@@ -95,11 +95,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     if (!thread)
     {
         // Write out chosen nodes, to be picked up by the cpu worker threads
-        if (split_MinOffset)
-            AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MinOffset);
         if (split_MaxOffset)
-            AppendSVOMipmapQueue(_SVO_MipmapQueue, _SVO_Counters, split_MaxOffset);
-        _SVO[split_MinOffset].SetIsWaitingForMipmap(0);
+            AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MaxOffset);
+        if (mip_MaxOffset)
+            AppendSVOMipmapQueue(_SVO_MipmapQueue, _SVO_Counters, mip_MaxOffset);
+        _SVO[split_MaxOffset].SetIsWaitingForMipmap(0);
         
     }
 }

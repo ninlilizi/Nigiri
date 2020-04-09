@@ -48,7 +48,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         nodeToSplit.UnPackStruct(bitfieldOccupancy, runLength, ttl, isLeaf);
         
         // Only split the node if TTL is non-zero, reference is null and SVO not full
-        if ((ttl != 0) && (nodeToSplit.referenceOffset == 0) && (_SVO_Counters_Internal[0] < _SVO_MaxNodes))
+        if ((ttl) && (nodeToSplit.referenceOffset == 0) && (_SVO_Counters_Internal[0] < _SVO_MaxNodes))
         {
         
             // pack node to write        
