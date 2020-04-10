@@ -98,7 +98,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
         if (split_MinOffset)
         {
             AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MinOffset);
-            _SVO[split_MinOffset - 1] = SetNodeColour(_SVO[split_MinOffset - 1], colour, depth);
+            _SVO[split_MinOffset - 1] = SetNodeColour(_SVO[split_MinOffset - 1], colour / 4, depth);
         }
         if (mip_MinOffset)
         {
