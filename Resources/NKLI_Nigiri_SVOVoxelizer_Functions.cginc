@@ -207,7 +207,7 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                 return traversalResult;
             }
             else
-            {          
+            {
                 traversalResult.action = 1;
                 traversalResult.offset = offset + 1;
                 traversalResult.TTL = ttl;

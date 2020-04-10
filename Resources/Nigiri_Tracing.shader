@@ -476,9 +476,6 @@ inline uint GetSVOBitOffset(float3 tX, float3 tM)
 // Returns the voxel information from grid 1
 inline float4 GetVoxelInfoSVO(float3 worldPosition, uint ttl)
 {
-	//worldPosition += _giAreaSize;
-	//worldPosition /= (2.0f * _giAreaSize);
-
 	/// Calculate initial values
 	// AABB Min/Max x,y,z
 	float halfArea = _giAreaSize / 2;
@@ -821,7 +818,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 2) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 1) * GISampleWeight(voxelPosition);
 			//currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -863,7 +860,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 4) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 2) * GISampleWeight(voxelPosition);
 			//GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -904,7 +901,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 6) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 3) * GISampleWeight(voxelPosition);
 			//currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{
@@ -944,7 +941,7 @@ inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, f
 		if (hitFound < 0.9f)
 		{
 			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 8) * GISampleWeight(voxelPosition);
+			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 4) * GISampleWeight(voxelPosition);
 			//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
 			if (currentVoxelInfo.a > 0.0f)
 			{

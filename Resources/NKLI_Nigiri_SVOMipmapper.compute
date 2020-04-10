@@ -18,6 +18,20 @@ uniform RWStructuredBuffer<uint> _SVO_MipmapQueue;
 // Debug visualisation
 uniform const uint _debugFiltering;
 
+// Calculates occupancy bitmap
+uint getOccupancyBitmap(uint offset)
+{
+    return
+		(min(_SVO[offset].packedColour, 1) << 7) |
+		(min(_SVO[offset + 1].packedColour, 1) << 6) |
+		(min(_SVO[offset + 2].packedColour, 1) << 5) |
+		(min(_SVO[offset + 3].packedColour, 1) << 4) |
+		(min(_SVO[offset + 4].packedColour, 1) << 3) |
+		(min(_SVO[offset + 5].packedColour, 1) << 2) |
+		(min(_SVO[offset + 6].packedColour, 1) << 1) |
+		(min(_SVO[offset + 7].packedColour, 1) & 1);
+}
+
 [numthreads(8, 1, 1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
@@ -39,6 +53,13 @@ void CSMain (uint3 id : SV_DispatchThreadID)
                
         // Get the target node
         SVONode nodeToMipmap = _SVO[mipmapIndex];
+        
+        uint _bifFieldOccupancy;
+        uint _runLength;
+        uint _ttl;
+        uint isWaitingForMipmap;
+        nodeToMipmap.UnPackStruct(_bifFieldOccupancy, _runLength, _ttl, isWaitingForMipmap);
+        _bifFieldOccupancy = getOccupancyBitmap(mipmapIndex);
                  
         // Initialise accumumator
         float4 filteredColour = (0).xxxx;
@@ -59,11 +80,12 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         
         // Debug visualisation
         if (_debugFiltering)
-            filteredColour = float4(1, 1, 1, 1);
+            filteredColour += float4(0.1, 0.1, 0.1, 0);
         
         // Update node properties
+        nodeToMipmap.PackStruct(_bifFieldOccupancy, 0, _ttl, 1);
         nodeToMipmap.PackColour(filteredColour);
-        nodeToMipmap.SetIsWaitingForMipmap(1);
+        //nodeToMipmap.SetIsWaitingForMipmap(1);
         
         // Store node
         _SVO[mipmapIndex] = nodeToMipmap;
