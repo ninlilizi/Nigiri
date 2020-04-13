@@ -49,11 +49,11 @@ inline uint GetSVOBitOffset(float3 tX, float3 tM)
 {
     uint nextIndex = 0;
     if (tX.x > tM.x)
-        nextIndex = nextIndex | (1);
+        nextIndex = nextIndex | (1 << 2);
     if (tX.y > tM.y)
         nextIndex = nextIndex | (1 << 1);
     if (tX.z > tM.z)
-        nextIndex = nextIndex | (1 << 2);
+        nextIndex = nextIndex | (1);
     
     return nextIndex;
 }
@@ -229,7 +229,7 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                     t0 = float3(t0.x, t0.y, t0.z);
                     t1 = float3(tM.x, tM.y, tM.z);
                     break;
-                case 4:
+                case 1:
                     t0 = float3(t0.x, t0.y, tM.z);
                     t1 = float3(tM.x, tM.y, t1.z);
                     break;
@@ -237,11 +237,11 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                     t0 = float3(t0.x, tM.y, t0.z);
                     t1 = float3(tM.x, t1.y, tM.z);
                     break;
-                case 6:
+                case 3:
                     t0 = float3(t0.x, tM.y, tM.z);
                     t1 = float3(tM.x, t1.y, t1.z);
                     break;
-                case 1:
+                case 4:
                     t0 = float3(tM.x, t0.y, t0.z);
                     t1 = float3(t1.x, tM.y, tM.z);
                     break;
@@ -249,7 +249,7 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
                     t0 = float3(tM.x, t0.y, tM.z);
                     t1 = float3(t1.x, tM.y, t1.z);
                     break;
-                case 3:
+                case 6:
                     t0 = float3(tM.x, tM.y, t0.z);
                     t1 = float3(t1.x, t1.y, tM.z);
                     break;

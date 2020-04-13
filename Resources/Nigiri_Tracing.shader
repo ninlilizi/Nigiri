@@ -4,7 +4,7 @@
 	{
 		_MainTex("Texture", 2D) = "white" {}
 	}
-		SubShader
+	SubShader
 	{
 		// No culling or depth
 		Cull Off ZWrite Off ZTest Always
@@ -102,7 +102,7 @@
 		uniform int						Stereo2Mono;
 		uniform int						stereoEnabled;
 		uniform uint					rng_state;
-		
+
 		uniform float3					gridOffset;
 
 		uniform sampler2D _CameraGBufferTexture2;
@@ -160,7 +160,7 @@
 			else o.uv = v.uv;
 
 			float4 clipPos = float4(v.uv * 2.0f - 1.0f, 1.0f, 1.0f);
-		
+
 			float4 cameraRay = mul(InverseProjectionMatrix, clipPos);
 			o.cameraRay = cameraRay / cameraRay.w;
 
@@ -178,28 +178,28 @@
 
 		float GetDepthTexture(float2 uv)
 		{
-#if defined(UNITY_REVERSED_Z)
-#if defined(VRWORKS)
-			return 1.0 - SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
-#else
-			return 1.0 - SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
-#endif
-#else
-#if defined(VRWORKS)
-			return SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
-#else
-			return SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
-#endif
-#endif
-		}
+	#if defined(UNITY_REVERSED_Z)
+	#if defined(VRWORKS)
+				return 1.0 - SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
+	#else
+				return 1.0 - SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+	#endif
+	#else
+	#if defined(VRWORKS)
+				return SAMPLE_DEPTH_TEXTURE(VRWorksGetDepthSampler(), VRWorksRemapUV(uv)).x;
+	#else
+				return SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
+	#endif
+	#endif
+			}
 
 		float4 GetViewSpacePosition(float2 uv)
 		{
 			float depth = tex2Dlod(_CameraDepthTexture, float4(uv.xy, 0.0, 0.0)).x;
 
-#if defined(UNITY_REVERSED_Z)
-			depth = 1.0 - depth;
-#endif
+			#if defined(UNITY_REVERSED_Z)
+				depth = 1.0 - depth;
+			#endif
 
 			if (stereoEnabled)
 			{
@@ -234,7 +234,7 @@
 				float4 viewPosition = mul(InverseProjectionMatrix, float4(uv.x * 2.0 - 1.0, uv.y * 2.0 - 1.0, 2.0 * depth - 1.0, 1.0));
 				viewPosition /= viewPosition.w;
 				return viewPosition;
-			}	
+			}
 		}
 
 		float GISampleWeight(float3 pos)
@@ -315,967 +315,1182 @@
 			return coord.z * (voxelResolution * voxelResolution) + (coord.y * voxelResolution) + coord.x;
 		}
 
-float4 frag_position(v2f i) : SV_Target
-{
-	// read low res depth and reconstruct world position
-	float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
-
-	//linearise depth		
-	float lindepth = Linear01Depth(depth);
-
-	//get view and then world positions		
-	float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-	float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
-
-	//worldPos.z *= 100;
-
-	if (Stereo2Mono)
-	{
-		if (i.uv.x < 0.5) return float4(worldPos.xyz - gridOffset.xyz, lindepth);
-		else return float4(0, 0, 0, 0);
-	}
-	else
-	{
-		return float4(worldPos.xyz, lindepth);
-	}
-}
-
-float3 offsets[6] =
-{
-	float3(1, 0, 0),
-	float3(-1, 0, -0),
-	float3(0, 1, 0),
-	float3(0, -1, 0),
-	float3(0, 0, 1),
-	float3(0, 0, -1)
-};
-
-// Returns the voxel position in the grids
-inline float3 GetVoxelPosition(float3 worldPosition)
-{
-	float3 voxelPosition = worldPosition / _giAreaSize;
-	voxelPosition += float3(1.0f, 1.0f, 1.0f);
-	voxelPosition /= 2.0f;
-	return voxelPosition;
-}
-/*
-// Returns the voxel information from grid 1
-inline float4 GetVoxelInfo1(float3 voxelPosition)
-{
-	//voxelUpdateBuffer
-	//uint threeD2oneD(float3 coord)
-
-	//uint index = threeD2oneD(voxelPosition);
-	//if (voxelUpdateBuffer[index] == 0) 
-		//voxelUpdateBuffer[index] = 2;
-
-	float4 tex = tex3D(voxelGrid1, voxelPosition);
-	
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
+		float4 frag_position(v2f i) : SV_Target
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGrid1, voxelPosition + offset), tex);
+			// read low res depth and reconstruct world position
+			float depth = SAMPLE_DEPTH_TEXTURE(_CameraDepthTexture, i.uv);
+
+			//linearise depth		
+			float lindepth = Linear01Depth(depth);
+
+			//get view and then world positions		
+			float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+			float3 worldPos = mul(InverseViewMatrix, viewPos).xyz;
+
+			//worldPos.z *= 100;
+
+			if (Stereo2Mono)
+			{
+				if (i.uv.x < 0.5) return float4(worldPos.xyz - gridOffset.xyz, lindepth);
+				else return float4(0, 0, 0, 0);
+			}
+			else
+			{
+				return float4(worldPos.xyz, lindepth);
+			}
 		}
-	}
-	return tex;
-}
 
-// Returns the voxel information from grid 2
-inline float4 GetVoxelInfo2(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGrid2, voxelPosition);
-
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
+		float3 offsets[6] =
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGrid2, voxelPosition + offset), tex);
+			float3(1, 0, 0),
+			float3(-1, 0, -0),
+			float3(0, 1, 0),
+			float3(0, -1, 0),
+			float3(0, 0, 1),
+			float3(0, 0, -1)
+		};
+
+		// Returns the voxel position in the grids
+		inline float3 GetVoxelPosition(float3 worldPosition)
+		{
+			float3 voxelPosition = worldPosition / _giAreaSize;
+			voxelPosition += float3(1.0f, 1.0f, 1.0f);
+			voxelPosition /= 2.0f;
+			return voxelPosition;
 		}
-	}
 
-	return tex;
-}
-
-// Returns the voxel information from grid 3
-inline float4 GetVoxelInfo3(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGrid3, voxelPosition);
-
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
+		/*
+		// Returns the voxel information from grid 1
+		inline float4 GetVoxelInfo1(float3 voxelPosition)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGrid3, voxelPosition + offset), tex);
+			//voxelUpdateBuffer
+			//uint threeD2oneD(float3 coord)
+
+			//uint index = threeD2oneD(voxelPosition);
+			//if (voxelUpdateBuffer[index] == 0)
+				//voxelUpdateBuffer[index] = 2;
+
+			float4 tex = tex3D(voxelGrid1, voxelPosition);
+
+			if (neighbourSearch)
+			{
+				[unroll]
+				for (int j = 0; j < 6; j++)
+				{
+					float3 offset = float3(0, 0, 0);
+					offset = offsets[j];
+					tex = max(tex3D(voxelGrid1, voxelPosition + offset), tex);
+				}
+			}
+			return tex;
 		}
-	}
-	return tex;
-}
 
-// Returns the voxel information from grid 4
-inline float4 GetVoxelInfo4(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGrid4, voxelPosition);
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
+		// Returns the voxel information from grid 2
+		inline float4 GetVoxelInfo2(float3 voxelPosition)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGrid4, voxelPosition + offset), tex);
+			float4 tex = tex3D(voxelGrid2, voxelPosition);
+
+			if (neighbourSearch)
+			{
+				[unroll]
+				for (int j = 0; j < 6; j++)
+				{
+					float3 offset = float3(0, 0, 0);
+					offset = offsets[j];
+					tex = max(tex3D(voxelGrid2, voxelPosition + offset), tex);
+				}
+			}
+
+			return tex;
 		}
-	}
-	return tex;
-}
 
-// Returns the voxel information from grid 5
-inline float4 GetVoxelInfo5(float3 voxelPosition)
-{
-	float4 tex = tex3D(voxelGrid5, voxelPosition);
-	if (neighbourSearch)
-	{
-		[unroll]
-		for (int j = 0; j < 6; j++)
+		// Returns the voxel information from grid 3
+		inline float4 GetVoxelInfo3(float3 voxelPosition)
 		{
-			float3 offset = float3(0, 0, 0);
-			offset = offsets[j];
-			tex = max(tex3D(voxelGrid5, voxelPosition + offset), tex);
+			float4 tex = tex3D(voxelGrid3, voxelPosition);
+
+			if (neighbourSearch)
+			{
+				[unroll]
+				for (int j = 0; j < 6; j++)
+				{
+					float3 offset = float3(0, 0, 0);
+					offset = offsets[j];
+					tex = max(tex3D(voxelGrid3, voxelPosition + offset), tex);
+				}
+			}
+			return tex;
 		}
-	}
-	return tex;
-}
-*/
 
-/// <summary>
-/// Returns the node offset calculated from spatial relation
-/// </summary>
-inline uint GetSVOBitOffset(float3 tX, float3 tM)
-{
-	uint nextIndex = 0;
-	if (tX.x > tM.x)
-		nextIndex = nextIndex | (1);
-	if (tX.y > tM.y)
-		nextIndex = nextIndex | (1 << 1);
-	if (tX.z > tM.z)
-		nextIndex = nextIndex | (1 << 2);
-
-	return nextIndex;
-}
-
-
-// Returns the voxel information from grid 1
-inline float4 GetVoxelInfoSVO(float3 worldPosition, uint ttl)
-{
-	/// Calculate initial values
-	// AABB Min/Max x,y,z
-	float halfArea = _giAreaSize / 2;
-	float3 t0 = float3(-halfArea, -halfArea, -halfArea);
-	float3 t1 = float3(halfArea, halfArea, halfArea);
-
-	float4 tempColour = (0).xxxx;
-
-	// Traverse tree
-	uint offset = 0;
-	uint colourCount = 0;
-	while (true)
-	{
-		// Retrieve node
-		SVONode node = _SVO[offset];
-
-		// TODO - Add noise threshold slider to inspector
-		//			Noise threashold controlled by
-		//			adjusting the 0.5
-		/*if (node.colour_A)
+		// Returns the voxel information from grid 4
+		inline float4 GetVoxelInfo4(float3 voxelPosition)
 		{
-			colourCount++;
-			tempColour += node.UnPackColour();
-		}*/
-
-		uint nodeTTL = node.GetTTL();
-
-		// If no children then tag for split queue consideration
-		if (!node.referenceOffset || (nodeTTL == ttl))
-		{
-
-			// If no child then return colour
-			//return tempColour / colourCount;
-			return node.UnPackColour();
+			float4 tex = tex3D(voxelGrid4, voxelPosition);
+			if (neighbourSearch)
+			{
+				[unroll]
+				for (int j = 0; j < 6; j++)
+				{
+					float3 offset = float3(0, 0, 0);
+					offset = offsets[j];
+					tex = max(tex3D(voxelGrid4, voxelPosition + offset), tex);
+				}
+			}
+			return tex;
 		}
-		else
+
+		// Returns the voxel information from grid 5
+		inline float4 GetVoxelInfo5(float3 voxelPosition)
 		{
-			// Middle of node coordiates
-			float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
+			float4 tex = tex3D(voxelGrid5, voxelPosition);
+			if (neighbourSearch)
+			{
+				[unroll]
+				for (int j = 0; j < 6; j++)
+				{
+					float3 offset = float3(0, 0, 0);
+					offset = offsets[j];
+					tex = max(tex3D(voxelGrid5, voxelPosition + offset), tex);
+				}
+			}
+			return tex;
+		}
+		*/
 
-			// Child node offset index
-			uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
+		/// <summary>
+		/// Returns the node offset calculated from spatial relation
+		/// </summary>
+		inline uint GetSVOBitOffset(float3 tX, float3 tM)
+		{
+			uint nextIndex = 0;
+			if (tX.x > tM.x)
+				nextIndex = nextIndex | (1 << 2);
+			if (tX.y > tM.y)
+				nextIndex = nextIndex | (1 << 1);
+			if (tX.z > tM.z)
+				nextIndex = nextIndex | (1);
 
-			// Set extents of child node
-			switch (childIndex)
+			return nextIndex;
+		}
+
+		inline uint EntryNodeSelector(float3 t0, float3 tM)
+		{
+			float tMax = max(t0.x, max(t0.y, t0.z));
+
+
+			uint node = 0;
+
+			if (tMax == t0.x)
+			{
+				if (tM.x < t0.z) node = node | (1 << 2);
+				if (tM.y < t0.z) node = node | (1 << 1);
+			}
+			else if (tMax == t0.y)
+			{
+				if (tM.y < t0.x) node = node | (1 << 1);
+				if (tM.z < t0.x) node = node | (1);
+			}
+			else if (tMax == t0.z)
+			{
+				if (tM.x < t0.y) node = node | (1 << 2);
+				if (tM.z < t0.y) node = node | (1);
+			}
+
+			return node;
+		}
+
+		/// <summary>
+		/// Selects next node based on exit plane
+		/// </summary>
+		inline uint NextNodeSelector(uint exitPlane, float3 nextNodes)
+		{
+			// exitPlane
+			// [0] YZ
+			// [1] XZ
+			// [2] XY
+
+			// Initialise return value
+			uint exit = 0;
+
+			// Select
+			switch (exitPlane)
 			{
 			case 0:
-				t0 = float3(t0.x, t0.y, t0.z);
-				t1 = float3(tM.x, tM.y, tM.z);
-				break;
-			case 4:
-				t0 = float3(t0.x, t0.y, tM.z);
-				t1 = float3(tM.x, tM.y, t1.z);
-				break;
-			case 2:
-				t0 = float3(t0.x, tM.y, t0.z);
-				t1 = float3(tM.x, t1.y, tM.z);
-				break;
-			case 6:
-				t0 = float3(t0.x, tM.y, tM.z);
-				t1 = float3(tM.x, t1.y, t1.z);
+				exit = nextNodes.x;
 				break;
 			case 1:
-				t0 = float3(tM.x, t0.y, t0.z);
-				t1 = float3(t1.x, tM.y, tM.z);
+				exit = nextNodes.y;
 				break;
-			case 5:
-				t0 = float3(tM.x, t0.y, tM.z);
-				t1 = float3(t1.x, tM.y, t1.z);
+			case 2:
+				exit = nextNodes.z;
+				break;
+			}
+
+			// Return selected plane
+			return exit;
+		}
+
+
+		/// <summary>
+		/// Selects noded based on exit plane
+		/// </summary>
+		inline uint ChildNodeSelector(uint node, uint exitPlane)
+		{
+			// Initialise return value
+			uint exitNode = 0;
+
+			// Select
+			switch (node)
+			{
+			case 0:
+				exitNode = NextNodeSelector(exitPlane, float3(4, 2, 1));
+				break;
+			case 1:
+				exitNode = NextNodeSelector(exitPlane, float3(5, 3, 8));
+				break;
+			case 2:
+				exitNode = NextNodeSelector(exitPlane, float3(6, 8, 3));
 				break;
 			case 3:
-				t0 = float3(tM.x, tM.y, t0.z);
-				t1 = float3(t1.x, t1.y, tM.z);
+				exitNode = NextNodeSelector(exitPlane, float3(7, 8, 8));
+				break;
+			case 4:
+				exitNode = NextNodeSelector(exitPlane, float3(8, 6, 5));
+				break;
+			case 5:
+				exitNode = NextNodeSelector(exitPlane, float3(8, 7, 8));
+				break;
+			case 6:
+				exitNode = NextNodeSelector(exitPlane, float3(8, 8, 7));
 				break;
 			case 7:
-				t0 = float3(tM.x, tM.y, tM.z);
-				t1 = float3(t1.x, t1.y, t1.z);
+				exitNode = NextNodeSelector(exitPlane, float3(8, 8, 8));
 				break;
 			}
 
-			// Offet is reference + the node offset index
-			offset = node.referenceOffset + childIndex;
-		}
-	}
-	return float4(0, 0, 0, 0);
-}
-
-float4 frag_debug(v2f i) : SV_Target
-{
-	// read low res depth and reconstruct world position
-	//float depth = tex2D(_CameraDepthTexture, UnityStereoScreenSpaceUVAdjust(i.uv, _CameraDepthTexture_ST));
-	float depth = 0;
-	if (stereoEnabled) depth = 1 - GetDepthTexture(i.uv.xy);
-	else depth = 1 - GetDepthTexture(i.uv.xy);
-	//linearise depth		
-	float lindepth = Linear01Depth(depth);
-
-	//get view and then world positions		
-
-	float3 worldPos = float3(0, 0, 0);
-	if (stereoEnabled)
-	{
-		//Fix Stereo View Matrix
-		float depth = GetDepthTexture(i.uv);
-		float4x4 proj, eyeToWorld;
-
-		if (i.uv.x < .5) // Left Eye
-		{
-			i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
-			proj = _LeftEyeProjection;
-			eyeToWorld = _LeftEyeToWorld;
-		}
-		else // Right Eye
-		{
-			i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
-			proj = _RightEyeProjection;
-			eyeToWorld = _RightEyeToWorld;
+			// Return selected node
+			return exitNode;
 		}
 
-		float2 uvClip = i.uv * 2.0 - 1.0;
-		float4 clipPos = float4(uvClip, 1 - depth, 1.0);
-		float4 viewPos = mul(proj, clipPos); // inverse projection by clip position
-		viewPos /= viewPos.w; // perspective division
-		worldPos = mul(eyeToWorld, viewPos).xyz;
-		//Fix Stereo View Matrix/
-	}
-	else
-	{
-		float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-		worldPos = mul(InverseViewMatrix, viewPos).xyz;
-	}
-
-	float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
-	float3 voxelPosition = (0).xxx;
-
-	#if defined(GRID_1)
-	//voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
-	#endif
-
-	#if defined(GRID_2)
-	//voxelPosition = GetVoxelPosition(worldPos);
-	//voxelInfo = GetVoxelInfo2(voxelPosition);
-	#endif
-
-	#if defined(GRID_3)
-	//voxelPosition = GetVoxelPosition(worldPos);
-	//voxelInfo = GetVoxelInfo3(voxelPosition);
-	#endif
-
-	#if defined(GRID_4)
-	//voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
-	#endif
-
-	#if defined(GRID_5)
-	//voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
-	#endif
-
-
-
-	#if defined(GRID_SVO)
-	voxelInfo = GetVoxelInfoSVO(worldPos, 0);
-	#endif
-
-	//return float4(worldPos, 1);
-
-	float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
-	return float4(resultingColor, 1.0f);
-}
-
-float3 GetWorldNormal(float2 uv)
-{
-	float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, UnityStereoTransformScreenSpaceTex(uv));
-	worldSpaceNormal = normalize(worldSpaceNormal);
-
-	return worldSpaceNormal;
-}
-
-// Returns the voxel information
-inline float4 GetVoxelInfo(float3 worldPosition)
-{
-	// Default value
-	float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
-
-	// Check if the given position is inside the voxelized volume
-	if ((abs(worldPosition.x) < _giAreaSize) && (abs(worldPosition.y) < _giAreaSize) && (abs(worldPosition.z) < _giAreaSize))
-	{
-		worldPosition += _giAreaSize;
-		worldPosition /= (2.0f * _giAreaSize);
-
-
-		//info = tex3D(voxelGrid1, worldPosition);
-		//info = GetVoxelInfoSVO(worldPosition, 0);
-		//info += tex3D(voxelGrid2, worldPosition);
-		//info += tex3D(voxelGrid3, worldPosition);
-		//info += tex3D(voxelGrid4, worldPosition);
-		//info += tex3D(voxelGrid5, worldPosition);
-
-		info = GetVoxelInfoSVO(worldPosition, 0);
-		info = GetVoxelInfoSVO(worldPosition, 1);
-		info = GetVoxelInfoSVO(worldPosition, 2);
-		info = GetVoxelInfoSVO(worldPosition, 3);
-		info = GetVoxelInfoSVO(worldPosition, 4);
-
-	}
-
-	return info;
-}
-
-// Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
-inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
-{
-	// Color for storing all the samples
-	float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
-
-	float3 currentPosition = worldPosition + (rayOffset * pixelNormal);
-	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
-
-	bool hitFound = false;
-
-	// Loop for tracing the ray through the scene
-	for (float i = 0.0f; i < maximumIterationsReflection; i += 1.0f)
-	{
-		// Traverse the ray in the reflected direction
-		currentPosition += (reflectedRayDirection * rayStep);
-
-		// Get the currently hit voxel's information
-		currentVoxelInfo = GetVoxelInfo(currentPosition);
-
-		// At the currently traced sample
-		if ((currentVoxelInfo.w > 0.0f) && (!hitFound))
+		/// <summary>
+		/// Selects exit plane
+		/// </summary>
+		inline uint ExitPlaneSelector(float3 t1)
 		{
-			accumulatedColor += currentVoxelInfo * (rayStep).xxxx;
-			//if (depthStopOptimization) hitFound = true; // We dont do this or fails to reflect!
-		}
-	}
+			// Find lowest
+			float tMin = min(t1.x, min(t1.y, t1.z));
 
-	return accumulatedColor;
-}
+			// Initialise return value.
+			uint exitPlane = 0;
 
-
-inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float skyVisibility)
-{
-	//Temp consts till integration
-	//float3 SEGISunlightVector = _WorldSpaceLightPos0;
-	//float3 skyColor = unity_AmbientSky;
-	//float SunlightInjection = 5.5f;
-	//float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);
-	///
-
-	float3 computedColor = float3(0.0f, 0.0f, 0.0f);
-
-	float iteration0 = maximumIterations / 32.0f;
-	float iteration1 = maximumIterations / 32.0f;
-	float iteration2 = maximumIterations / 16.0f;
-	float iteration3 = maximumIterations / 8.0f;
-	float iteration4 = maximumIterations / 4.0f;
-	float iteration5 = maximumIterations / 2.0f;
-
-	float coneStep = lengthOfCone / maximumIterations;
-
-	//float3 worldNormal = tex2D(_CameraGBufferTexture2, uv).rgb;
-
-	blueNoise.xy *= 0.0625;
-	blueNoise.z *= 0.0625;
-	blueNoise.z -= blueNoise.z * 2;
-
-
-	//float3 cacheOrigin = worldPosition + worldNormal * 0.003 * ConeTraceBias * 1.25;
-
-	//return float4(worldPos.x - (int)gridOffset.x, worldPos.y - (int)gridOffset.y, worldPos.z - (int)gridOffset.z, lindepth);
-
-	float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0) * ConeTraceBias;
-	//coneOrigin =  float3(coneOrigin.x - (int)gridOffset.x, coneOrigin.y - (int)gridOffset.y, coneOrigin.z - (int)gridOffset.z);
-
-	float3 currentPosition = coneOrigin;
-	float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
-
-	float hitFound = 0.0f;
-
-	int coordSet = 0;
-	skyVisibility = 1.0f;
-	//float3 skyVisibility2 = 1.0f;
-	float occlusion;
-	float4 gi = float4(0, 0, 0, 0);
-	//float2 interMult = float2(0, 0);
-	float3 voxelPosition = (0).xxx;
-
-	// Sample voxel grid 1
-	for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
-	{
-		currentPosition += (coneStep * coneDirection);
-
-		float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
-		fi = lerp(fi, 1.0, 0.0);
-
-		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * 63.6;
-
-		if (hitFound < 0.9f)
-		{
-			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 0) * GISampleWeight(voxelPosition);
-			if (currentVoxelInfo.a > 0.0f)
+			// Select
+			// TODO - Write an efficient method
+			if (tMin == t1.x)
 			{
-				if (depthStopOptimization) hitFound = 1.0f;
+				exitPlane = 0;
 			}
-			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
-		}
-		occlusion = skyVisibility * skyVisibility;
-		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-
-		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
-
-		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
-	}
-	computedColor = gi;
-
-
-
-	// Sample voxel grid 2
-	hitFound = 0;
-	gi = (0.0f).xxxx;
-	//skyVisibility = 1.0f;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration2);
-	for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
-	{
-		currentPosition += (coneStep * coneDirection);
-
-		float fi = ((float)i2 + blueNoise.y * StochasticSampling) / iteration2;
-		fi = lerp(fi, 1.0, 0.0);
-
-		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * 63.6;
-
-		if (hitFound < 0.9f)
-		{
-			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 1) * GISampleWeight(voxelPosition);
-			//currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (currentVoxelInfo.a > 0.0f)
+			else if (tMin == t1.y)
 			{
-				if (depthStopOptimization) hitFound = 1.0f;
+				exitPlane = 1;
 			}
-			if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
-		}
-		occlusion = skyVisibility * skyVisibility;
-		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-
-		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
-
-		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
-	}
-	computedColor += gi;
-
-
-
-	// Sample voxel grid 3
-	hitFound = 0;
-	gi = (0.0f).xxxx;
-	//skyVisibility = 1.0f;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration3);
-	for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
-	{
-		currentPosition += coneStep * coneDirection;
-
-		float fi = ((float)i3 + blueNoise.y * StochasticSampling) / iteration3;
-		fi = lerp(fi, 1.0, 0.0);
-
-		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * 63.6;
-
-		if (hitFound < 0.9f)
-		{
-			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 2) * GISampleWeight(voxelPosition);
-			//GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (currentVoxelInfo.a > 0.0f)
+			else if (tMin == t1.z)
 			{
-				if (depthStopOptimization) hitFound = 1.0f;
+				exitPlane = 2;
 			}
+
+			// return value
+			return exitPlane;
 		}
-		occlusion = skyVisibility * skyVisibility;
-		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
 
-		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
-
-		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
-	}
-	computedColor += gi;
-
-
-
-	// Sample voxel grid 4
-	hitFound = 0;
-	gi = (0.0f).xxxx;
-	//skyVisibility = 1.0f;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration4);
-	for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
-	{
-		currentPosition += coneStep * coneDirection;
-
-		float fi = ((float)i4 + blueNoise.y * StochasticSampling) / iteration4;
-		fi = lerp(fi, 1.0, 0.0);
-
-		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * 63.6;
-
-		if (hitFound < 0.9f)
+		/// <summary>
+		/// Handles negative coordinates by returning a bitmask that reverses
+		///	the returned child node ordering from ChildNodeSelector()
+		///		rayDirection	- Normalized direction
+		///		rayOrigin		- Worldspace origin
+		///		octreeSize		- Length of a side of the octrees bounding cube
+		/// </summary>
+		inline uint GetRayReflectionBit(float3 rayDirection, uint3 rayOrigin, float octreeSize)
 		{
-			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 3) * GISampleWeight(voxelPosition);
-			//currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (currentVoxelInfo.a > 0.0f)
+			// Intialise return value
+			uint a = 0;
+
+			// Text axis for inversion
+			if (rayDirection.x < 0)
 			{
-				if (depthStopOptimization) hitFound = 1.0f;
+				// Reflect ray along axis
+				rayOrigin.x = octreeSize - rayOrigin.x;
+				rayDirection.x = -(rayDirection.x);
+				// Bitmask for child ordering reversal
+				a |= 4;
 			}
-		}
-		occlusion = skyVisibility * skyVisibility;
-		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-
-		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
-
-		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
-	}
-	computedColor += gi;
-
-
-
-	// Sample voxel grid 5
-	hitFound = 0;
-	gi = (0.0f).xxxx;
-	currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
-	for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
-	{
-		currentPosition += coneStep * coneDirection;
-
-		float fi = ((float)i5 + blueNoise.y * StochasticSampling) / iteration5;
-		fi = lerp(fi, 1.0, 0.0);
-
-		float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
-		float coneSize = coneDistance * 63.6;
-
-		if (hitFound < 0.9f)
-		{
-			//voxelPosition = GetVoxelPosition(currentPosition);
-			currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 4) * GISampleWeight(voxelPosition);
-			//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
-			if (currentVoxelInfo.a > 0.0f)
+			// Text axis for inversion
+			if (rayDirection.y < 0)
 			{
-				if (depthStopOptimization) hitFound = 1.0f;
+				// Reflect ray along axis
+				rayOrigin.y = octreeSize - rayOrigin.y;
+				rayDirection.y = -(rayDirection.y);
+				// Bitmask for child ordering reversal
+				a |= 2;
 			}
-		}
-		occlusion = skyVisibility * skyVisibility;
-		//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+			// Text axis for inversion
+			if (rayDirection.z < 0)
+			{
+				// Reflect ray along axis
+				rayOrigin.z = octreeSize - rayOrigin.z;
+				rayDirection.z = -(rayDirection.z);
+				// Bitmask for child ordering reversal
+				a |= 1;
+			}
 
-		float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
-
-		currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
-		currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
-		if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
-		else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix *(1.0 - fi * fi);// / falloffFix;
-
-		skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
-	}
-	computedColor += gi;
-
-
-
-	//Calculate lighting attribution
-	if (!visualizeOcclusion)
-	{
-		float3 worldSpaceNormal = GetWorldNormal(uv);
-
-		float NdotL = pow(saturate(dot(worldSpaceNormal, coneDirection) * 1.0 - 0.0), 0.5);
-
-		computedColor *= NdotL;
-		skyVisibility *= NdotL;
-		skyVisibility *= lerp(saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0, sphericalSunlight);
-		float3 skyColor = float3(0.0, 0.0, 0.0);
-
-		float upGradient = saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)));
-		float sunGradient = saturate(dot(coneDirection, -sunLight.xyz));
-		skyColor += lerp(skyColor.rgb * 1.0, skyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
-		skyColor += sunColor.rgb * pow(sunGradient, (4.0).xxx) * sunLightInjection;
-
-		computedColor.rgb *= GIGain * 0.15;
-
-		computedColor.rgb += (skyColor * skyVisibility);
-
-	}
-	else
-	{
-		//gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
-		computedColor *= GIGain;
-	}
-
-	//computedColor.rgb = gi.rgb;
-
-	return computedColor;
-}
-
-inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, float3 worldNormal, float2 uv, float depth, out float skyVisibility)
-{
-	float3 gi = float3(0.0f, 0.0f, 0.0f);
-
-	float2 noiseCoord = (uv.xy * _MainTex_TexelSize.zw) / (64.0).xx;
-	float4 blueNoise = tex2Dlod(NoiseTexture, float4(noiseCoord, 0.0, 0.0)).x;
-	blueNoise *= (1 - depth);
-	blueNoise * 0.125;
-	blueNoise *= stochasticSamplingScale;
-
-
-	float fi = (float)tracedTexture1UpdateCount + blueNoise.x * StochasticSampling;
-	float fiN = fi / 65;
-	float longitude = gAngle * fi;
-	float latitude = asin(fiN * 2.0 - 1.0);
-
-	float3 kernel;
-	kernel.x = cos(latitude) * cos(longitude);
-	kernel.z = cos(latitude) * sin(longitude);
-	kernel.y = sin(latitude);
-
-	//kernel = normalize(kernel + worldNormal.xyz * 1.0);
-
-	float3 randomVector = normalize(kernel);
-	float3 direction1 = normalize(cross(worldNormal, randomVector));
-	float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
-
-	/*
-	///Reflection cone setup
-	float depthValue;
-	float3 viewSpaceNormal;
-	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
-	viewSpaceNormal = normalize(viewSpaceNormal);
-	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
-	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
-	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
-	reflectedRayDirection *= -1.0;
-	float4 reflection = (0).xxxx;
-	///
-	*/
-	//uint index = 0;
-	//float3 voxelBufferCoord;
-	/*if (usePathCache)
-	{
-		gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord, skyVisibility);
-
-		//voxelBufferCoord.x += (blueNoise.x * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.y += (blueNoise.y * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.z += (blueNoise.z * 0.00000001) * StochasticSampling;
-		//voxelBufferCoord.xy *= uv;
-		//voxelBufferCoord.z *= depth;
-		index = voxelBufferCoord.x * (voxelResolution) * (voxelResolution)+voxelBufferCoord.y * (voxelResolution)+voxelBufferCoord.z;
-		tracedBuffer1[index] += float4(gi, 1);
-	}*/
-
-	gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, skyVisibility);
-	/*if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
-	{
-		float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
-		float3 viewVector = normalize(viewSpacePosition.xyz);
-		float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
-
-		float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
-		
-		float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a), 5.0);
-		fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
-		fresnel *= saturate(spec.a * 6.0);
-
-		reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain;
-		//reflection.rgb *= maximumIterationsReflection * BalanceGain;
-
-		reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
-
-		if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
-		else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
-	}*/
-
-	/*if (usePathCache && !visualizeOcclusion)
-	{
-		float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
-
-		//Average HSV values independantly for prettier result
-		half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
-		half4 giHSV = float4(rgb2hsv(gi), 0);
-		gi.rgb *= cachedResult.rgb * EmissiveAttribution;
-		giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
-		gi.rgb += hsv2rgb(giHSV);
-
-		if (visualiseCache) gi.rgb = cachedResult.rgb;	
-	}*/
-	//if (visualizeReflections) gi.rgb = reflection.rgb;
-
-	return gi;
-}
-
-inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, float skyVisibility)
-{
-	///Reflection cone setup
-	float depthValue;
-	float3 viewSpaceNormal;
-	DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
-	viewSpaceNormal = normalize(viewSpaceNormal);
-	float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
-	float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
-	float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
-	reflectedRayDirection *= -1.0;
-	float4 reflection = (0).xxxx;
-	///
-	float4 viewSpacePosition = GetViewSpacePosition(UnityStereoTransformScreenSpaceTex(uv.xy));
-	float3 viewVector = normalize(viewSpacePosition.xyz);
-	float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
-
-	float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
-
-	float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
-	fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
-	fresnel *= saturate(spec.a * 6.0);
-
-	reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain / maximumIterationsReflection;
-
-	reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.00 * skyColor) * 2.41 * skyReflectionIntensity * skyVisibility;
-
-	if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
-	else reflection.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
-
-	return reflection.rgb;
-}
-
-float4 frag_lighting(v2f i) : SV_Target
-{
-	rng_state = i.uv.x * i.uv.y;
-	float3 directLighting = tex2D(_MainTex, i.uv).rgb;
-
-	float4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
-	//float3 albedo = gBufferSample.rgb;
-	//float ao = gBufferSample.a;
-
-	float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
-
-
-	// read low res depth and reconstruct world position
-	float depth = GetDepthTexture(i.uv);
-
-	//linearise depth		
-	float lindepth = Linear01Depth(1 - depth);
-
-	//get view and then world positions		
-
-	float4 viewPos = float4(0, 0, 0, 0);
-	float3 worldPos = float3(0, 0, 0);
-	if (stereoEnabled)
-	{
-		//Fix Stereo View Matrix
-		float depth = GetDepthTexture(i.uv);
-		float4x4 proj, eyeToWorld;
-
-		if (i.uv.x < .5) // Left Eye
-		{
-			i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
-			proj = _LeftEyeProjection;
-			eyeToWorld = _LeftEyeToWorld;
-		}
-		else // Right Eye
-		{
-			i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
-			proj = _RightEyeProjection;
-			eyeToWorld = _RightEyeToWorld;
+			// Return value
+			return a;
 		}
 
-		float2 uvClip = i.uv * 2.0 - 1.0;
-		float4 clipPos = float4(uvClip, 1 - depth, 1.0);
-		viewPos = mul(proj, clipPos); // inverse projection by clip position
-		viewPos /= viewPos.w; // perspective division
-		worldPos = mul(eyeToWorld, viewPos).xyz;
-		//Fix Stereo View Matrix/
-	}
-	else
-	{
-		viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
-		worldPos = mul(InverseViewMatrix, viewPos).xyz;
-	}
-
-	float3 worldSpaceNormal = GetWorldNormal(i.uv);
-
-	float skyVisibility;
-	float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth, skyVisibility);
-	float3 indirectLighting = directLighting + ((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution;
-	//indirectLighting = directLighting + indirectLighting * gBufferSample.a * gBufferSample.rgb;
-	//if (skyVisibility == 0) indirectLighting += directLighting;
-	if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
-	{
-		indirectLighting = ComputeReflection(worldPos, i.uv, indirectLighting, skyVisibility);
-	}
-
-	//else indirectLighting *= 1.85;
-
-	
-
-	if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = indirectContribution / maximumIterations / 1.85;
-
-	return float4(indirectLighting, 1.0f);
-}
-
-float4 frag_normal_texture(v2f i) : SV_Target
-{
-	float3 worldSpaceNormal = GetWorldNormal(i.uv);
-	return float4(worldSpaceNormal, 1.0f);
-}
-
-ENDCG
-
-// 0 : World Position Writing pass
-Pass
-{
-	CGPROGRAM
-	#pragma vertex vert
-	#pragma fragment frag_position
-	#pragma target 5.0
-	ENDCG
-}
-
-// 1 : Voxel Grid debug pass
-Pass
-{
-	CGPROGRAM
-	#pragma vertex vert
-	#pragma fragment frag_debug
-	//#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5 GRID_SVO
-	#pragma multi_compile GRID_SVO
-	#pragma target 5.0
-	ENDCG
-}
-
-// 2 : Lighting pass
-Pass
-{
-	CGPROGRAM
-	#pragma vertex vert
-	#pragma fragment frag_lighting
-	#pragma target 5.0
-	ENDCG
-}
-
-// 3 : Composition pass
-Pass
-{
-	CGPROGRAM
-		#pragma vertex vert
-		#pragma fragment frag_blur
-		#pragma fragmentoption ARB_precision_hint_fastest
-		#pragma multi_compile_instancing
-		#if defined (VRWORKS)
-			#pragma multi_compile VRWORKS_MRS VRWORKS_LMS VRWORKS_NONE
-		#endif
-
-		float4 frag_blur(v2f input) : COLOR0
+		// Example function to find exit nodes
+		// TODO - Should not remain in source
+		inline uint TraceNode(float3 rayDirection, float3 rayOrigin, float octreeSize, float3 tM, uint node)
 		{
-			half3 col = tex2D(_MainTex, input.uv).rgb;
-			half3 giCol = tex2D(gi, input.uv).rgb;
-			half3 lpvCol = tex2D(lpv, input.uv).rgb;
-			//half3 gBufferSample = tex2D(_CameraGBufferTexture0, input.uv).rgb;
-			//half3 finalLighting = giCol.rgb + lerp(col.rgb, gBufferSample.rgb * 0.25, 0.25);
+			// Used to reverse child node ordering if negative direction axis found
+			uint rayReflectionBit = GetRayReflectionBit(rayDirection, rayOrigin, octreeSize);
 
-			if (!VisualiseGI) return float4(giCol + lpvCol, 1);
-			else return float4(giCol, 1);
+			/// Calculate initial values
+			// AABB Min/Max x,y,z
+			float halfArea = octreeSize / 2;
+			float3 t0 = float3(-halfArea, -halfArea, -halfArea);
+			float3 t1 = float3(halfArea, halfArea, halfArea);
 
-			//return float4(finalLighting, 1);
+			uint entryPlane = EntryNodeSelector(t0, tM);
+
+			// Find the exit plane
+			uint exitPlane = ExitPlaneSelector(t1);
+
+			// Do this to collect intercepted nodes
+			while (node != 8)
+			{
+				// Get the next intercepted child node.
+				//	Bitwise XOR used to adjust child ordering against rayReflectionBit
+				node = ChildNodeSelector(node, exitPlane) ^ rayReflectionBit;
+			}
+
+		}
+
+
+
+
+
+
+		// Returns the voxel information from grid 1
+		inline float4 GetVoxelInfoSVO(float3 worldPosition, uint ttl)
+		{
+			/// Calculate initial values
+			// AABB Min/Max x,y,z
+			float halfArea = _giAreaSize / 2;
+			float3 t0 = float3(-halfArea, -halfArea, -halfArea);
+			float3 t1 = float3(halfArea, halfArea, halfArea);
+
+
+			if ((worldPosition.x < t0.x || worldPosition.x > t1.x) || (worldPosition.y < t0.y || worldPosition.y > t1.y) || (worldPosition.z < t0.z || worldPosition.z > t1.z))
+			{
+				// We're done here
+				return (0).xxxx;
+			}
+
+
+
+			float4 tempColour = (0).xxxx;
+
+			// Traverse tree
+			uint offset = 0;
+			uint colourCount = 0;
+			while (true)
+			{
+				// Retrieve node
+				SVONode node = _SVO[offset];
+
+				// TODO - Add noise threshold slider to inspector
+				//			Noise threashold controlled by
+				//			adjusting the 0.5
+				/*if (node.colour_A)
+				{
+					colourCount++;
+					tempColour += node.UnPackColour();
+				}*/
+
+				uint nodeTTL = node.GetTTL();
+
+				// If no children then tag for split queue consideration
+				if (!node.referenceOffset || (nodeTTL == ttl))
+				{
+
+					// If no child then return colour
+					//return tempColour / colourCount;
+					return node.UnPackColour();
+				}
+				else
+				{
+					// Middle of node coordiates
+					float3 tM = float3(0.5 * (t0.x + t1.x), 0.5 * (t0.y + t1.y), 0.5 * (t0.z + t1.z));
+
+					// Child node offset index
+					uint childIndex = GetSVOBitOffset(worldPosition.xyz, tM);
+
+					// Set extents of child node
+					switch (childIndex)
+					{
+					case 0:
+						t0 = float3(t0.x, t0.y, t0.z);
+						t1 = float3(tM.x, tM.y, tM.z);
+						break;
+					case 1:
+						t0 = float3(t0.x, t0.y, tM.z);
+						t1 = float3(tM.x, tM.y, t1.z);
+						break;
+					case 2:
+						t0 = float3(t0.x, tM.y, t0.z);
+						t1 = float3(tM.x, t1.y, tM.z);
+						break;
+					case 3:
+						t0 = float3(t0.x, tM.y, tM.z);
+						t1 = float3(tM.x, t1.y, t1.z);
+						break;
+					case 4:
+						t0 = float3(tM.x, t0.y, t0.z);
+						t1 = float3(t1.x, tM.y, tM.z);
+						break;
+					case 5:
+						t0 = float3(tM.x, t0.y, tM.z);
+						t1 = float3(t1.x, tM.y, t1.z);
+						break;
+					case 6:
+						t0 = float3(tM.x, tM.y, t0.z);
+						t1 = float3(t1.x, t1.y, tM.z);
+						break;
+					case 7:
+						t0 = float3(tM.x, tM.y, tM.z);
+						t1 = float3(t1.x, t1.y, t1.z);
+						break;
+					}
+
+					// Offet is reference + the node offset index
+					offset = node.referenceOffset + childIndex;
+				}
+			}
+			return float4(0, 0, 0, 0);
+		}
+
+		float4 frag_debug(v2f i) : SV_Target
+		{
+			// read low res depth and reconstruct world position
+			//float depth = tex2D(_CameraDepthTexture, UnityStereoScreenSpaceUVAdjust(i.uv, _CameraDepthTexture_ST));
+			float depth = 0;
+			if (stereoEnabled) depth = 1 - GetDepthTexture(i.uv.xy);
+			else depth = 1 - GetDepthTexture(i.uv.xy);
+			//linearise depth		
+			float lindepth = Linear01Depth(depth);
+
+			//get view and then world positions		
+
+			float3 worldPos = float3(0, 0, 0);
+			if (stereoEnabled)
+			{
+				//Fix Stereo View Matrix
+				float depth = GetDepthTexture(i.uv);
+				float4x4 proj, eyeToWorld;
+
+				if (i.uv.x < .5) // Left Eye
+				{
+					i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
+					proj = _LeftEyeProjection;
+					eyeToWorld = _LeftEyeToWorld;
+				}
+				else // Right Eye
+				{
+					i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
+					proj = _RightEyeProjection;
+					eyeToWorld = _RightEyeToWorld;
+				}
+
+				float2 uvClip = i.uv * 2.0 - 1.0;
+				float4 clipPos = float4(uvClip, 1 - depth, 1.0);
+				float4 viewPos = mul(proj, clipPos); // inverse projection by clip position
+				viewPos /= viewPos.w; // perspective division
+				worldPos = mul(eyeToWorld, viewPos).xyz;
+				//Fix Stereo View Matrix/
+			}
+			else
+			{
+				float4 viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+				worldPos = mul(InverseViewMatrix, viewPos).xyz;
+			}
+
+			float4 voxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+			float3 voxelPosition = (0).xxx;
+
+			#if defined(GRID_1)
+			//voxelInfo = GetVoxelInfo1(GetVoxelPosition(worldPos));
+			#endif
+
+			#if defined(GRID_2)
+			//voxelPosition = GetVoxelPosition(worldPos);
+			//voxelInfo = GetVoxelInfo2(voxelPosition);
+			#endif
+
+			#if defined(GRID_3)
+			//voxelPosition = GetVoxelPosition(worldPos);
+			//voxelInfo = GetVoxelInfo3(voxelPosition);
+			#endif
+
+			#if defined(GRID_4)
+			//voxelInfo = GetVoxelInfo4(GetVoxelPosition(worldPos));
+			#endif
+
+			#if defined(GRID_5)
+			//voxelInfo = GetVoxelInfo5(GetVoxelPosition(worldPos));
+			#endif
+
+
+
+			#if defined(GRID_SVO)
+			voxelInfo = GetVoxelInfoSVO(worldPos, 0);
+			#endif
+
+			//return float4(worldPos, 1);
+
+			float3 resultingColor = (voxelInfo.a > 0.0f ? voxelInfo.rgb : float3(0.0f, 0.0f, 0.0f));
+			return float4(resultingColor, 1.0f);
+		}
+
+		float3 GetWorldNormal(float2 uv)
+		{
+			float3 worldSpaceNormal = tex2D(_CameraGBufferTexture2, UnityStereoTransformScreenSpaceTex(uv));
+			worldSpaceNormal = normalize(worldSpaceNormal);
+
+			return worldSpaceNormal;
+		}
+
+		// Returns the voxel information
+		inline float4 GetVoxelInfo(float3 worldPosition)
+		{
+			// Default value
+			float4 info = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+			// Check if the given position is inside the voxelized volume
+			if ((abs(worldPosition.x) < _giAreaSize) && (abs(worldPosition.y) < _giAreaSize) && (abs(worldPosition.z) < _giAreaSize))
+			{
+				worldPosition += _giAreaSize;
+				worldPosition /= (2.0f * _giAreaSize);
+
+
+				//info = tex3D(voxelGrid1, worldPosition);
+				//info = GetVoxelInfoSVO(worldPosition, 0);
+				//info += tex3D(voxelGrid2, worldPosition);
+				//info += tex3D(voxelGrid3, worldPosition);
+				//info += tex3D(voxelGrid4, worldPosition);
+				//info += tex3D(voxelGrid5, worldPosition);
+
+				info = GetVoxelInfoSVO(worldPosition, 0);
+				info = GetVoxelInfoSVO(worldPosition, 1);
+				info = GetVoxelInfoSVO(worldPosition, 2);
+				info = GetVoxelInfoSVO(worldPosition, 3);
+				info = GetVoxelInfoSVO(worldPosition, 4);
+
+			}
+
+			return info;
+		}
+
+		// Traces a ray starting from the current voxel in the reflected ray direction and accumulates color
+		inline float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal)
+		{
+			// Color for storing all the samples
+			float4 accumulatedColor = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+			float3 currentPosition = worldPosition + (rayOffset * pixelNormal);
+			float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+			bool hitFound = false;
+
+			// Loop for tracing the ray through the scene
+			for (float i = 0.0f; i < maximumIterationsReflection; i += 1.0f)
+			{
+				// Traverse the ray in the reflected direction
+				currentPosition += (reflectedRayDirection * rayStep);
+
+				// Get the currently hit voxel's information
+				currentVoxelInfo = GetVoxelInfo(currentPosition);
+
+				// At the currently traced sample
+				if ((currentVoxelInfo.w > 0.0f) && (!hitFound))
+				{
+					accumulatedColor += currentVoxelInfo * (rayStep).xxxx;
+					//if (depthStopOptimization) hitFound = true; // We dont do this or fails to reflect!
+				}
+			}
+
+			return accumulatedColor;
+		}
+
+
+		inline float3 ConeTrace(float3 worldPosition, float3 coneDirection, float2 uv, float3 blueNoise, out float skyVisibility)
+		{
+			//Temp consts till integration
+			//float3 SEGISunlightVector = _WorldSpaceLightPos0;
+			//float3 skyColor = unity_AmbientSky;
+			//float SunlightInjection = 5.5f;
+			//float3 GISunColor = float3(256 / 124, 256 / 122, 256 / 118);
+			///
+
+			float3 computedColor = float3(0.0f, 0.0f, 0.0f);
+
+			float iteration0 = maximumIterations / 32.0f;
+			float iteration1 = maximumIterations / 32.0f;
+			float iteration2 = maximumIterations / 16.0f;
+			float iteration3 = maximumIterations / 8.0f;
+			float iteration4 = maximumIterations / 4.0f;
+			float iteration5 = maximumIterations / 2.0f;
+
+			float coneStep = lengthOfCone / maximumIterations;
+
+			//float3 worldNormal = tex2D(_CameraGBufferTexture2, uv).rgb;
+
+			blueNoise.xy *= 0.0625;
+			blueNoise.z *= 0.0625;
+			blueNoise.z -= blueNoise.z * 2;
+
+
+			//float3 cacheOrigin = worldPosition + worldNormal * 0.003 * ConeTraceBias * 1.25;
+
+			//return float4(worldPos.x - (int)gridOffset.x, worldPos.y - (int)gridOffset.y, worldPos.z - (int)gridOffset.z, lindepth);
+
+			float3 coneOrigin = worldPosition + (coneDirection * coneStep * iteration0) * ConeTraceBias;
+			//coneOrigin =  float3(coneOrigin.x - (int)gridOffset.x, coneOrigin.y - (int)gridOffset.y, coneOrigin.z - (int)gridOffset.z);
+
+			float3 currentPosition = coneOrigin;
+			float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+
+			float hitFound = 0.0f;
+
+			int coordSet = 0;
+			skyVisibility = 1.0f;
+			//float3 skyVisibility2 = 1.0f;
+			float occlusion;
+			float4 gi = float4(0, 0, 0, 0);
+			//float2 interMult = float2(0, 0);
+			float3 voxelPosition = (0).xxx;
+
+			// Sample voxel grid 1
+			for (float i1 = 0.0f; i1 < iteration1; i1 += 1.0f)
+			{
+				currentPosition += (coneStep * coneDirection);
+
+				float fi = ((float)i1 + blueNoise.y * StochasticSampling) / iteration1;
+				fi = lerp(fi, 1.0, 0.0);
+
+				float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+				float coneSize = coneDistance * 63.6;
+
+				if (hitFound < 0.9f)
+				{
+					//voxelPosition = GetVoxelPosition(currentPosition);
+					currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 0) * GISampleWeight(voxelPosition);
+					if (currentVoxelInfo.a > 0.0f)
+					{
+						if (depthStopOptimization) hitFound = 1.0f;
+					}
+					if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
+				}
+				occlusion = skyVisibility * skyVisibility;
+				//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+				float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+				currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+				currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+				if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+				else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+				skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			}
+			computedColor = gi;
+
+
+
+			// Sample voxel grid 2
+			hitFound = 0;
+			gi = (0.0f).xxxx;
+			//skyVisibility = 1.0f;
+			currentPosition = worldPosition + (coneDirection * coneStep * iteration2);
+			for (float i2 = 0.0f; i2 < iteration2; i2 += 1.0f)
+			{
+				currentPosition += (coneStep * coneDirection);
+
+				float fi = ((float)i2 + blueNoise.y * StochasticSampling) / iteration2;
+				fi = lerp(fi, 1.0, 0.0);
+
+				float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+				float coneSize = coneDistance * 63.6;
+
+				if (hitFound < 0.9f)
+				{
+					//voxelPosition = GetVoxelPosition(currentPosition);
+					currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 1) * GISampleWeight(voxelPosition);
+					//currentVoxelInfo = GetVoxelInfo2(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+					if (currentVoxelInfo.a > 0.0f)
+					{
+						if (depthStopOptimization) hitFound = 1.0f;
+					}
+					if (currentVoxelInfo.a < 0.5f) currentVoxelInfo.rgb + blueNoise.xyz;
+				}
+				occlusion = skyVisibility * skyVisibility;
+				//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+				float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+				currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+				currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+				if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+				else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+				skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			}
+			computedColor += gi;
+
+
+
+			// Sample voxel grid 3
+			hitFound = 0;
+			gi = (0.0f).xxxx;
+			//skyVisibility = 1.0f;
+			currentPosition = worldPosition + (coneDirection * coneStep * iteration3);
+			for (float i3 = 0.0f; i3 < iteration3; i3 += 1.0f)
+			{
+				currentPosition += coneStep * coneDirection;
+
+				float fi = ((float)i3 + blueNoise.y * StochasticSampling) / iteration3;
+				fi = lerp(fi, 1.0, 0.0);
+
+				float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+				float coneSize = coneDistance * 63.6;
+
+				if (hitFound < 0.9f)
+				{
+					//voxelPosition = GetVoxelPosition(currentPosition);
+					currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 2) * GISampleWeight(voxelPosition);
+					//GetVoxelInfo3(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+					if (currentVoxelInfo.a > 0.0f)
+					{
+						if (depthStopOptimization) hitFound = 1.0f;
+					}
+				}
+				occlusion = skyVisibility * skyVisibility;
+				//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+				float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+				currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+				currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+				if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+				else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+				skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			}
+			computedColor += gi;
+
+
+
+			// Sample voxel grid 4
+			hitFound = 0;
+			gi = (0.0f).xxxx;
+			//skyVisibility = 1.0f;
+			currentPosition = worldPosition + (coneDirection * coneStep * iteration4);
+			for (float i4 = 0.0f; i4 < iteration4; i4 += 1.0f)
+			{
+				currentPosition += coneStep * coneDirection;
+
+				float fi = ((float)i4 + blueNoise.y * StochasticSampling) / iteration4;
+				fi = lerp(fi, 1.0, 0.0);
+
+				float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+				float coneSize = coneDistance * 63.6;
+
+				if (hitFound < 0.9f)
+				{
+					//voxelPosition = GetVoxelPosition(currentPosition);
+					currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 3) * GISampleWeight(voxelPosition);
+					//currentVoxelInfo = GetVoxelInfo4(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+					if (currentVoxelInfo.a > 0.0f)
+					{
+						if (depthStopOptimization) hitFound = 1.0f;
+					}
+				}
+				occlusion = skyVisibility * skyVisibility;
+				//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+				float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+				currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+				currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+				if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+				else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+				skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			}
+			computedColor += gi;
+
+
+
+			// Sample voxel grid 5
+			hitFound = 0;
+			gi = (0.0f).xxxx;
+			currentPosition = worldPosition + (coneDirection * coneStep * iteration5);
+			for (float i5 = 0.0f; i5 < iteration5; i5 += 1.0f)
+			{
+				currentPosition += coneStep * coneDirection;
+
+				float fi = ((float)i5 + blueNoise.y * StochasticSampling) / iteration5;
+				fi = lerp(fi, 1.0, 0.0);
+
+				float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+				float coneSize = coneDistance * 63.6;
+
+				if (hitFound < 0.9f)
+				{
+					//voxelPosition = GetVoxelPosition(currentPosition);
+					currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 4) * GISampleWeight(voxelPosition);
+					//currentVoxelInfo = GetVoxelInfo5(voxelPosition.xyz) * GISampleWeight(voxelPosition.xyz);
+					if (currentVoxelInfo.a > 0.0f)
+					{
+						if (depthStopOptimization) hitFound = 1.0f;
+					}
+				}
+				occlusion = skyVisibility * skyVisibility;
+				//float3 localOcclusionColor = 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+
+				float falloffFix = pow(fi, 1.0) * 4.0 + NearLightGain;
+
+				currentVoxelInfo.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+				currentVoxelInfo.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+				if (visualizeOcclusion) gi.rgb += 1 - max(currentVoxelInfo.a, (1 - currentVoxelInfo.a) * occlusionColor.rgb);
+				else gi.rgb += currentVoxelInfo.rgb * occlusion * (coneDistance + NearLightGain) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+				skyVisibility *= pow(saturate(1.0 - currentVoxelInfo.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+			}
+			computedColor += gi;
+
+
+
+			//Calculate lighting attribution
+			if (!visualizeOcclusion)
+			{
+				float3 worldSpaceNormal = GetWorldNormal(uv);
+
+				float NdotL = pow(saturate(dot(worldSpaceNormal, coneDirection) * 1.0 - 0.0), 0.5);
+
+				computedColor *= NdotL;
+				skyVisibility *= NdotL;
+				skyVisibility *= lerp(saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0, sphericalSunlight);
+				float3 skyColor = float3(0.0, 0.0, 0.0);
+
+				float upGradient = saturate(dot(coneDirection, float3(0.0, 1.0, 0.0)));
+				float sunGradient = saturate(dot(coneDirection, -sunLight.xyz));
+				skyColor += lerp(skyColor.rgb * 1.0, skyColor.rgb * 0.5, pow(upGradient, (0.5).xxx));
+				skyColor += sunColor.rgb * pow(sunGradient, (4.0).xxx) * sunLightInjection;
+
+				computedColor.rgb *= GIGain * 0.15;
+
+				computedColor.rgb += (skyColor * skyVisibility);
+
+			}
+			else
+			{
+				//gi /= maximumIterations * iteration1 * iteration2 * iteration3 * iteration4 * iteration5;
+				computedColor *= GIGain;
+			}
+
+			//computedColor.rgb = gi.rgb;
+
+			return computedColor;
+		}
+
+		inline float3 ComputeIndirectContribution(float3 worldPosition, float4 viewPos, float3 worldNormal, float2 uv, float depth, out float skyVisibility)
+		{
+			float3 gi = float3(0.0f, 0.0f, 0.0f);
+
+			float2 noiseCoord = (uv.xy * _MainTex_TexelSize.zw) / (64.0).xx;
+			float4 blueNoise = tex2Dlod(NoiseTexture, float4(noiseCoord, 0.0, 0.0)).x;
+			blueNoise *= (1 - depth);
+			blueNoise * 0.125;
+			blueNoise *= stochasticSamplingScale;
+
+
+			float fi = (float)tracedTexture1UpdateCount + blueNoise.x * StochasticSampling;
+			float fiN = fi / 65;
+			float longitude = gAngle * fi;
+			float latitude = asin(fiN * 2.0 - 1.0);
+
+			float3 kernel;
+			kernel.x = cos(latitude) * cos(longitude);
+			kernel.z = cos(latitude) * sin(longitude);
+			kernel.y = sin(latitude);
+
+			//kernel = normalize(kernel + worldNormal.xyz * 1.0);
+
+			float3 randomVector = normalize(kernel);
+			float3 direction1 = normalize(cross(worldNormal, randomVector));
+			float3 coneDirection2 = lerp(direction1, worldNormal, 0.3333f);
+
+			/*
+			///Reflection cone setup
+			float depthValue;
+			float3 viewSpaceNormal;
+			DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+			viewSpaceNormal = normalize(viewSpaceNormal);
+			float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+			float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
+			float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
+			reflectedRayDirection *= -1.0;
+			float4 reflection = (0).xxxx;
+			///
+			*/
+			//uint index = 0;
+			//float3 voxelBufferCoord;
+			/*if (usePathCache)
+			{
+				gi = ConeTrace(worldPosition, kernel.xyz, uv, blueNoise, voxelBufferCoord, skyVisibility);
+
+				//voxelBufferCoord.x += (blueNoise.x * 0.00000001) * StochasticSampling;
+				//voxelBufferCoord.y += (blueNoise.y * 0.00000001) * StochasticSampling;
+				//voxelBufferCoord.z += (blueNoise.z * 0.00000001) * StochasticSampling;
+				//voxelBufferCoord.xy *= uv;
+				//voxelBufferCoord.z *= depth;
+				index = voxelBufferCoord.x * (voxelResolution) * (voxelResolution)+voxelBufferCoord.y * (voxelResolution)+voxelBufferCoord.z;
+				tracedBuffer1[index] += float4(gi, 1);
+			}*/
+
+			gi = ConeTrace(worldPosition, worldNormal, uv, blueNoise, skyVisibility);
+			/*if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
+			{
+				float4 viewSpacePosition = GetViewSpacePosition(uv.xy);
+				float3 viewVector = normalize(viewSpacePosition.xyz);
+				float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
+
+				float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+
+				float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a), 5.0);
+				fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+				fresnel *= saturate(spec.a * 6.0);
+
+				reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain;
+				//reflection.rgb *= maximumIterationsReflection * BalanceGain;
+
+				reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.0 * skyColor) * 2.4015 * skyReflectionIntensity;
+
+				if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
+				else gi.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
+			}*/
+
+			/*if (usePathCache && !visualizeOcclusion)
+			{
+				float4 cachedResult = float4(tracedBuffer0[index]);// *0.000003;
+
+				//Average HSV values independantly for prettier result
+				half4 cachedHSV = float4(rgb2hsv(cachedResult.rgb), 0);
+				half4 giHSV = float4(rgb2hsv(gi), 0);
+				gi.rgb *= cachedResult.rgb * EmissiveAttribution;
+				giHSV.rg = float2(rgb2hsv(gi).r, lerp(cachedHSV.g, giHSV.g, 0.5));
+				gi.rgb += hsv2rgb(giHSV);
+
+				if (visualiseCache) gi.rgb = cachedResult.rgb;
+			}*/
+			//if (visualizeReflections) gi.rgb = reflection.rgb;
+
+			return gi;
+		}
+
+		inline float3 ComputeReflection(float3 worldPosition, float2 uv, float3 gi, float skyVisibility)
+		{
+			///Reflection cone setup
+			float depthValue;
+			float3 viewSpaceNormal;
+			DecodeDepthNormal(tex2D(_CameraDepthNormalsTexture, UnityStereoTransformScreenSpaceTex(uv)), depthValue, viewSpaceNormal);
+			viewSpaceNormal = normalize(viewSpaceNormal);
+			float3 pixelNormal = mul((float3x3)InverseViewMatrix, viewSpaceNormal);
+			float3 pixelToCameraUnitVector = normalize(mainCameraPosition - worldPosition);
+			float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
+			reflectedRayDirection *= -1.0;
+			float4 reflection = (0).xxxx;
+			///
+			float4 viewSpacePosition = GetViewSpacePosition(UnityStereoTransformScreenSpaceTex(uv.xy));
+			float3 viewVector = normalize(viewSpacePosition.xyz);
+			float4 worldViewVector = mul(InverseViewMatrix, float4(viewVector.xyz, 0.0));
+
+			float4 spec = tex2D(_CameraGBufferTexture1, UnityStereoTransformScreenSpaceTex(uv));
+
+			float3 fresnel = pow(saturate(dot(worldViewVector.xyz, reflectedRayDirection.xyz)) * (spec.a * 0.5 + 0.5), 5.0);
+			fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+			fresnel *= saturate(spec.a * 6.0);
+
+			reflection = RayTrace(worldPosition, reflectedRayDirection, pixelNormal) * BalanceGain / maximumIterationsReflection;
+
+			reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.00 * skyColor) * 2.41 * skyReflectionIntensity * skyVisibility;
+
+			if (visualizeReflections) reflection.rgb = lerp((0).xxx, reflection.rgb, fresnel.rgb);
+			else reflection.rgb = lerp(gi.rgb, reflection.rgb, fresnel.rgb);
+
+			return reflection.rgb;
+		}
+
+		float4 frag_lighting(v2f i) : SV_Target
+		{
+			rng_state = i.uv.x * i.uv.y;
+			float3 directLighting = tex2D(_MainTex, i.uv).rgb;
+
+			float4 gBufferSample = tex2D(_CameraGBufferTexture0, i.uv);
+			//float3 albedo = gBufferSample.rgb;
+			//float ao = gBufferSample.a;
+
+			float metallic = tex2D(_CameraGBufferTexture1, i.uv).r;
+
+
+			// read low res depth and reconstruct world position
+			float depth = GetDepthTexture(i.uv);
+
+			//linearise depth		
+			float lindepth = Linear01Depth(1 - depth);
+
+			//get view and then world positions		
+
+			float4 viewPos = float4(0, 0, 0, 0);
+			float3 worldPos = float3(0, 0, 0);
+			if (stereoEnabled)
+			{
+				//Fix Stereo View Matrix
+				float depth = GetDepthTexture(i.uv);
+				float4x4 proj, eyeToWorld;
+
+				if (i.uv.x < .5) // Left Eye
+				{
+					i.uv.x = saturate(i.uv.x * 2); // 0..1 for left side of buffer
+					proj = _LeftEyeProjection;
+					eyeToWorld = _LeftEyeToWorld;
+				}
+				else // Right Eye
+				{
+					i.uv.x = saturate((i.uv.x - 0.5) * 2); // 0..1 for right side of buffer
+					proj = _RightEyeProjection;
+					eyeToWorld = _RightEyeToWorld;
+				}
+
+				float2 uvClip = i.uv * 2.0 - 1.0;
+				float4 clipPos = float4(uvClip, 1 - depth, 1.0);
+				viewPos = mul(proj, clipPos); // inverse projection by clip position
+				viewPos /= viewPos.w; // perspective division
+				worldPos = mul(eyeToWorld, viewPos).xyz;
+				//Fix Stereo View Matrix/
+			}
+			else
+			{
+				viewPos = float4(i.cameraRay.xyz * lindepth, 1.0f);
+				worldPos = mul(InverseViewMatrix, viewPos).xyz;
+			}
+
+			float3 worldSpaceNormal = GetWorldNormal(i.uv);
+
+			float skyVisibility;
+			float3 indirectContribution = ComputeIndirectContribution(worldPos, viewPos, worldSpaceNormal, i.uv, depth, skyVisibility);
+			float3 indirectLighting = directLighting + ((gBufferSample.a * indirectLightingStrength * (1.0f - metallic) * gBufferSample.rgb) / PI) * indirectContribution;
+			//indirectLighting = directLighting + indirectLighting * gBufferSample.a * gBufferSample.rgb;
+			//if (skyVisibility == 0) indirectLighting += directLighting;
+			if ((DoReflections && !visualizeOcclusion && !VisualiseGI) || visualizeReflections)
+			{
+				indirectLighting = ComputeReflection(worldPos, i.uv, indirectLighting, skyVisibility);
+			}
+
+			//else indirectLighting *= 1.85;
+
+
+
+			if (VisualiseGI || visualizeOcclusion || visualiseCache) indirectLighting = indirectContribution / maximumIterations / 1.85;
+
+			return float4(indirectLighting, 1.0f);
+		}
+
+		float4 frag_normal_texture(v2f i) : SV_Target
+		{
+			float3 worldSpaceNormal = GetWorldNormal(i.uv);
+			return float4(worldSpaceNormal, 1.0f);
 		}
 
 		ENDCG
-}
 
-// 4 : Normal texture writing
-Pass
-{
-	CGPROGRAM
-	#pragma vertex vert
-	#pragma fragment frag_normal_texture
-	ENDCG
-}
+		// 0 : World Position Writing pass
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag_position
+			#pragma target 5.0
+			ENDCG
+		}
+
+		// 1 : Voxel Grid debug pass
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag_debug
+			//#pragma multi_compile GRID_1 GRID_2 GRID_3 GRID_4 GRID_5 GRID_SVO
+			#pragma multi_compile GRID_SVO
+			#pragma target 5.0
+			ENDCG
+		}
+
+		// 2 : Lighting pass
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag_lighting
+			#pragma target 5.0
+			ENDCG
+		}
+
+		// 3 : Composition pass
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag_blur
+			#pragma fragmentoption ARB_precision_hint_fastest
+			#pragma multi_compile_instancing
+			#if defined (VRWORKS)
+				#pragma multi_compile VRWORKS_MRS VRWORKS_LMS VRWORKS_NONE
+			#endif
+
+			float4 frag_blur(v2f input) : COLOR0
+			{
+				half3 col = tex2D(_MainTex, input.uv).rgb;
+				half3 giCol = tex2D(gi, input.uv).rgb;
+				half3 lpvCol = tex2D(lpv, input.uv).rgb;
+				//half3 gBufferSample = tex2D(_CameraGBufferTexture0, input.uv).rgb;
+				//half3 finalLighting = giCol.rgb + lerp(col.rgb, gBufferSample.rgb * 0.25, 0.25);
+
+				if (!VisualiseGI) return float4(giCol + lpvCol, 1);
+				else return float4(giCol, 1);
+
+				//return float4(finalLighting, 1);
+			}
+
+			ENDCG
+		}
+
+		// 4 : Normal texture writing
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag_normal_texture
+			ENDCG
+		}
 	}
 }
