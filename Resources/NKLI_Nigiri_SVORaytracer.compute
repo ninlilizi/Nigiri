@@ -108,11 +108,11 @@ result_Struct Create_result_Struct()
     return output;
 }
 
-#define STACK_DECLARE
+/*#define STACK_DECLARE
 #define STACK_SETUP uint StackPosition = 0; subtree_Struct stackBuffer[256]
 #define STACK_PUSH(a) stackBuffer[StackPosition++] = a
 #define STACK_POP stackBuffer[--StackPosition]
-#define STACK_HAS_DATA (StackPosition >0)
+#define STACK_HAS_DATA (StackPosition >0)*/
 
 
 float3 SampleHemisphere(float3 normal, float alpha, uint seed)
@@ -265,10 +265,6 @@ float3 Shade(inout Ray ray, RayHit hit, uint seed)
     }
 }
 
-
-
-
-
 int first_node(float tx0, float ty0, float tz0, float txm, float tym, float tzm)
 {
     uint
@@ -331,12 +327,16 @@ inline int new_node(float txm, int x, float tym, int y, float tzm, int z)
     STACK_PUSH(subtree);
 }*/
 
-inline void AddChildToResult(float tx0, float ty0, float tz0, float txm, float tym, float tzm, uint offset, uint childCount, inout result_Struct result)
+inline void AddChildToResult(float tx0, float ty0, float tz0, float txm, float tym, float tzm, uint offset, uint nodeOffset, SVONode node, uint childCount, inout result_Struct result)
 {
-    result.t0[childCount] = float3(tx0, ty0, tz0);
-    result.t1[childCount] = float3(txm, tym, tzm);
-    result.referenceOffset[childCount] = offset;
-    result.isOccupied[childCount] = 1;
+    // Only append the node if occupancy bit is setd
+    if (node.GetOccupancyBit(nodeOffset));
+    {
+        result.t0[childCount] = float3(tx0, ty0, tz0);
+        result.t1[childCount] = float3(txm, tym, tzm);
+        result.referenceOffset[childCount] = offset + nodeOffset;
+        result.isOccupied[childCount] = 1;
+    }
 }
 
 result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1, float tz1, SVONode node, uint a)
@@ -352,9 +352,9 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
     {
         //cout << "Reached leaf node " << node - > debug_ID << endl;
         
-        result.t0[0] = float3(tx0, ty0, tz0);
-        result.t1[0] = float3(txm, tym, tzm);
-        result.referenceOffset[0] = node.referenceOffset;
+        //result.t0[0] = float3(tx0, ty0, tz0);
+        //result.t1[0] = float3(txm, tym, tzm);
+        //result.referenceOffset[0] = node.referenceOffset;
         result.isLeaf = 1;
         return result;
     }
@@ -380,11 +380,8 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
     txm = 0.5 * (tx0 + tx1);
     tym = 0.5 * (ty0 + ty1);
     tzm = 0.5 * (tz0 + tz1);
-    
-    
-    
+           
     currNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
-    //currNode = GetSVOBitOffset(float3(tx0, ty0, tz0), float3(txm, tym, tzm));
     for (uint childCount = 0; childCount < 3; childCount++)
     {
         //subtree_Struct subtree;
@@ -393,48 +390,48 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
         {
             case 0:
                     //proc_subtree(tx0, ty0, tz0, txm, tym, tzm, node - > children[a]);
-                AddChildToResult(tx0, ty0, tz0, txm, tym, tzm, node.referenceOffset + a, childCount, result);
+                AddChildToResult(tx0, ty0, tz0, txm, tym, tzm, node.referenceOffset, a, node, childCount, result);
                 currNode = new_node(txm, 4, tym, 2, tzm, 1);
                 break;
             case 1:{ 
                     //proc_subtree(tx0, ty0, tzm, txm, tym, tz1, node - > children[1 ^ a]);
-                    AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset + (1 ^ a), childCount, result);
+                    AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset, (1 ^ a), node, childCount, result);
                     currNode = new_node(txm, 5, tym, 3, tz1, 8);
                     break;
                 }
             case 2:{ 
                     //proc_subtree(tx0, tym, tz0, txm, ty1, tzm, node - > children[2 ^ a]);
-                    AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset + (2 ^ a), childCount, result);
+                    AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset, (2 ^ a), node, childCount, result);
                     currNode = new_node(txm, 6, ty1, 8, tzm, 3);
                     break;
                 }
             case 3:{ 
                     //proc_subtree(tx0, tym, tzm, txm, ty1, tz1, node - > children[3 ^ a]);
-                    AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset + (3 ^ a), childCount, result);
+                    AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset, (3 ^ a), node, childCount, result);
                     currNode = new_node(txm, 7, ty1, 8, tz1, 8);
                     break;
                 }
             case 4:{ 
                     //proc_subtree(txm, ty0, tz0, tx1, tym, tzm, node - > children[4 ^ a]);
-                    AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset + (4 ^ a), childCount, result);
+                    AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset, (4 ^ a), node, childCount, result);
                     currNode = new_node(tx1, 8, tym, 6, tzm, 5);
                     break;
                 }
             case 5:{ 
                     //proc_subtree(txm, ty0, tzm, tx1, tym, tz1, node - > children[5 ^ a]);
-                    AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset + (5 ^ a), childCount, result);
+                    AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset, (5 ^ a), node, childCount, result);
                     currNode = new_node(tx1, 8, tym, 7, tz1, 8);
                     break;
                 }
             case 6:{ 
                     //proc_subtree(txm, tym, tz0, tx1, ty1, tzm, node - > children[6 ^ a]);
-                    AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset + (6 ^ a), childCount, result);
+                    AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset, (6 ^ a), node, childCount, result);
                     currNode = new_node(tx1, 8, ty1, 8, tzm, 7);
                     break;
                 }
             case 7:{ 
                     //proc_subtree(txm, tym, tzm, tx1, ty1, tz1, node - > children[7 ^ a]);
-                    AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset + (7 ^ a), childCount, result);
+                    AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset, (7 ^ a), node, childCount, result);
                     currNode = 8;
                     break;
                 }
@@ -442,7 +439,6 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
                 //break;
         }
     }
-    
     //result.childCount = childCount + 1;
     
     return result;
@@ -520,15 +516,30 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
     float tz1 = (grid_max.z - ray.origin[2]) * divz;
       
     
-    STACK_SETUP;
+    //STACK_SETUP;
+    //RINGBUFFER_SETUP;
+    
+    uint RingBuffer_MaxCount = 64;
+    subtree_Struct RingBuffer[64];
+    uint RingBuffer_ReadIndex = 0;
+    uint RingBuffer_WriteIndex = 0;
+    uint RingBuffer_Count = 0;
         
     
     subtree_Struct rootNode;
     rootNode.t0 = float3(tx0, ty0, tz0);
     rootNode.t1 = float3(tx1, ty1, tz1);
     rootNode.referenceOffset = 0;
-    STACK_PUSH(rootNode);
+    //STACK_PUSH(rootNode);
+    //RINGBUFFER_WRITE(rootNode);
+    
+    RingBuffer[RingBuffer_WriteIndex] = rootNode;
+    
+    RingBuffer_WriteIndex++;
+    RingBuffer_Count++;
 
+    if (RingBuffer_WriteIndex == RingBuffer_MaxCount)
+        RingBuffer_WriteIndex = 0;
     
         
     if (max(max(tx0, ty0), tz0) < min(min(tx1, ty1), tz1))
@@ -537,9 +548,23 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
         float min_t = 9999;
         uint intersected = 0;
         
-        while (STACK_HAS_DATA)
+        //while (RINGBUFFER_HAS_DATA)
+        while (RingBuffer_Count > 0)
         {
-            subtree_Struct subtree = STACK_POP;
+            //subtree_Struct subtree = STACK_POP;
+            //subtree_Struct subtree = RINGBUFFER_READ;
+            
+            subtree_Struct subtree = RingBuffer[RingBuffer_ReadIndex];
+        
+            RingBuffer_ReadIndex++;
+            RingBuffer_Count--;
+        
+            if (RingBuffer_ReadIndex == RingBuffer_MaxCount)
+                RingBuffer_ReadIndex = 0;
+
+
+            
+            
             result_Struct result = proc_subtree(subtree.t0.x, subtree.t0.y, subtree.t0.z, subtree.t1.x, subtree.t1.y, subtree.t1.z, _SVO[subtree.referenceOffset], a);
             
             if (result.isLeaf)
@@ -560,11 +585,11 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
             }
             
             if (intersected)
-            {               
+            {
                 SVONode localNode = _SVO[subtree.referenceOffset];
             
-               float tmin, tmax;
-               float3 aabb[2] = { subtree.t0, subtree.t1 };
+                float tmin, tmax;
+                float3 aabb[2] = { subtree.t0, subtree.t1 };
 
                 ray_box_intersection(ray, aabb, tmin, tmax);
                 
@@ -572,7 +597,7 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
             
                 position = ray.origin + min_t * ray.direction;
 
-                normal = float3(0, 1, 0);
+                normal = float3(1, 1, 0);
                 hit.normal = normal;
                 //int material_index = material_index_list[min_tris_index];
                 //float4x4 mat = material_list[material_index];
@@ -611,8 +636,19 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
                     subtree.t0 = result.t0[ri];
                     subtree.t1 = result.t1[ri];
                     subtree.referenceOffset = result.referenceOffset[ri];
-                    STACK_PUSH(subtree);
-                
+                    //STACK_PUSH(subtree);
+                    //RINGBUFFER_WRITE(subtree);
+                    
+                    if (RingBuffer_MaxCount - RingBuffer_Count)
+                    {
+                        RingBuffer[RingBuffer_WriteIndex] = subtree;
+    
+                        RingBuffer_WriteIndex++;
+                        RingBuffer_Count++;
+
+                        if (RingBuffer_WriteIndex == RingBuffer_MaxCount)
+                            RingBuffer_WriteIndex = 0;
+                    }
 
                     result.t0[ri] = float3(0, 0, 0);
                     result.t1[ri] = float3(0, 0, 0);
@@ -665,11 +701,12 @@ void PathTrace_uniform_grid(CS_INPUT input)
             {
                 seed = rand_xorshift(seed);
 				
-                L += ray.energy * Shade(ray, hit, seed);
+                L = hit.albedo;
+                //L += ray.energy * Shade(ray, hit, seed);
 				//L
 
             }
-            else
+            /*else
             {
                 L += SimpleGradient(ray) * ray.energy; //float3(1.5, 1.5, 1.5) is the temporary skybox value
 
@@ -678,15 +715,16 @@ void PathTrace_uniform_grid(CS_INPUT input)
                     if (!any(ray.energy))
                         break;
                 break;
-            }
+            }*/
  
 									
         }
 
         float4 ris = output[input.DTid.xy];
-        float num_samples = ris.a;
-        L = 1.0 / (num_samples + 1) * (num_samples * ris.rgb + L);
-        ris = float4(L, num_samples + 1);
+        //float num_samples = ris.a;
+        //L = 1.0 / (num_samples + 1) * (num_samples * ris.rgb + L);
+        //ris = float4(L, num_samples + 1);
+        ris = float4(L, 1);
 		
         output[input.DTid.xy] = ris;
     }

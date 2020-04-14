@@ -147,5 +147,11 @@ struct SVONode
         return (packedBitfield >> 16) & 0xF;
     }
     
-
+    /// <summary>
+    /// Returns single occupancy bit
+    /// </summary>
+    inline uint GetOccupancyBit(uint index)
+    {
+        return ((packedBitfield >> 24 + index) & 1);
+    }
 };
