@@ -464,36 +464,39 @@
 		{
 			uint nextIndex = 0;
 			if (tX.x > tM.x)
-				nextIndex = nextIndex | (1 << 2);
+				nextIndex |= 4;
 			if (tX.y > tM.y)
-				nextIndex = nextIndex | (1 << 1);
+				nextIndex |= 2;
 			if (tX.z > tM.z)
-				nextIndex = nextIndex | (1);
+				nextIndex |= 1;
 
 			return nextIndex;
 		}
 
-		inline uint EntryNodeSelector(float3 t0, float3 tM)
+		inline uint CurrentNodeSelector(float3 tX, float3 tM)
 		{
-			float tMax = max(t0.x, max(t0.y, t0.z));
+			float tMax = max(tX.x, max(tX.y, tX.z));
 
 
 			uint node = 0;
 
-			if (tMax == t0.x)
+			// YZ
+			if (tMax == tX.x)
 			{
-				if (tM.x < t0.z) node = node | (1 << 2);
-				if (tM.y < t0.z) node = node | (1 << 1);
+				if (tM.y < tX.x) node |= (1 << 1);
+				if (tM.z < tX.x) node |= (1 << 2);
 			}
-			else if (tMax == t0.y)
+			// XZ
+			else if (tMax == tX.y)
 			{
-				if (tM.y < t0.x) node = node | (1 << 1);
-				if (tM.z < t0.x) node = node | (1);
+				if (tM.x < tX.y) node |= (1);
+				if (tM.z < tX.y) node |= (1 << 2);
 			}
-			else if (tMax == t0.z)
+			// XY
+			else if (tMax == tX.z)
 			{
-				if (tM.x < t0.y) node = node | (1 << 2);
-				if (tM.z < t0.y) node = node | (1);
+				if (tM.x < tX.z) node |= (1);
+				if (tM.y < tX.z) node |= (1 << 1);
 			}
 
 			return node;
@@ -659,7 +662,7 @@
 			float3 t0 = float3(-halfArea, -halfArea, -halfArea);
 			float3 t1 = float3(halfArea, halfArea, halfArea);
 
-			uint entryPlane = EntryNodeSelector(t0, tM);
+			uint entryPlane = CurrentNodeSelector(t0, tM);
 
 			// Find the exit plane
 			uint exitPlane = ExitPlaneSelector(t1);

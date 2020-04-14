@@ -49,12 +49,12 @@ inline uint GetSVOBitOffset(float3 tX, float3 tM)
 {
     uint nextIndex = 0;
     if (tX.x > tM.x)
-        nextIndex = nextIndex | (1 << 2);
+        nextIndex |= 4;
     if (tX.y > tM.y)
-        nextIndex = nextIndex | (1 << 1);
+        nextIndex |= 2;
     if (tX.z > tM.z)
-        nextIndex = nextIndex | (1);
-    
+        nextIndex |= 1;
+
     return nextIndex;
 }
 

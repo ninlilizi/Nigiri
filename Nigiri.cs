@@ -13,6 +13,8 @@ public class Nigiri : MonoBehaviour {
         GRID_SVO
     };
 
+    public Texture TEST_BACKGROUND_TEX;
+
     [Header("General Settings")]
     [Range(0.01f, 8)]
     public float indirectLightingStrength = 1.0f;
@@ -387,6 +389,7 @@ public class Nigiri : MonoBehaviour {
 
     // Functional objects
     public static NKLI.Nigiri.SVO.Voxelizer voxelizer;
+    public static NKLI.Nigiri.SVO.Raytracer raytracer;
 
     private int tracedTexture1UpdateCount;
 
@@ -1034,7 +1037,8 @@ public class Nigiri : MonoBehaviour {
 		} else {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
-            Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
+            renderTextures.gi = raytracer.Trace(source, renderTextures.positionTexture);
+            //Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
             renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
@@ -1161,6 +1165,8 @@ public class Nigiri : MonoBehaviour {
             computeBuffers.maskGenerated = true;
         }
 
+        
+        //Graphics.Blit(renderTextures.gi, destination);
 
         // Voxelization happens after the scene render
         // as we need the output render buffers.
@@ -1186,17 +1192,20 @@ public class Nigiri : MonoBehaviour {
         if (Application.isEditor)  if (renderTextures != null) DestroyImmediate(renderTextures);
         else if (renderTextures != null) Destroy(renderTextures);
 
-        // Destroy render textures
-        Helpers.DestroyScriptableObject(ref renderTextures);
-
-        // Destroy buffers
-        Helpers.DestroyScriptableObject(ref computeBuffers);
+        // Dispose raytracer
+        raytracer.Dispose();
 
         // Dispose voxelizer
         voxelizer.Dispose();
 
         // Destroy SVO
         Helpers.DestroyScriptableObject(ref SVO);
+
+        // Destroy render textures
+        Helpers.DestroyScriptableObject(ref renderTextures);
+
+        // Destroy buffers
+        Helpers.DestroyScriptableObject(ref computeBuffers);
 
         //Volumetric Lighting
         //_camera.RemoveAllCommandBuffers();
@@ -2293,6 +2302,11 @@ public class Nigiri : MonoBehaviour {
         {
             // Dispose voxelizer if exists
             if (voxelizer != null) voxelizer.Dispose();
+
+            // Dispose voxelizer if exists
+            if (raytracer != null) raytracer.Dispose();
+
+
             // Destroy SVO if exists
             if (SVO != null) Helpers.DestroyScriptableObject(ref SVO);
 
@@ -2305,6 +2319,9 @@ public class Nigiri : MonoBehaviour {
 
             // Instantiate voxelizer
             voxelizer = new NKLI.Nigiri.SVO.Voxelizer(SVO, 5F, 0.9F, 0.95F, OctreeAreaSize);
+
+            // Instantiate raytracer
+            raytracer = new NKLI.Nigiri.SVO.Raytracer(SVO, this.GetComponent<Camera>(), sunLight, OctreeAreaSize);
         }
 
         // Propagate inspector values

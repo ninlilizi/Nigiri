@@ -1,0 +1,693 @@
+﻿#pragma kernel PathTrace_uniform_grid
+
+#include "Utils.cginc"
+#include "NKLI_Nigiri_SVONode.cginc"
+
+RWTexture2D<float4> output;
+
+// SVO
+uniform RWStructuredBuffer<SVONode> _SVO;
+
+float3 grid_min;
+float3 grid_max;
+
+uniform const float _giAreaSize;
+
+float4 grid_origin;
+float4 grid_size;
+
+//camera data
+float4x4 worldspace_frustum_corners;
+float4 screen_size;
+float4 camera_position;
+
+int start_seed;
+
+struct RayHit
+{
+    float3 position;
+    float distance;
+    float3 normal;
+    float3 albedo;
+    float3 specular;
+    float smoothness;
+    float3 emission;
+    float transparency;
+    float refraction;
+};
+
+RayHit CreateRayHit()
+{
+    RayHit hit;
+    hit.position = 0;
+    hit.distance = 0;
+    hit.normal = (0).xxx;
+    hit.albedo = (0).xxx;
+    hit.specular = (0).xxx;
+    hit.smoothness = 0;
+    hit.emission = (0).xxx;
+    hit.transparency = 0;
+    hit.refraction = 0l;
+    
+    return hit;
+}
+
+
+
+struct CS_INPUT
+{
+    uint3 Gid : SV_GroupID;
+    uint3 GTid : SV_GroupThreadID;
+    uint3 DTid : SV_DispatchThreadID;
+    uint GI : SV_GroupIndex;
+};
+
+struct subtree_Struct
+{
+    
+    float3 t0;
+    float3 t1;
+    uint referenceOffset;
+};
+
+struct result_Struct
+{
+    uint isLeaf;
+    
+    uint isOccupied[3];
+    
+    float3 t0[3];
+    
+    float3 t1[3];
+    
+    uint referenceOffset[3];
+};
+
+result_Struct Create_result_Struct()
+{
+    result_Struct output;
+    
+    output.isLeaf = 0;
+    
+    output.isOccupied[0] = 0;
+    output.isOccupied[1] = 0;
+    output.isOccupied[2] = 0;
+    
+    output.t0[0] = (0).xxx;
+    output.t0[1] = (0).xxx;
+    output.t0[2] = (0).xxx;
+    
+    output.t1[0] = (0).xxx;
+    output.t1[1] = (0).xxx;
+    output.t1[2] = (0).xxx;
+    
+    output.referenceOffset[0] = 0;
+    output.referenceOffset[1] = 0;
+    output.referenceOffset[2] = 0;
+    
+    return output;
+}
+
+#define STACK_DECLARE
+#define STACK_SETUP uint StackPosition = 0; subtree_Struct stackBuffer[256]
+#define STACK_PUSH(a) stackBuffer[StackPosition++] = a
+#define STACK_POP stackBuffer[--StackPosition]
+#define STACK_HAS_DATA (StackPosition >0)
+
+
+float3 SampleHemisphere(float3 normal, float alpha, uint seed)
+{
+
+    seed = rand_xorshift(seed);
+    float u = seed * (1.0 / 4294967296.0);
+    seed = rand_xorshift(seed);
+    float v = seed * (1.0 / 4294967296.0);
+	// Sample the hemisphere, where alpha determines the kind of the sampling
+    float cosTheta = pow(u, 1.0f / (alpha + 1.0f));
+    float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
+    float phi = 2 * PI * v;
+    float3 tangentSpaceDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+
+	// Transform direction to world space
+    return mul(tangentSpaceDir, GetTangentSpace(normal));
+}
+
+float3 Shade(inout Ray ray, RayHit hit, uint seed)
+{
+    if (hit.distance < 1.#INF)
+    {
+		// Calculate chances of diffuse and specular reflection
+        hit.albedo = (min(hit.transparency - hit.specular, hit.albedo) + hit.albedo) / 2;
+        float specChance = energy(hit.specular);
+        float diffChance = energy(hit.albedo);
+        float transparencyChance = (hit.transparency);
+        float sum = specChance + diffChance;
+
+
+		// Roulette-select the ray's path
+
+        float u = seed * (1.0 / 4294967296.0);
+        float roulette = u;
+		//	noise();
+
+        if (roulette < specChance)
+        {
+			//// Specular reflection
+			//ray.origin = hit.position + hit.normal * 0.001f;
+            ray.origin = hit.position;
+            float alpha;
+            if (hit.smoothness < 1)
+            {
+                alpha = SmoothnessToPhongAlpha(hit.smoothness);
+                ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha, seed);
+                float f = (alpha + 2) / (alpha + 1);
+
+                ray.energy *= (1.0f / specChance) * hit.specular * sdot(hit.normal, ray.direction, f);
+            }
+            else
+            {
+                float alpha = 15.0f;
+                ray.direction = (reflect(ray.direction, hit.normal));
+                float f = (alpha + 2) / (alpha + 1);
+                ray.energy *= (1.0f / specChance) * hit.specular * sdot(hit.normal, ray.direction, f);
+            }
+
+
+        }
+        else if (diffChance > 0 && transparencyChance == 1 && roulette < sum)
+        {
+			//// Diffuse reflection
+            ray.origin = hit.position;
+			//ray.origin = hit.position + hit.normal * 0.001f;
+            ray.direction = SampleHemisphere(hit.normal, 1.0f, seed);
+            ray.energy *= (1.0f / diffChance) * hit.albedo;
+
+
+        }
+        else if (transparencyChance < 1)
+        {
+            const float refIdx = hit.refraction;
+			//// Transparency and refraction
+
+			//1.56 ior reflection;
+            float3 outwardNormal;
+            float niOverNt;
+            float3 refracted;
+            float cosine;
+
+            if (dot(ray.direction, hit.normal) > 0)
+            {
+                outwardNormal = -hit.normal;
+                niOverNt = refIdx;
+                cosine = refIdx * dot(ray.direction, hit.normal) / length(ray.direction);
+            }
+            else
+            {
+                outwardNormal = hit.normal;
+                niOverNt = 1.0 / refIdx;
+                cosine = -dot(ray.direction, hit.normal) / length(ray.direction);
+            }
+
+            float reflectProb = lerp(1.0, Schlick(cosine, refIdx),
+				Refract(ray.direction, outwardNormal, niOverNt, refracted));
+
+            float alpha = SmoothnessToPhongAlpha(1 - transparencyChance);
+
+            ray.origin = hit.position; //;
+            ray.direction = refracted;
+
+            float f = (alpha + 2) / (alpha + 1);
+            ray.energy *= (1.0f / diffChance) * (hit.albedo) * (1 - transparencyChance);
+
+
+
+        }
+        else
+        {
+            ray.energy = 0.0f;
+        }
+
+		//Shadow Pass
+		//if (_shadowMode == 1) {
+		//	Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz, ray.uv);
+		//	RayHit shadowHit = Trace(shadowRay);
+		//	if (shadowHit.distance != 1.#INF)
+		//	{
+		//		if (shadowHit.canShadow == 1) {
+		//			ray.energy += float3(0.0f, 0.0f, 0.0f);
+		//			//Clamp min to 1
+		//			ray.energy = ray.energy / 8 / max(0.125, _shadowStrength)/*(normalize(shadowRay.origin + shadowHit.position)/4*/;
+		//		}
+
+		//	}
+		//	else
+		//	{
+		//		ray.origin = hit.position - hit.normal * 0.001f;
+		//		ray.firstHit = false;
+		//		//ray.energy += _LightColor0;
+		//	}
+		//}
+		//else {
+		//ray.origin = hit.position;
+				//hit.position + hit.normal * 0.001f;
+			//ray.firstHit = false;
+		//}
+
+        return hit.emission;
+    }
+    else
+    {
+		// Erase the ray's energy - the sky doesn't reflect anything
+        ray.energy = 0.0f;
+
+
+        return float3(1.5, 1.5, 1.5);
+    }
+}
+
+
+
+
+
+int first_node(float tx0, float ty0, float tz0, float txm, float tym, float tzm)
+{
+    uint
+    answer = 0; // initialize to 00000000
+    // select the entry plane and set bits
+    if (tx0 > ty0)
+    {
+        if (tx0 > tz0)
+        { // PLANE YZ
+            if (tym < tx0)
+                answer |= 2; // set bit at position 1
+            if (tzm < tx0)
+                answer |= 1; // set bit at position 0
+            return (int) answer;
+        }
+    }
+    else
+    {
+        if (ty0 > tz0)
+        { // PLANE XZ
+            if (txm < ty0)
+                answer |= 1; // set bit at position 2
+            if (tzm < ty0)
+                answer |= 4; // set bit at position 0
+            return (int) answer;
+        }
+    }
+    // PLANE XY
+    if (txm < tz0)
+        answer |= 4; // set bit at position 2
+    if (tym < tz0)
+        answer |= 2; // set bit at position 1
+    return (int) answer;
+}
+
+inline int new_node(float txm, int x, float tym, int y, float tzm, int z)
+{
+    if (txm < tym)
+    {
+        if (txm < tzm)
+        {
+            return x;
+        } // YZ plane
+    }
+    else
+    {
+        if (tym < tzm)
+        {
+            return y;
+        } // XZ plane
+    }
+    return z; // XY plane;
+}
+/*inline void PushSubTreeToStack(uint tx0, uint ty0, uint tz0, uint txm, uint tym, uint tzm, uint offset, inout uint StackPosition, inout subtree_Struct stackBuffer[128])
+{
+    subtree_Struct subtree;
+    subtree.t0 = float3(tx0, ty0, tz0);
+    subtree.t1 = float3(txm, tym, tzm);
+    subtree.referenceOffset = offset;
+    STACK_PUSH(subtree);
+}*/
+
+inline void AddChildToResult(float tx0, float ty0, float tz0, float txm, float tym, float tzm, uint offset, uint childCount, inout result_Struct result)
+{
+    result.t0[childCount] = float3(tx0, ty0, tz0);
+    result.t1[childCount] = float3(txm, tym, tzm);
+    result.referenceOffset[childCount] = offset;
+    result.isOccupied[childCount] = 1;
+}
+
+result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1, float tz1, SVONode node, uint a)
+{
+    result_Struct result = Create_result_Struct();
+    
+    float txm, tym, tzm;
+    int currNode;
+
+    if (tx1 < 0 || ty1 < 0 || tz1 < 0)
+        return result;
+    if (!node.GetTTL())
+    {
+        //cout << "Reached leaf node " << node - > debug_ID << endl;
+        
+        result.t0[0] = float3(tx0, ty0, tz0);
+        result.t1[0] = float3(txm, tym, tzm);
+        result.referenceOffset[0] = node.referenceOffset;
+        result.isLeaf = 1;
+        return result;
+    }
+    else if (!node.referenceOffset)
+    {
+        //cout << "Reached node " << node - > debug_ID << endl;
+        
+        if (node.colour_A)
+        {
+            result.t0[0] = float3(tx0, ty0, tz0);
+            result.t1[0] = float3(txm, tym, tzm);
+            result.referenceOffset[0] = node.referenceOffset;
+            //result.isLeaf = 1;
+        }
+        
+
+        
+        
+        //result.isLeaf = 1;
+        return result;
+    }
+
+    txm = 0.5 * (tx0 + tx1);
+    tym = 0.5 * (ty0 + ty1);
+    tzm = 0.5 * (tz0 + tz1);
+    
+    
+    
+    currNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
+    //currNode = GetSVOBitOffset(float3(tx0, ty0, tz0), float3(txm, tym, tzm));
+    for (uint childCount = 0; childCount < 3; childCount++)
+    {
+        //subtree_Struct subtree;
+        
+        switch (currNode)
+        {
+            case 0:
+                    //proc_subtree(tx0, ty0, tz0, txm, tym, tzm, node - > children[a]);
+                AddChildToResult(tx0, ty0, tz0, txm, tym, tzm, node.referenceOffset + a, childCount, result);
+                currNode = new_node(txm, 4, tym, 2, tzm, 1);
+                break;
+            case 1:{ 
+                    //proc_subtree(tx0, ty0, tzm, txm, tym, tz1, node - > children[1 ^ a]);
+                    AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset + (1 ^ a), childCount, result);
+                    currNode = new_node(txm, 5, tym, 3, tz1, 8);
+                    break;
+                }
+            case 2:{ 
+                    //proc_subtree(tx0, tym, tz0, txm, ty1, tzm, node - > children[2 ^ a]);
+                    AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset + (2 ^ a), childCount, result);
+                    currNode = new_node(txm, 6, ty1, 8, tzm, 3);
+                    break;
+                }
+            case 3:{ 
+                    //proc_subtree(tx0, tym, tzm, txm, ty1, tz1, node - > children[3 ^ a]);
+                    AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset + (3 ^ a), childCount, result);
+                    currNode = new_node(txm, 7, ty1, 8, tz1, 8);
+                    break;
+                }
+            case 4:{ 
+                    //proc_subtree(txm, ty0, tz0, tx1, tym, tzm, node - > children[4 ^ a]);
+                    AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset + (4 ^ a), childCount, result);
+                    currNode = new_node(tx1, 8, tym, 6, tzm, 5);
+                    break;
+                }
+            case 5:{ 
+                    //proc_subtree(txm, ty0, tzm, tx1, tym, tz1, node - > children[5 ^ a]);
+                    AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset + (5 ^ a), childCount, result);
+                    currNode = new_node(tx1, 8, tym, 7, tz1, 8);
+                    break;
+                }
+            case 6:{ 
+                    //proc_subtree(txm, tym, tz0, tx1, ty1, tzm, node - > children[6 ^ a]);
+                    AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset + (6 ^ a), childCount, result);
+                    currNode = new_node(tx1, 8, ty1, 8, tzm, 7);
+                    break;
+                }
+            case 7:{ 
+                    //proc_subtree(txm, tym, tzm, tx1, ty1, tz1, node - > children[7 ^ a]);
+                    AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset + (7 ^ a), childCount, result);
+                    currNode = 8;
+                    break;
+                }
+            //case 8:
+                //break;
+        }
+    }
+    
+    //result.childCount = childCount + 1;
+    
+    return result;
+}
+
+
+bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit hit)
+{
+    bool ris = false;
+    float3 p;
+    
+    /// Calculate initial values
+    // AABB Min/Max x,y,z
+    float halfArea = _giAreaSize / 2;
+    grid_min = (-halfArea).xxx;
+    grid_max = (halfArea).xxx;
+    
+    float octreeCenter[3] = { 0, 0, 0};
+    
+    //check if ray origin is inside the voxel grid
+    if (point_inside_box(ray.origin, grid_min, grid_max))
+    {
+        p = ray.origin;
+    }
+    else //the origin is not in the grid, check if the ray intersects the grid
+    {
+        float tmin, tmax;
+        float3 aabb[2] = { grid_min, grid_max };
+
+        ray_box_intersection(ray, aabb, tmin, tmax);
+
+        if (tmin > tmax)  //no scene intersection
+        {
+            return false;
+        }
+        else
+        {
+            p = ray.origin + tmin * ray.direction;
+        }
+    }
+    
+     
+    uint a = 0;
+
+    // fixes for rays with negative direction
+    if (ray.direction[0] < 0)
+    {
+        ray.origin[0] = octreeCenter[0] * 2 - ray.origin[0];
+        ray.direction[0] = -ray.direction[0];
+        a |= 4; //bitwise OR (latest bits are XYZ)
+    }
+    if (ray.direction[1] < 0)
+    {
+        ray.origin[1] = octreeCenter[1] * 2 - ray.origin[1];
+        ray.direction[1] = -ray.direction[1];
+        a |= 2;
+    }
+    if (ray.direction[2] < 0)
+    {
+        ray.origin[2] = octreeCenter[2] * 2 - ray.origin[2];
+        ray.direction[2] = -ray.direction[2];
+        a |= 1;
+    }
+    
+    
+    float divx = 1 / ray.direction.x; // IEEE stability fix
+    float divy = 1 / ray.direction.y;
+    float divz = 1 / ray.direction.z;
+    
+    float tx0 = (grid_min.x - ray.origin[0]) * divx;
+    float tx1 = (grid_max.x - ray.origin[0]) * divx;
+    float ty0 = (grid_min.y - ray.origin[1]) * divy;
+    float ty1 = (grid_max.y - ray.origin[1]) * divy;
+    float tz0 = (grid_min.z - ray.origin[2]) * divz;
+    float tz1 = (grid_max.z - ray.origin[2]) * divz;
+      
+    
+    STACK_SETUP;
+        
+    
+    subtree_Struct rootNode;
+    rootNode.t0 = float3(tx0, ty0, tz0);
+    rootNode.t1 = float3(tx1, ty1, tz1);
+    rootNode.referenceOffset = 0;
+    STACK_PUSH(rootNode);
+
+    
+        
+    if (max(max(tx0, ty0), tz0) < min(min(tx1, ty1), tz1))
+    {
+        //result_Struct result = proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, _SVO[0], a);
+        float min_t = 9999;
+        uint intersected = 0;
+        
+        while (STACK_HAS_DATA)
+        {
+            subtree_Struct subtree = STACK_POP;
+            result_Struct result = proc_subtree(subtree.t0.x, subtree.t0.y, subtree.t0.z, subtree.t1.x, subtree.t1.y, subtree.t1.z, _SVO[subtree.referenceOffset], a);
+            
+            if (result.isLeaf)
+            {
+                float tmin, tmax;
+                float3 aabb[2] = { subtree.t0, subtree.t1 };
+
+                ray_box_intersection(ray, aabb, tmin, tmax);
+                
+                if (tmin < min_t)
+                {
+                    min_t = tmin;
+                    //min_b = b;
+                    //min_tris_index = tris_index;
+                    
+                    intersected = 1;
+                }
+            }
+            
+            if (intersected)
+            {               
+                SVONode localNode = _SVO[subtree.referenceOffset];
+            
+               float tmin, tmax;
+               float3 aabb[2] = { subtree.t0, subtree.t1 };
+
+                ray_box_intersection(ray, aabb, tmin, tmax);
+                
+                float3 tM = float3(0.5 * (subtree.t0.x + subtree.t1.x), 0.5 * (subtree.t0.y + subtree.t1.y), 0.5 * (subtree.t0.z + subtree.t1.z));
+            
+                position = ray.origin + min_t * ray.direction;
+
+                normal = float3(0, 1, 0);
+                hit.normal = normal;
+                //int material_index = material_index_list[min_tris_index];
+                //float4x4 mat = material_list[material_index];
+                //hit.position = position;
+
+                hit.albedo = localNode.UnPackColour().rgb;
+			    //hit.albedo = mat[0];
+                hit.position = position;
+                hit.specular = 0.0;
+                hit.smoothness = 0.5;
+			    //mat[3].y;
+                hit.emission = 0;
+                hit.transparency = 0.5;
+			    //mat[3].x;
+
+                hit.refraction = 0;
+
+                hit.distance = min_t;
+			    //hit.canShadow = mat[3].z;
+            
+                return true;
+            }
+            
+            /*if (result.childCount > 0)
+            {
+            
+                hit.albedo = float3(0.5, 0, 1);
+                return true;
+            }*/
+            
+            for (uint ri = 0; ri < 3; ri += 1)
+            {
+                if (result.isOccupied[ri])
+                {
+                    subtree_Struct subtree;
+                    subtree.t0 = result.t0[ri];
+                    subtree.t1 = result.t1[ri];
+                    subtree.referenceOffset = result.referenceOffset[ri];
+                    STACK_PUSH(subtree);
+                
+
+                    result.t0[ri] = float3(0, 0, 0);
+                    result.t1[ri] = float3(0, 0, 0);
+                    result.referenceOffset[ri] = 0;
+                    result.isOccupied[ri] = 0;
+                }
+            }
+            result.isLeaf = 0;
+        }
+    }
+    
+    position = 0;
+    normal = (0).xxx;
+    hit = CreateRayHit();
+    
+    // For now. Obv change later
+    return false;
+}
+
+
+
+
+static const int NUM_BOUNCES = 4;
+
+[numthreads(8, 8, 1)]
+void PathTrace_uniform_grid(CS_INPUT input)
+{
+    if (input.DTid.x < screen_size.x && input.DTid.y < screen_size.y)
+    {
+		//compute view ray
+        float2 uv = float2(input.DTid.xy) / (screen_size.xy - 1);
+        float3 eye_dir = lerp(lerp(worldspace_frustum_corners[0], worldspace_frustum_corners[1], uv.y), lerp(worldspace_frustum_corners[2], worldspace_frustum_corners[3], uv.y), uv.x);
+        eye_dir = normalize(eye_dir);
+
+        Ray ray = MakeRay(camera_position.xyz, eye_dir);
+
+        float3 intersection_position;
+        float3 intersection_normal;
+
+        float weight = 1;
+        float3 L = float3(0, 0, 0);
+        
+		//random initial seed using thread id
+        uint seed = wang_hash(input.DTid.x + input.DTid.y * screen_size.x + start_seed);
+        RayHit hit;
+
+        for (int bounce = 0; bounce < NUM_BOUNCES; ++bounce)
+        {
+            if (SVOIntersection(ray, intersection_position, intersection_normal, hit))
+            {
+                seed = rand_xorshift(seed);
+				
+                L += ray.energy * Shade(ray, hit, seed);
+				//L
+
+            }
+            else
+            {
+                L += SimpleGradient(ray) * ray.energy; //float3(1.5, 1.5, 1.5) is the temporary skybox value
+
+                if (bounce == 0)
+					//L = float3(0, 0, 0);
+                    if (!any(ray.energy))
+                        break;
+                break;
+            }
+ 
+									
+        }
+
+        float4 ris = output[input.DTid.xy];
+        float num_samples = ris.a;
+        L = 1.0 / (num_samples + 1) * (num_samples * ris.rgb + L);
+        ris = float4(L, num_samples + 1);
+		
+        output[input.DTid.xy] = ris;
+    }
+}

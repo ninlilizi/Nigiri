@@ -45,7 +45,6 @@ groupshared uint split_MaxTTL = 0;
 groupshared uint mip_MinOffset = 4294967295;
 groupshared uint split_MinOffset = 4294967295;
 
-
 /// <summary>
 /// Encodes samples into tree
 /// </summary>
