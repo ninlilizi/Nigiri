@@ -114,11 +114,11 @@ namespace NKLI.Nigiri.SVO
 
                 Shader_Raytracer.Dispatch(path_tracing_kernel, groups_x, groups_y, 1);
 
-                Graphics.Blit(hdr_rt, Texture_Output, tonemap_blit, 0);
+                //Graphics.Blit(hdr_rt, Texture_Output, tonemap_blit, 0);
 
 
 
-                return Texture_Output;
+                return hdr_rt;
             }
 
             return source;
@@ -132,8 +132,8 @@ namespace NKLI.Nigiri.SVO
 
             Shader_Raytracer.SetVector("screen_size", new Vector4(cam.pixelRect.width, cam.pixelRect.height, 0, 0));
 
-            groups_x = Mathf.CeilToInt(cam.pixelRect.width / 8.0f);
-            groups_y = Mathf.CeilToInt(cam.pixelRect.height / 8.0f);
+            groups_x = Mathf.CeilToInt(cam.pixelRect.width / 4.0f);
+            groups_y = Mathf.CeilToInt(cam.pixelRect.height / 4.0f);
 
             tonemap_blit = new Material(Shader.Find("PathTracing/Tonemap"));
 

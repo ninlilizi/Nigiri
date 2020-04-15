@@ -285,10 +285,12 @@ int first_node(float tx0, float ty0, float tz0, float txm, float tym, float tzm)
     {
         if (ty0 > tz0)
         { // PLANE XZ
+
+        //These were swappep Nin
             if (txm < ty0)
-                answer |= 1; // set bit at position 2
+                answer |= 4; // set bit at position 2
             if (tzm < ty0)
-                answer |= 4; // set bit at position 0
+                answer |= 1; // set bit at position 0
             return (int) answer;
         }
     }
@@ -329,7 +331,7 @@ inline int new_node(float txm, int x, float tym, int y, float tzm, int z)
 
 inline void AddChildToResult(float tx0, float ty0, float tz0, float txm, float tym, float tzm, uint offset, uint nodeOffset, SVONode node, uint childCount, inout result_Struct result)
 {
-    // Only append the node if occupancy bit is setd
+    // Only append the node if occupancy bit is set
     if (node.GetOccupancyBit(nodeOffset));
     {
         result.t0[childCount] = float3(tx0, ty0, tz0);
@@ -362,13 +364,14 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
     {
         //cout << "Reached node " << node - > debug_ID << endl;
         
-        if (node.colour_A)
+        /*if (node.colour_A)
         {
-            result.t0[0] = float3(tx0, ty0, tz0);
-            result.t1[0] = float3(txm, tym, tzm);
-            result.referenceOffset[0] = node.referenceOffset;
-            //result.isLeaf = 1;
-        }
+            //result.t0[0] = float3(tx0, ty0, tz0);
+            //result.t1[0] = float3(txm, tym, tzm);
+            //result.referenceOffset[0] = node.referenceOffset;
+            result.isLeaf = 1;
+            return result;
+        }*/
         
 
         
@@ -393,50 +396,44 @@ result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1
                 AddChildToResult(tx0, ty0, tz0, txm, tym, tzm, node.referenceOffset, a, node, childCount, result);
                 currNode = new_node(txm, 4, tym, 2, tzm, 1);
                 break;
-            case 1:{ 
+            case 1:
                     //proc_subtree(tx0, ty0, tzm, txm, tym, tz1, node - > children[1 ^ a]);
-                    AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset, (1 ^ a), node, childCount, result);
-                    currNode = new_node(txm, 5, tym, 3, tz1, 8);
-                    break;
-                }
-            case 2:{ 
+                AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset, (1 ^ a), node, childCount, result);
+                currNode = new_node(txm, 5, tym, 3, tz1, 8);
+                break;
+            case 2:
                     //proc_subtree(tx0, tym, tz0, txm, ty1, tzm, node - > children[2 ^ a]);
-                    AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset, (2 ^ a), node, childCount, result);
-                    currNode = new_node(txm, 6, ty1, 8, tzm, 3);
-                    break;
-                }
-            case 3:{ 
+                AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset, (2 ^ a), node, childCount, result);
+                currNode = new_node(txm, 6, ty1, 8, tzm, 3);
+                break;
+            case 3:
                     //proc_subtree(tx0, tym, tzm, txm, ty1, tz1, node - > children[3 ^ a]);
-                    AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset, (3 ^ a), node, childCount, result);
-                    currNode = new_node(txm, 7, ty1, 8, tz1, 8);
-                    break;
-                }
-            case 4:{ 
+                AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset, (3 ^ a), node, childCount, result);
+                currNode = new_node(txm, 7, ty1, 8, tz1, 8);
+                break;
+            case 4:
                     //proc_subtree(txm, ty0, tz0, tx1, tym, tzm, node - > children[4 ^ a]);
-                    AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset, (4 ^ a), node, childCount, result);
-                    currNode = new_node(tx1, 8, tym, 6, tzm, 5);
-                    break;
-                }
-            case 5:{ 
+                AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset, (4 ^ a), node, childCount, result);
+                currNode = new_node(tx1, 8, tym, 6, tzm, 5);
+                break;
+            case 5:
                     //proc_subtree(txm, ty0, tzm, tx1, tym, tz1, node - > children[5 ^ a]);
-                    AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset, (5 ^ a), node, childCount, result);
-                    currNode = new_node(tx1, 8, tym, 7, tz1, 8);
-                    break;
-                }
-            case 6:{ 
+                AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset, (5 ^ a), node, childCount, result);
+                currNode = new_node(tx1, 8, tym, 7, tz1, 8);
+                break;
+            case 6:
                     //proc_subtree(txm, tym, tz0, tx1, ty1, tzm, node - > children[6 ^ a]);
-                    AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset, (6 ^ a), node, childCount, result);
-                    currNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-                    break;
-                }
-            case 7:{ 
+                AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset, (6 ^ a), node, childCount, result);
+                currNode = new_node(tx1, 8, ty1, 8, tzm, 7);
+                break;
+            case 7:
                     //proc_subtree(txm, tym, tzm, tx1, ty1, tz1, node - > children[7 ^ a]);
-                    AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset, (7 ^ a), node, childCount, result);
-                    currNode = 8;
-                    break;
-                }
-            //case 8:
-                //break;
+                AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset, (7 ^ a), node, childCount, result);
+                currNode = 8;
+                break;
+            case 8:
+                return result;
+                break;
         }
     }
     //result.childCount = childCount + 1;
@@ -519,8 +516,8 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
     //STACK_SETUP;
     //RINGBUFFER_SETUP;
     
-    uint RingBuffer_MaxCount = 64;
-    subtree_Struct RingBuffer[64];
+    uint RingBuffer_MaxCount = 128;
+    subtree_Struct RingBuffer[128];
     uint RingBuffer_ReadIndex = 0;
     uint RingBuffer_WriteIndex = 0;
     uint RingBuffer_Count = 0;
@@ -554,6 +551,7 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
             //subtree_Struct subtree = STACK_POP;
             //subtree_Struct subtree = RINGBUFFER_READ;
             
+            // Fetch next node from the buffer
             subtree_Struct subtree = RingBuffer[RingBuffer_ReadIndex];
         
             RingBuffer_ReadIndex++;
@@ -562,19 +560,19 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
             if (RingBuffer_ReadIndex == RingBuffer_MaxCount)
                 RingBuffer_ReadIndex = 0;
 
-
-            
             
             result_Struct result = proc_subtree(subtree.t0.x, subtree.t0.y, subtree.t0.z, subtree.t1.x, subtree.t1.y, subtree.t1.z, _SVO[subtree.referenceOffset], a);
             
-            if (result.isLeaf)
+            /*if (result.isLeaf)
             {
                 float tmin, tmax;
                 float3 aabb[2] = { subtree.t0, subtree.t1 };
 
                 ray_box_intersection(ray, aabb, tmin, tmax);
                 
-                if (tmin < min_t)
+                float t = distance(ray.origin, tmin);
+                
+                if (tmin < t)
                 {
                     min_t = tmin;
                     //min_b = b;
@@ -582,9 +580,9 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
                     
                     intersected = 1;
                 }
-            }
+            }*/
             
-            if (intersected)
+            if (result.isLeaf)
             {
                 SVONode localNode = _SVO[subtree.referenceOffset];
             
@@ -592,12 +590,15 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
                 float3 aabb[2] = { subtree.t0, subtree.t1 };
 
                 ray_box_intersection(ray, aabb, tmin, tmax);
+                float center = (tmax - tmin) * 0.5;
                 
-                float3 tM = float3(0.5 * (subtree.t0.x + subtree.t1.x), 0.5 * (subtree.t0.y + subtree.t1.y), 0.5 * (subtree.t0.z + subtree.t1.z));
+                float t = distance(ray.origin, center + tmin);
+                
+                //float3 tM = float3(0.5 * (subtree.t0.x + subtree.t1.x), 0.5 * (subtree.t0.y + subtree.t1.y), 0.5 * (subtree.t0.z + subtree.t1.z));
             
-                position = ray.origin + min_t * ray.direction;
+                position = ray.origin + t * ray.direction;
 
-                normal = float3(1, 1, 0);
+                normal = float3(0, 1, 0);
                 hit.normal = normal;
                 //int material_index = material_index_list[min_tris_index];
                 //float4x4 mat = material_list[material_index];
@@ -615,7 +616,7 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
 
                 hit.refraction = 0;
 
-                hit.distance = min_t;
+                hit.distance = t;
 			    //hit.canShadow = mat[3].z;
             
                 return true;
@@ -650,13 +651,13 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
                             RingBuffer_WriteIndex = 0;
                     }
 
-                    result.t0[ri] = float3(0, 0, 0);
-                    result.t1[ri] = float3(0, 0, 0);
-                    result.referenceOffset[ri] = 0;
-                    result.isOccupied[ri] = 0;
+                    //result.t0[ri] = float3(0, 0, 0);
+                    //result.t1[ri] = float3(0, 0, 0);
+                    //result.referenceOffset[ri] = 0;
+                    //result.isOccupied[ri] = 0;
                 }
             }
-            result.isLeaf = 0;
+            //result.isLeaf = 0;
         }
     }
     
@@ -673,7 +674,7 @@ bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit
 
 static const int NUM_BOUNCES = 4;
 
-[numthreads(8, 8, 1)]
+[numthreads(4, 4, 1)]
 void PathTrace_uniform_grid(CS_INPUT input)
 {
     if (input.DTid.x < screen_size.x && input.DTid.y < screen_size.y)
@@ -684,19 +685,23 @@ void PathTrace_uniform_grid(CS_INPUT input)
         eye_dir = normalize(eye_dir);
 
         Ray ray = MakeRay(camera_position.xyz, eye_dir);
-
+        //Ray ray = MakeRay(float3(0, 0, 0), eye_dir);
+        
         float3 intersection_position;
         float3 intersection_normal;
 
         float weight = 1;
-        float3 L = float3(0, 0, 0);
+        
+        // For debug purposes
+        //float3 L = float3(0, 0, 0);
+        float3 L = SimpleGradient(ray);
         
 		//random initial seed using thread id
         uint seed = wang_hash(input.DTid.x + input.DTid.y * screen_size.x + start_seed);
         RayHit hit;
 
-        for (int bounce = 0; bounce < NUM_BOUNCES; ++bounce)
-        {
+        //for (int bounce = 0; bounce < NUM_BOUNCES; ++bounce)
+        //{
             if (SVOIntersection(ray, intersection_position, intersection_normal, hit))
             {
                 seed = rand_xorshift(seed);
@@ -718,7 +723,7 @@ void PathTrace_uniform_grid(CS_INPUT input)
             }*/
  
 									
-        }
+        //}
 
         float4 ris = output[input.DTid.xy];
         //float num_samples = ris.a;
