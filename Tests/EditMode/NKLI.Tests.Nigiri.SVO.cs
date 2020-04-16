@@ -1,25 +1,21 @@
 ﻿/// <summary>
-/// NKLI     : Nigiri - Test Unit SVO
+/// NKLI     : Nigiri - EditMode, Test Unit - SVO
 /// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
 /// </summary>
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.IO;
-using System.Runtime.InteropServices;
 using NKLI.Nigiri.SVO;
 using NUnit.Framework;
-using Unity.Collections;
 using UnityEngine;
 using UnityEngine.Rendering;
-using UnityEngine.TestTools;
 
-namespace Tests.Nigiri.SVO
+namespace NKLI.Tests.Nigiri.SVO
 {
-    #region Test_SVOBuilder
-    public class Test_SVOVoxelizer
+    #region Test_SVOVoxelizer
+    public class Test_Voxelizer
     {
         [Test]
         public void Voxelizer()
@@ -228,13 +224,13 @@ namespace Tests.Nigiri.SVO
                     Buffer.BlockCopy(nodeBytes, 20, nodeBytesA, 0, 4);
 
                     SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytesReferenceOffset, 0), BitConverter.ToUInt32(nodeBytesPackedBitfield, 0));
-                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _ttl, out bool isLeaf);
+                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _ttl, out bool isWaitingForMipmap);
 
                     node.PackColour(new Vector4(BitConverter.ToUInt32(nodeBytesR, 0), BitConverter.ToUInt32(nodeBytesG, 0), BitConverter.ToUInt32(nodeBytesB, 0), BitConverter.ToUInt32(nodeBytesA, 0)));
                     Vector4 unpackedColour = node.UnPackColour();
 
                     string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
-                        " [RL:" + _runlength + "] [TTL:" + _ttl + "] [isLeaf:" + isLeaf + "]" +
+                        " [RL:" + _runlength + "] [TTL:" + _ttl + "] [isWaitingForMipmap:" + isWaitingForMipmap + "]" +
                         " [R:" + unpackedColour.x + "] [G:" + unpackedColour.y + "] [B:" + unpackedColour.z + "] [A:" + unpackedColour.w + "]";
 
                     fileOutput.WriteLine(line);

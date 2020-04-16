@@ -5,7 +5,6 @@
 /// </summary>
 
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Threading;
@@ -67,7 +66,6 @@ namespace NKLI.Nigiri.SVO
         // Is the processor suspended
         private ManualResetEvent thread_MipmapPreProcessor_Suspend_Event = new ManualResetEvent(true);
 
-
         // Buffers
         public ComputeBuffer Buffer_SVO;
         public ComputeBuffer Buffer_Counters;
@@ -106,6 +104,9 @@ namespace NKLI.Nigiri.SVO
 
             // Set properties
             MaxDepth = maxDepth;
+
+            // Set reference for test unit hooks
+            TestUnitHooks.Set_Most_Recent_Tree(this);
 
             // Rounds split queue length to nearest mul of 8 
             //  to match dispatch thread group size

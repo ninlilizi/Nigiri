@@ -1,15 +1,23 @@
-﻿using NKLI.Nigiri;
+﻿/// <summary>
+/// NKLI     : Nigiri
+/// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
+/// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
+/// </summary>
+
 using System;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.XR;
+using NKLI.Nigiri;
 
 [ExecuteInEditMode]
 [RequireComponent(typeof(Camera))]
-public class Nigiri : MonoBehaviour {
+public class Nigiri : MonoBehaviour
+{
 
-    public enum DebugVoxelGrid {
+    public enum DebugVoxelGrid
+    {
         GRID_SVO
     };
 
@@ -26,7 +34,7 @@ public class Nigiri : MonoBehaviour {
     [Header("Voxelization Settings")]
     public LayerMask dynamicPlusEmissiveLayer;
 
-    
+
     [Range(10.0f, 4096f)]
     [Tooltip("Width of a single axis of the worldspace size of the GI covered area, centered on zero")]
     public float OctreeAreaSize = 50;
@@ -334,7 +342,7 @@ public class Nigiri : MonoBehaviour {
         }
     }
     private readonly int RenderCounterMax = 7;
-    
+
 
     [Header("Performance Counters")]
     public bool expensiveGPUCounters = false;
@@ -358,7 +366,7 @@ public class Nigiri : MonoBehaviour {
     public bool forceImmediateRefresh = false;
 
     private Texture2D[] blueNoise;
-    
+
 
     //[Header("Shaders")]
     private Shader tracingShader;
@@ -641,7 +649,7 @@ public class Nigiri : MonoBehaviour {
         ramUsed = "RAM Usage: " + ramUsage.ToString("F2") + " M";
         vramUsed = "VRAM Usage: " + vramUsage.ToString("F2") + " M";
 
-        
+
         // FPS counter
         frameRate.frameCount++;
         frameRate.dt += Time.unscaledDeltaTime;
@@ -679,7 +687,7 @@ public class Nigiri : MonoBehaviour {
     }
 
     // Use this for initialization
-    void OnEnable ()
+    void OnEnable()
     {
         // Set camera to render optional buffers
         Camera.main.depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
@@ -707,9 +715,9 @@ public class Nigiri : MonoBehaviour {
         nigiri_VoxelMask = Resources.Load("Nigiri_VoxelMask") as ComputeShader;
         nigiri_InjectionCompute = Resources.Load("Nigiri_Injection") as ComputeShader;
 
-		GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
+        GetComponent<Camera>().depthTextureMode = DepthTextureMode.Depth | DepthTextureMode.DepthNormals | DepthTextureMode.MotionVectors;
 
-		if (tracingShader == null)  tracingShader = Shader.Find("Hidden/Nigiri_Tracing");
+        if (tracingShader == null) tracingShader = Shader.Find("Hidden/Nigiri_Tracing");
         tracerMaterial = new Material(tracingShader);
 
         if (blitGBuffer0Material == null) blitGBuffer0Material = new Material(blitGBufferShader);
@@ -797,8 +805,8 @@ public class Nigiri : MonoBehaviour {
         UpdateLUT();
     }
 
-	// Function to update data in the voxel grid
-	private void UpdateSVO()
+    // Function to update data in the voxel grid
+    private void UpdateSVO()
     {
         computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
 
@@ -826,12 +834,12 @@ public class Nigiri : MonoBehaviour {
 
 
         /// Naive
-        
+
         // These apply to all grids        
         Shader.SetGlobalFloat("_giAreaSize", OctreeAreaSize);
         // Global buffers
         Shader.SetGlobalBuffer("_renderCountBuffer", computeBuffers.RenderCountBuffer);
-        
+
         // Secondary Voxelisation
         if (dynamicPlusEmissiveLayer.value != 0 && secondaryVoxelization)
         {
@@ -839,14 +847,14 @@ public class Nigiri : MonoBehaviour {
             Nigiri_EmissiveCameraHelper.DoRender();
         }
         ///END Secondary Voxelisation
-        
+
         /// Performance counters
         //  
     }
 
     // This is called once per frame after the scene is rendered
     //[ImageEffectOpaque]
-    void OnRenderImage (RenderTexture source, RenderTexture destination)
+    void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         renderTimes.RenderStopwatch.Start();
 
@@ -902,7 +910,7 @@ public class Nigiri : MonoBehaviour {
 
         //lengthOfCone = (32.0f * coneLength * GIAreaSize) / (highestVoxelResolution * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
         lengthOfCone = (32.0f * 1 * OctreeAreaSize) / (512 * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
-        //lengthOfCone = OctreeAreaSize * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
+                                                                                         //lengthOfCone = OctreeAreaSize * Mathf.Tan(Mathf.PI / 6.0f));// * -2;
 
         //Color Settings
         linearColourSpace = QualitySettings.activeColorSpace == ColorSpace.Linear;
@@ -949,12 +957,12 @@ public class Nigiri : MonoBehaviour {
             _colorMaterial.DisableKeyword("DITHER_TRIANGULAR");
         }
 
-        tracerMaterial.SetMatrix ("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
-        tracerMaterial.SetMatrix ("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
-		tracerMaterial.SetFloat ("maximumIterations", maximumIterations);
+        tracerMaterial.SetMatrix("InverseViewMatrix", GetComponent<Camera>().cameraToWorldMatrix);
+        tracerMaterial.SetMatrix("InverseProjectionMatrix", GetComponent<Camera>().projectionMatrix.inverse);
+        tracerMaterial.SetFloat("maximumIterations", maximumIterations);
         tracerMaterial.SetInt("depthStopOptimization", depthStopOptimization ? 1 : 0);
-        tracerMaterial.SetFloat ("indirectLightingStrength", indirectLightingStrength);
-        tracerMaterial.SetFloat ("lengthOfCone", lengthOfCone);
+        tracerMaterial.SetFloat("indirectLightingStrength", indirectLightingStrength);
+        tracerMaterial.SetFloat("lengthOfCone", lengthOfCone);
         //tracerMaterial.SetFloat("coneWidth", coneWidth);
         tracerMaterial.SetFloat("ConeTraceBias", coneTraceBias);
         tracerMaterial.SetColor("sunColor", sunColor);
@@ -1025,16 +1033,19 @@ public class Nigiri : MonoBehaviour {
         tracerMaterial.SetBuffer("_SVO", SVO.Buffer_SVO);
 
 
-        if (VisualizeVoxels) {
+        if (VisualizeVoxels)
+        {
             tracerMaterial.EnableKeyword("GRID_SVO");
 
             renderTimes.TraceStopwatch.Start();
-            Graphics.Blit (source, destination, tracerMaterial, 1);
+            Graphics.Blit(source, destination, tracerMaterial, 1);
             renderTimes.TraceStopwatch.Stop();
             renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
             renderTimes.TraceStopwatch.Reset();
             return;
-		} else {
+        }
+        else
+        {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
             renderTextures.gi = raytracer.Trace(source, renderTextures.positionTexture);
@@ -1067,7 +1078,7 @@ public class Nigiri : MonoBehaviour {
             if (Resolution == VolumtericResolution.Quarter)
             {
                 if (_quarterDepthBuffer == null) ChangeResolution();
-                RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf, 
+                RenderTexture temp = RenderTexture.GetTemporary(_quarterDepthBuffer.width, _quarterDepthBuffer.height, 0, RenderTextureFormat.ARGBHalf,
                     RenderTextureReadWrite.Default, 1, RenderTextureMemoryless.None, XRSettings.eyeTextureDesc.vrUsage);
 
                 temp.filterMode = FilterMode.Bilinear;
@@ -1099,7 +1110,7 @@ public class Nigiri : MonoBehaviour {
 
                 // upscale to full res
                 Graphics.Blit(_halfVolumeLightTexture, _volumeLightTexture, _bilateralBlurMaterial, 5);
-                RenderTexture.ReleaseTemporary(temp);           
+                RenderTexture.ReleaseTemporary(temp);
             }
             else
             {
@@ -1165,7 +1176,7 @@ public class Nigiri : MonoBehaviour {
             computeBuffers.maskGenerated = true;
         }
 
-        
+
         //Graphics.Blit(renderTextures.gi, destination);
 
         // Voxelization happens after the scene render
@@ -1189,8 +1200,8 @@ public class Nigiri : MonoBehaviour {
 
         if (emissiveCameraGO != null) GameObject.DestroyImmediate(emissiveCameraGO);
 
-        if (Application.isEditor)  if (renderTextures != null) DestroyImmediate(renderTextures);
-        else if (renderTextures != null) Destroy(renderTextures);
+        if (Application.isEditor) if (renderTextures != null) DestroyImmediate(renderTextures);
+            else if (renderTextures != null) Destroy(renderTextures);
 
         // Dispose raytracer
         raytracer.Dispose();
@@ -2801,4 +2812,3 @@ public class Nigiri : MonoBehaviour {
     }
 }
 #endregion
-

@@ -1,14 +1,12 @@
 {
-    "name": "NKLI.Nigiri.Tests.EditMode",
+    "name": "NKLI.Tests.PlayMode.Nigiri",
     "references": [
         "NKLI.Nigiri"
     ],
     "optionalUnityReferences": [
         "TestAssemblies"
     ],
-    "includePlatforms": [
-        "Editor"
-    ],
+    "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": false,

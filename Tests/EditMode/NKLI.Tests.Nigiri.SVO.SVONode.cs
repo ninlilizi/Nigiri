@@ -1,5 +1,5 @@
 ﻿/// <summary>
-/// NKLI     : Nigiri - Test Unit - SVONode
+/// NKLI     : Nigiri - EditMode, Test Unit - SVONode
 /// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
 /// </summary>
@@ -7,7 +7,7 @@
 using NKLI.Nigiri.SVO;
 using NUnit.Framework;
 
-namespace Tests.Nigiri.SVO
+namespace NKLI.Tests.Nigiri.SVO
 {
     public class Test_SVONode
     {

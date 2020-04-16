@@ -1,5 +1,5 @@
 ﻿/// <summary>
-/// NKLI     : Nigiri - Test Unit SVO Helper
+/// NKLI     : Nigiri - EditMode, Test Unit - SVO Helper
 /// Copywrite: Abigail Sara Hocking of Newbury, 2020. 
 /// Licence  : The Nigiri 'Bits and pieces' Licence. [v3]
 /// </summary>
@@ -14,7 +14,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace Tests.Nigiri.SVO
+namespace NKLI.Tests.Nigiri.SVO
 {
     #region Test_SVOHelper
     public class Test_SVOHelper
