@@ -58,7 +58,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     // Get morton ordered read index from mask buffer
     uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
     
-    float4 colour = GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain);
+    half4 colour = GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain);
     float depth = _CameraDepthTexture[orderedCoord].r;
    
     // Traverse the SVO, splitting and writing the sampled colour as required
@@ -94,12 +94,12 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     if (!thread)
     {
         // Write out chosen nodes, to be picked up by the cpu worker threads
-        if (split_MinOffset)
+        if (split_MinOffset && split_MinOffset != 4294967295)
         {
             AppendSVOSplitQueue(_SVO_SplitQueue, _SVO_Counters, split_MinOffset);
             _SVO[split_MinOffset - 1] = SetNodeColour(_SVO[split_MinOffset - 1], colour / 4, depth);
         }
-        if (mip_MinOffset)
+        if (mip_MinOffset && mip_MinOffset != 4294967295)
         {
             AppendSVOMipmapQueue(_SVO_MipmapQueue, _SVO_Counters, mip_MinOffset);
             _SVO[mip_MinOffset - 1].SetIsWaitingForMipmap(0);

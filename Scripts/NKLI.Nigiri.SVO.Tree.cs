@@ -176,7 +176,7 @@ namespace NKLI.Nigiri.SVO
 
             // Send root node to GPU
             SVONode rootNode = new SVONode(0, 0);
-            rootNode.PackStruct(0, 0, maxDepth, false);
+            rootNode.PackStruct(0, maxDepth, false);
             List<SVONode> nodeList = new List<SVONode>(1)
             {
                 rootNode
@@ -352,9 +352,6 @@ namespace NKLI.Nigiri.SVO
                         threadDispatch.Enqueue(() => queue_Split_Sparse = ResizeByteArray(queue_Split_Sparse, sizeof(uint) * SplitQueueMaxLength));
                         threadDispatch.Enqueue(() => BuildCommandBuffer());
                         threadDispatch.Enqueue(() => thread_SplitPreProcessor_Scaling_Event.Set());
-
-                        // Avoid mismatched buffer sizes
-                        AbleToSplit = false;
                     }
 
                     // Suspends thread
@@ -619,27 +616,27 @@ namespace NKLI.Nigiri.SVO
         /// <summary> 
         /// Removes duplicates from a byte array of 32bit uint values 
         /// </summary> 
-        /// <param name="targetArray"></param> 
+        /// <param name="sourceArray"></param> 
         /// <param name="contentsFound"></param> 
         /// <returns></returns> 
-        private byte[] DeDupeUintByteArray(byte[] targetArray, bool retainOrder, out bool contentsFound, out int count, out int sparseCount)
+        private byte[] DeDupeUintByteArray(byte[] sourceArray, bool retainOrder, out bool contentsFound, out int count, out int sparseCount)
         {
             // Get appended count
             byte[] countByte = new byte[4];
-            Buffer.BlockCopy(targetArray, 0, countByte, 0, 4);
+            Buffer.BlockCopy(sourceArray, 0, countByte, 0, 4);
             // Clamp count to max buffer size
-            count = (int)Math.Min(BitConverter.ToUInt32(countByte, 0), (uint)targetArray.Length / 4);
+            count = (int)Math.Min(BitConverter.ToUInt32(countByte, 0), ((uint)sourceArray.Length - 1) / 4);
 
             // We only do this if there's actually anything to do
             if (count > 0)
             {
                 // Copy split queue to hashset to remove dupes
                 List<uint> orderedSet = new List<uint>();
-                HashSet<uint> arraySet = new HashSet<uint>();
+                SortedSet<uint> arraySet = new SortedSet<uint>();
                 for (int i = 1; i < count; i++)
                 {
                     byte[] queueByte = new byte[4];
-                    Buffer.BlockCopy(targetArray, (i * 4), queueByte, 0, 4);
+                    Buffer.BlockCopy(sourceArray, (i * 4), queueByte, 0, 4);
                     uint queueValue = BitConverter.ToUInt32(queueByte, 0);
                     if (queueValue != 0)
                     {
@@ -652,6 +649,8 @@ namespace NKLI.Nigiri.SVO
 
                 if (sparseCount > 0)
                 {
+                    sourceArray = new byte[sourceArray.Length];
+
                     if (retainOrder)
                     {
                         // Copy list back to array
@@ -660,7 +659,7 @@ namespace NKLI.Nigiri.SVO
                         {
                             byte[] queueByte = new byte[4];
                             queueByte = BitConverter.GetBytes(offset);
-                            Buffer.BlockCopy(queueByte, 0, targetArray, queueWriteBackIndex * 4, 4);
+                            Buffer.BlockCopy(queueByte, 0, sourceArray, queueWriteBackIndex * 4, 4);
                             queueWriteBackIndex++;
                         }
                     }
@@ -668,15 +667,23 @@ namespace NKLI.Nigiri.SVO
                     {
                         // Copy hashset back to array
                         int queueWriteBackIndex = 1;
-                        HashSet<uint>.Enumerator queueEnum = arraySet.GetEnumerator();
+                        SortedSet<uint>.Enumerator queueEnum = arraySet.GetEnumerator();
                         while (queueEnum.MoveNext())
                         {
                             byte[] queueByte = new byte[4];
                             queueByte = BitConverter.GetBytes(queueEnum.Current);
-                            Buffer.BlockCopy(queueByte, 0, targetArray, queueWriteBackIndex * 4, 4);
+                            Buffer.BlockCopy(queueByte, 0, sourceArray, queueWriteBackIndex * 4, 4);
                             queueWriteBackIndex++;
                         }
                     }
+
+                    // Update count
+                    Buffer.BlockCopy(BitConverter.GetBytes((uint)sparseCount), 0, sourceArray, 0, 4);
+
+                    // Zero rest of array
+                    int clearStart = (sparseCount + 1) * 4;
+                    Array.Clear(sourceArray, clearStart, sourceArray.Length - clearStart);
+
                     // There's work to do!
                     contentsFound = true;
                 }
@@ -684,19 +691,22 @@ namespace NKLI.Nigiri.SVO
                 {
                     // Nothing to do.
                     contentsFound = false;
+
+                    // Zero append counter
+                    Array.Clear(sourceArray, 0, 4);
                 }
             }
             else
             {
                 contentsFound = false;
                 sparseCount = 0;
+
+                // Zero append counter
+                Array.Clear(sourceArray, 0, 4);
             }
 
-            // Zero append counter
-            Array.Clear(targetArray, 0, 4);
-
             // We're done here
-            return targetArray;
+            return sourceArray;
         }
 
         /// <summary>

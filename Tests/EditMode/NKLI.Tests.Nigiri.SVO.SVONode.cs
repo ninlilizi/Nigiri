@@ -25,18 +25,6 @@ namespace NKLI.Tests.Nigiri.SVO
             Assert.AreEqual(SVONode.packedBitfield, control);
         }
 
-        // Test PackStruct run length
-        [Test]
-        public void PackStruct_RunLength()
-        {
-            uint control = 0b_0000_0000_1111_0000_0000_0000_0000_0000;
-            uint sample = 0b_0000_0000_0000_0000_0000_0000_0000_1111;
-
-            SVONode SVONode = new SVONode(0, 0, sample, 0, false);
-
-            Assert.AreEqual(SVONode.packedBitfield, control);
-        }
-
         // Test PackStruct octree depth
         [Test]
         public void PackStruct_OctreeDepth()
@@ -68,22 +56,9 @@ namespace NKLI.Tests.Nigiri.SVO
             uint sample = 0b_1111_1111_0000_0000_0000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, sample);
-            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _runLength, out uint _depth, out bool isLeaf);
+            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _depth, out bool isLeaf);
 
             Assert.AreEqual(_bitFieldOccupancy, control);
-        }
-
-        // Test UnPackStruct run length
-        [Test]
-        public void UnPackStruct_RunLength()
-        {
-            uint control = 0b_0000_0000_0000_0000_0000_0000_0000_1111;
-            uint sample = 0b_0000_0000_1111_0000_0000_0000_0000_0000;
-
-            SVONode SVONode = new SVONode(0, sample);
-            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _runLength, out uint _depth, out bool isLeaf);
-
-            Assert.AreEqual(_runLength, control);
         }
 
         // Test UnPackStruct octree depth
@@ -94,7 +69,7 @@ namespace NKLI.Tests.Nigiri.SVO
             uint sample = 0b_0000_0000_0000_1111_0000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, sample);
-            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _runLength, out uint _depth, out bool isLeaf);
+            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _depth, out bool isLeaf);
 
             Assert.AreEqual(_depth, control);
         }
@@ -106,7 +81,7 @@ namespace NKLI.Tests.Nigiri.SVO
             uint sample = 0b_0000_0000_0000_0000_1000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, sample);
-            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _runLength, out uint _depth, out bool isLeaf);
+            SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _depth, out bool isLeaf);
 
             Assert.AreEqual(isLeaf, true);
         }

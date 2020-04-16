@@ -35,21 +35,20 @@ struct SVONode
 	// OD = Octree TTL depth of this node, 4b
 	// IR = Is this a root node, 1b
 	// Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
-	//            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
+	//            BO   BO   BO   BO   BO   BO   BO   BO   OD   OD   OD   OD   IR   --   --   --
 	//           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
-	//            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
-    void PackStruct(uint bitFieldOccupancy, uint runLength, uint ttl, uint isWaitingForMipmap)
+	//            --   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
+    void PackStruct(uint bitFieldOccupancy, uint ttl, uint isWaitingForMipmap)
     {
-        packedBitfield = (bitFieldOccupancy << 24) | (runLength << 20) | (ttl << 16) | (isWaitingForMipmap << 15);
+        packedBitfield = (bitFieldOccupancy << 24) | (ttl << 20) | (isWaitingForMipmap << 19);
     }
 
 	// Unpack 32 bits
-    void UnPackStruct(out uint _bifFieldOccupancy, out uint _runLength, out uint _ttl, out uint isWaitingForMipmap)
+    void UnPackStruct(out uint _bifFieldOccupancy, out uint _ttl, out uint isWaitingForMipmap)
     {
 		//ulong padding = (packedBitfield & 0x7FFF);
-        isWaitingForMipmap = (packedBitfield >> 15) & 1;
-        _ttl = (uint) (packedBitfield >> 16) & 0xF;
-        _runLength = (uint) (packedBitfield >> 20) & 0xF;
+        isWaitingForMipmap = (packedBitfield >> 19) & 1;
+        _ttl = (uint) (packedBitfield >> 20) & 0xF;
         _bifFieldOccupancy = (uint) (packedBitfield >> 24) & 0xFF;
     }
     
@@ -63,62 +62,56 @@ struct SVONode
         //pad0 = 0;
         //pad1 = 0;
     }
+       
+  
+    #define MAX_BRIGHTNESS 12
     
     /// <summary>
-    /// Encodes 32bit HDR RGB into 8bit RGBA.
-    /// Credits to: http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+    /// Encodes HDR half4 into uint
+    /// Credits to: https://github.com/keijiro/PackedRGBMShader
     /// </summary>
-    inline float4 RGBMEncode(float3 colour)
+    inline uint EncodeColour(half3 rgb)
     {
-        //colour = pow(colour, 0.454545); // Convert Linear to Gamma
-        float4 rgbm;
-        colour *= 1.0 / 6.0;
-        rgbm.a = saturate(max(max(colour.r, colour.g), max(colour.b, 1e-6)));
-        rgbm.a = ceil(rgbm.a * 255.0) / 255.0;
-        rgbm.rgb = colour / rgbm.a;
-        return rgbm;
+        half y = max(max(rgb.r, rgb.g), rgb.b);
+        y = clamp(ceil(y * 255 / MAX_BRIGHTNESS), 1, 255);
+        rgb *= 255 * 255 / (y * MAX_BRIGHTNESS);
+        uint4 i = half4(rgb, y);
+        return i.x | (i.y << 8) | (i.z << 16) | (i.w << 24);
     }
 
     /// <summary>
-    /// Decodes 8bit RGBA into 32bit HDR RGB
-    /// Credits to: http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+    /// Decodes HDR half4 from uint
+    /// Credits to: https://github.com/keijiro/PackedRGBMShader
     /// </summary>
-    inline float3 RGBMDecode(float4 rgbm)
+    inline half3 DecodeColour(uint data)
     {
-        return 6.0 * rgbm.rgb * rgbm.a; // Also converts Gamma to Linear
-	    //return pow(6.0 * rgbm.rgb * rgbm.a, 2.2); // Also converts Gamma to Linear
+        half r = (data) & 0xff;
+        half g = (data >> 8) & 0xff;
+        half b = (data >> 16) & 0xff;
+        half a = (data >> 24) & 0xff;
+        return half3(r, g, b) * a * MAX_BRIGHTNESS / (255 * 255);
     }
     
     /// <summary>
     /// Packs HDR RGBA into uint2
     /// </summary>
-    inline void PackColour(float4 colour)
+    inline void PackColour(half4 colour)
     {
         // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
 	    //            R    R    R    R    R    R    R    R    G    G    G    G    G    G    G    G 
 	    //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
 	    //            B    B    B    B    B    B    B    B    A    A    A    A    A    A    A    A 
         
-        uint4 encodedColour = RGBMEncode(colour.rgb) * 255;
-        
-        packedColour = (encodedColour.r << 24) | (encodedColour.g << 16) | (encodedColour.b << 8) | (encodedColour.a);
-        
+        packedColour = EncodeColour(colour.rgb);
         colour_A = colour.a;
     }
     
     /// <summary>
     /// Returns unpacked HDR RGBA values
     /// </summary>
-    inline float4 UnPackColour()
+    inline half4 UnPackColour()
     {
-        float4 encodedColour;
-        encodedColour.a = (packedColour) & 0xFF;
-        encodedColour.b = (packedColour >> 8) & 0xFF;
-        encodedColour.g = (packedColour >> 16) & 0xFF;
-        encodedColour.r = (packedColour >> 24) & 0xFF;
-        
-        return float4(RGBMDecode(encodedColour / 255), colour_A);
-
+        return half4(DecodeColour(packedColour), colour_A);
     }
         
     /// <summary>
@@ -127,7 +120,7 @@ struct SVONode
     inline uint GetIsWaitingForMipmap()
     {
 
-        return (packedBitfield >> 15) & 1;
+        return (packedBitfield >> 12) & 1;
     }
     
     /// <summary>
@@ -135,8 +128,8 @@ struct SVONode
     /// </summary>
     inline void SetIsWaitingForMipmap(uint value)
     {
-        packedBitfield &= ~(1 << 15);
-        packedBitfield |= value << 15;
+        packedBitfield &= ~(1 << 12);
+        packedBitfield |= value << 12;
     }
     
     /// <summary>
@@ -144,7 +137,7 @@ struct SVONode
     /// </summary>
     inline uint GetTTL()
     {
-        return (packedBitfield >> 16) & 0xF;
+        return (packedBitfield >> 20) & 0xF;
     }
     
     /// <summary>

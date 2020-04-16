@@ -224,13 +224,13 @@ namespace NKLI.Tests.Nigiri.SVO
                     Buffer.BlockCopy(nodeBytes, 20, nodeBytesA, 0, 4);
 
                     SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytesReferenceOffset, 0), BitConverter.ToUInt32(nodeBytesPackedBitfield, 0));
-                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _ttl, out bool isWaitingForMipmap);
+                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _ttl, out bool isWaitingForMipmap);
 
                     node.PackColour(new Vector4(BitConverter.ToUInt32(nodeBytesR, 0), BitConverter.ToUInt32(nodeBytesG, 0), BitConverter.ToUInt32(nodeBytesB, 0), BitConverter.ToUInt32(nodeBytesA, 0)));
                     Vector4 unpackedColour = node.UnPackColour();
 
                     string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
-                        " [RL:" + _runlength + "] [TTL:" + _ttl + "] [isWaitingForMipmap:" + isWaitingForMipmap + "]" +
+                        " [TTL:" + _ttl + "] [isWaitingForMipmap:" + isWaitingForMipmap + "]" +
                         " [R:" + unpackedColour.x + "] [G:" + unpackedColour.y + "] [B:" + unpackedColour.z + "] [A:" + unpackedColour.w + "]";
 
                     fileOutput.WriteLine(line);

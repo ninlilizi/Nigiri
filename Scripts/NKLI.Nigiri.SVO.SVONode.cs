@@ -22,8 +22,8 @@ namespace NKLI.Nigiri.SVO
         public uint packedBitfield;
 
         // Colour value (64b)
-        uint packedColour;
-        float colour_A;
+        public uint packedColour;
+        public float colour_A;
 
         // When used in shader, pad to fit 128 bit cache alignment
         //#pragma warning disable CS0414
@@ -62,7 +62,7 @@ namespace NKLI.Nigiri.SVO
             //pad1 = 0;
 
             // Pack values
-            PackStruct(bitFieldOccupancy, runLength, depth, isLeaf);
+            PackStruct(bitFieldOccupancy, depth, isLeaf);
         }
 
         // Pack 32 bits
@@ -71,51 +71,49 @@ namespace NKLI.Nigiri.SVO
         // OD = Octree depth of this node, 4b
         // IR = Is this node waiting to be mipmapped, 1b
         // Structure [00] [01] [02] [03] [04] [05] [06] [07] [08] [09] [10] [11] [12] [13] [14] [15]
-        //            BO   BO   BO   BO   BO   BO   BO   BO   RL   RL   RL   RL   OD   OD   OD   OD
+        //            BO   BO   BO   BO   BO   BO   BO   BO   OD   OD   OD   OD   IR   --   --   --
         //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
-        //            IR   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
-        public void PackStruct(uint bitfieldOccupancy, uint runLength, uint depth, bool isWaitingForMipmap)
+        //            --   --   --   --   --   --   --   --   --   --   --   --   --   --   --   --
+        public void PackStruct(uint bitfieldOccupancy, uint ttl, bool isWaitingForMipmap)
         {
-            packedBitfield = (bitfieldOccupancy << 24) | (runLength << 20) | (depth << 16) | (Convert.ToUInt32(isWaitingForMipmap) << 15);
+            packedBitfield = (bitfieldOccupancy << 24) | (ttl << 20) |  (Convert.ToUInt32(isWaitingForMipmap) << 19);
         }
 
         // Unpack 32 bits
-        public void UnPackStruct(out uint _bitfieldOccupancy, out uint _runLength, out uint _depth, out bool isWaitingForMipmap)
+        public void UnPackStruct(out uint _bitfieldOccupancy, out uint _ttl, out bool isWaitingForMipmap)
         {
             //ulong padding = (packedBitfield & 0x7FFF);
-            isWaitingForMipmap = Convert.ToBoolean((packedBitfield >> 15) & 1);
-            _depth = (uint)(packedBitfield >> 16) & 0xF;
-            _runLength = (uint)(packedBitfield >> 20) & 0xF;
+            isWaitingForMipmap = Convert.ToBoolean((packedBitfield >> 19) & 1);
+            _ttl = (uint)(packedBitfield >> 20) & 0xF;
             _bitfieldOccupancy = (uint)(packedBitfield >> 24) & 0xFF;
         }
 
+        const int MAX_BRIGHTNESS = 12;
+
         /// <summary>
-        /// Encodes 32bit HDR RGB into 8bit RGBA.
-        /// Credits to: http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+        /// Encodes HDR half4 into uint
+        /// Credits to: https://github.com/keijiro/PackedRGBMShader
         /// </summary>
-        Vector4 RGBMEncode(Vector3 colour)
+        uint EncodeColour(Vector3 rgb)
         {
-            //colour = pow(colour, 0.454545); // Convert Linear to Gamma
-            Vector4 rgbm = new Vector4();
-            colour *= (float)(1.0 / 6.0);
-            rgbm.w = Mathf.Clamp(Mathf.Max(Mathf.Max(colour.x, colour.y), Mathf.Max(colour.z, (float)1e-6)), 0, 1);
-            rgbm.w = Mathf.Ceil(rgbm.w * 255.0F) / 255.0F;
-            rgbm.x = colour.x / rgbm.w;
-            rgbm.y = colour.y / rgbm.w;
-            rgbm.z = colour.z / rgbm.w;
-            return rgbm;
+            float y = Mathf.Max(Mathf.Max(rgb.x, rgb.y), rgb.z);
+            y = Mathf.Clamp(Mathf.Ceil(y * 255 / MAX_BRIGHTNESS), 1, 255);
+            rgb *= 255 * 255 / (y * MAX_BRIGHTNESS);
+            Vector4 i = new Vector4(rgb.x, rgb.y, rgb.z, y);
+            return (uint)i.x | ((uint)i.y << 8) | ((uint)i.z << 16) | ((uint)i.w << 24);
         }
 
         /// <summary>
-        /// Decodes 8bit RGBA into 32bit HDR RGB.
-        /// Credits to: http://graphicrants.blogspot.com/2009/04/rgbm-color-encoding.html
+        /// Decodes HDR half4 from uint
+        /// Credits to: https://github.com/keijiro/PackedRGBMShader
         /// </summary>
-        Vector3 RGBMDecode(Vector4 rgbm)
+        Vector3 DecodeColour(uint data)
         {
-            rgbm.x *= rgbm.w * 6.0f;
-            rgbm.y *= rgbm.w * 6.0f;
-            rgbm.z *= rgbm.w * 6.0f;
-            return new Vector3(rgbm.x, rgbm.y, rgbm.z);
+            float r = (data) & 0xff;
+            float g = (data >> 8) & 0xff;
+            float b = (data >> 16) & 0xff;
+            float a = (data >> 24) & 0xff;
+            return new Vector3(r, g, b) * a * MAX_BRIGHTNESS / (255 * 255);
         }
 
         /// <summary>
@@ -128,10 +126,7 @@ namespace NKLI.Nigiri.SVO
             //           [16] [17] [18] [19] [20] [21] [22] [23] [24] [25] [26] [27] [28] [29] [30] [31]
             //            B    B    B    B    B    B    B    B    A    A    A    A    A    A    A    A 
 
-            colour.x *= 255;
-            Vector4 encodedColour = RGBMEncode(colour);
-
-            packedColour = ((uint)encodedColour.x << 24) | ((uint)encodedColour.y << 16) | ((uint)encodedColour.z << 8) | ((uint)encodedColour.w);
+            packedColour = EncodeColour(new Vector4(colour.x, colour.y, colour.z));
             colour_A = colour.w;
         }
 
@@ -140,20 +135,8 @@ namespace NKLI.Nigiri.SVO
         /// </summary>
         public Vector4 UnPackColour()
         {
-            Vector4 encodedColour;
-            encodedColour.x = (packedColour) & 0xFF;
-            encodedColour.y = (packedColour >> 8) & 0xFF;
-            encodedColour.z = (packedColour >> 16) & 0xFF;
-            encodedColour.w = (packedColour >> 24) & 0xFF;
-
-            encodedColour.x /= 255;
-            encodedColour.y /= 255;
-            encodedColour.z /= 255;
-            encodedColour.w /= 255;
-
-            Vector3 decodedColour = RGBMDecode(encodedColour);
-
-            return new Vector4(decodedColour.x, decodedColour.y, decodedColour.z, colour_A);
+            Vector4 unpackedColour = DecodeColour(packedColour);
+            return new Vector4(unpackedColour.x, unpackedColour.y, unpackedColour.z, colour_A);
         }
     }
 }

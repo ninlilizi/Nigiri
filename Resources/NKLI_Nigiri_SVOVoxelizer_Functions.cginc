@@ -35,9 +35,9 @@ inline uint3 GetGridPosition(float4 worldPosition, uint resolution, uint giAreaS
 /// <summary>
 /// Returns mixed colour for insertion
 /// </summary>
-inline float4 GetNewMixedColour(uint2 orderedCoord, Texture2D<float4> lightingTexture, Texture2D<float4> lightingTexture2, float emissiveIntensity, float shadowStrength, float occlusionGain)
+inline half4 GetNewMixedColour(uint2 orderedCoord, Texture2D<float4> lightingTexture, Texture2D<float4> lightingTexture2, float emissiveIntensity, float shadowStrength, float occlusionGain)
 {  
-    return float4((
+    return half4((
     max(lightingTexture[orderedCoord].rgb * emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - shadowStrength).xxx)),
     lightingTexture2[orderedCoord].a * occlusionGain);
 }
@@ -133,7 +133,7 @@ inline void AppendSVOMipmapQueue(RWStructuredBuffer<uint> mipmapBuffer, RWStruct
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
 TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> mipmapBuffer,
-                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, float4 colour, float depth, float giAreaSize, int mipmapQueueEmpty)
+                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, half4 colour, float depth, float giAreaSize, int mipmapQueueEmpty)
 {
     /// Calculate initial values
     // AABB Min/Max x,y,z

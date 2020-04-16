@@ -42,7 +42,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
     // Offset index by one as zero stores append count
     counter++;
     
-    // Get index of cell to split
+    // Get index of cell to filter
     uint mipmapIndex = _SVO_MipmapQueue[counter];
     
     // If index == 0 then do nothing
@@ -55,14 +55,12 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         SVONode nodeToMipmap = _SVO[mipmapIndex];
         
         uint _bifFieldOccupancy;
-        uint _runLength;
         uint _ttl;
         uint isWaitingForMipmap;
-        nodeToMipmap.UnPackStruct(_bifFieldOccupancy, _runLength, _ttl, isWaitingForMipmap);
-        _bifFieldOccupancy = getOccupancyBitmap(mipmapIndex);
+        nodeToMipmap.UnPackStruct(_bifFieldOccupancy, _ttl, isWaitingForMipmap);
                  
         // Initialise accumumator
-        float4 filteredColour = (0).xxxx;
+        half4 filteredColour = (0).xxxx;
         
         // Do this for all child nodes
         [unroll]
@@ -76,14 +74,14 @@ void CSMain (uint3 id : SV_DispatchThreadID)
         }
         
         // Average sampled nodes
-        filteredColour /= 8;
+        filteredColour *= 0.125;
         
         // Debug visualisation
         if (_debugFiltering)
             filteredColour += float4(0.1, 0.1, 0.1, 0);
         
         // Update node properties
-        nodeToMipmap.PackStruct(_bifFieldOccupancy, 0, _ttl, 1);
+        nodeToMipmap.PackStruct(getOccupancyBitmap(nodeToMipmap.referenceOffset), _ttl, 1);
         nodeToMipmap.PackColour(filteredColour);
         //nodeToMipmap.SetIsWaitingForMipmap(1);
         

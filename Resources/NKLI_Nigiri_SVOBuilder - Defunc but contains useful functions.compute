@@ -202,7 +202,7 @@ void CSMain(uint3 id : SV_DispatchThreadID)
         indexedNode.referenceOffset = outputReference;
         
         // Pack data
-        indexedNode.PackStruct(occupancyBitmap, runLength, actualDepth, isLeaf);
+        indexedNode.PackStruct(occupancyBitmap, actualDepth, isLeaf);
         
 		// Update sparse index
         uint counter_WriteSVO;

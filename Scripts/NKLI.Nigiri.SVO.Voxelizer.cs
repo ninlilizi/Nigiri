@@ -183,6 +183,9 @@ namespace NKLI.Nigiri.SVO
 
                 //Debug.Log("Nodes split successfully!");
 
+                // Turn this off to ensure we have fresh data before another round
+                SVO_Tree.AbleToSplit = false;
+
                 // Resume thread
                 SVO_Tree.ResumeNodeWorker();
 

@@ -83,34 +83,31 @@ namespace NKLI.Nigiri.SVO
             {
 
                 //int verifiedCount = 0;
-                for (int i = 0; i < (test_Buffer_SVO.Length / 32); i++)
+                for (int i = 0; i < (test_Buffer_SVO.Length / 16); i++)
                 {
-                    byte[] nodeBytes = new byte[32];
+                    byte[] nodeBytes = new byte[16];
                     byte[] nodeBytesReferenceOffset = new byte[4];
                     byte[] nodeBytesPackedBitfield = new byte[4];
 
-                    byte[] nodeBytesR = new byte[4];
-                    byte[] nodeBytesG = new byte[4];
-                    byte[] nodeBytesB = new byte[4];
+                    byte[] nodeBytesPackedColour = new byte[4];
                     byte[] nodeBytesA = new byte[4];
 
-                    Buffer.BlockCopy(test_Buffer_SVO, (i * 32), nodeBytes, 0, 32);
+                    Buffer.BlockCopy(test_Buffer_SVO, (i * 16), nodeBytes, 0, 16);
                     Buffer.BlockCopy(nodeBytes, 0, nodeBytesReferenceOffset, 0, 4);
                     Buffer.BlockCopy(nodeBytes, 4, nodeBytesPackedBitfield, 0, 4);
 
-                    Buffer.BlockCopy(nodeBytes, 8, nodeBytesR, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 12, nodeBytesG, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 16, nodeBytesB, 0, 4);
-                    Buffer.BlockCopy(nodeBytes, 20, nodeBytesA, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 8, nodeBytesPackedColour, 0, 4);
+                    Buffer.BlockCopy(nodeBytes, 12, nodeBytesA, 0, 4);
 
                     SVONode node = new SVONode(BitConverter.ToUInt32(nodeBytesReferenceOffset, 0), BitConverter.ToUInt32(nodeBytesPackedBitfield, 0));
-                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _runlength, out uint _ttl, out bool isWaitingForMipmap);
+                    node.UnPackStruct(out uint _bitfieldOccupance, out uint _ttl, out bool isWaitingForMipmap);
 
-                    node.PackColour(new Vector4(BitConverter.ToUInt32(nodeBytesR, 0), BitConverter.ToUInt32(nodeBytesG, 0), BitConverter.ToUInt32(nodeBytesB, 0), BitConverter.ToUInt32(nodeBytesA, 0)));
+                    //node.PackColour(new Vector4(BitConverter.ToUInt32(nodeBytesR, 0), BitConverter.ToUInt32(nodeBytesG, 0), BitConverter.ToUInt32(nodeBytesB, 0), BitConverter.ToSingle(nodeBytesA, 0)));
+                    node.packedColour = BitConverter.ToUInt32(nodeBytesPackedColour, 0);
                     Vector4 unpackedColour = node.UnPackColour();
 
                     string line = "[" + i + "] [Ref:" + node.referenceOffset + "] [BO:" + Convert.ToString(_bitfieldOccupance, toBase: 2) + "]" +
-                        " [RL:" + _runlength + "] [TTL:" + _ttl + "] [isWaitingForMipmap:" + isWaitingForMipmap + "]" +
+                        " [TTL:" + _ttl + "] [isWaitingForMipmap:" + isWaitingForMipmap + "]" +
                         " [R:" + unpackedColour.x + "] [G:" + unpackedColour.y + "] [B:" + unpackedColour.z + "] [A:" + unpackedColour.w + "]";
 
                     fileOutput.WriteLine(line);
