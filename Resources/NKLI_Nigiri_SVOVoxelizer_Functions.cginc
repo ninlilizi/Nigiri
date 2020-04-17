@@ -35,11 +35,11 @@ inline uint3 GetGridPosition(float4 worldPosition, uint resolution, uint giAreaS
 /// <summary>
 /// Returns mixed colour for insertion
 /// </summary>
-inline half4 GetNewMixedColour(uint2 orderedCoord, Texture2D<float4> lightingTexture, Texture2D<float4> lightingTexture2, float emissiveIntensity, float shadowStrength, float occlusionGain)
+inline half4 GetNewMixedColour(uint2 orderedCoord, Texture2D<half4> lightingTexture, Texture2D<half4> texture_GBuffer0, float emissiveIntensity, float shadowStrength, float occlusionGain)
 {  
     return half4((
-    max(lightingTexture[orderedCoord].rgb * emissiveIntensity, lightingTexture2[orderedCoord].rgb * (1 - shadowStrength).xxx)),
-    lightingTexture2[orderedCoord].a * occlusionGain);
+    max(lightingTexture[orderedCoord].rgb * emissiveIntensity, texture_GBuffer0[orderedCoord].rgb * (1 - shadowStrength).xxx)),
+    texture_GBuffer0[orderedCoord].a * occlusionGain);
 }
 
 /// <summary>
@@ -67,7 +67,7 @@ inline float GetLuma(float3 inputColor)
 /// <summary>
 /// Writes colour value to node
 /// </summary>
-inline SVONode SetNodeColour(SVONode node, float4 colour, float depth)
+inline SVONode SetNodeColour(SVONode node, half4 colour, float depth)
 {
     // Calculate depth based luma threshold (decreases with increasing depth)
     float lumaThreshold = LUMA_THRESHOLD_FACTOR * (1.0f / max(depth * LUMA_DEPTH_FACTOR, 0.1f));
@@ -133,7 +133,7 @@ inline void AppendSVOMipmapQueue(RWStructuredBuffer<uint> mipmapBuffer, RWStruct
 /// Traverses the SVO, either queueing nodes for splitting or writing out new colour
 /// </summary>
 TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredBuffer<uint> queueBuffer, RWStructuredBuffer<uint> mipmapBuffer,
-                                uniform RWStructuredBuffer<uint> counterBuffer, float4 worldPosition, half4 colour, float depth, float giAreaSize, int mipmapQueueEmpty)
+                                uniform RWStructuredBuffer<uint> counterBuffer, half4 worldPosition, half4 colour, float depth, float giAreaSize, int mipmapQueueEmpty)
 {
     /// Calculate initial values
     // AABB Min/Max x,y,z
@@ -146,11 +146,11 @@ TraversalResult TraverseSVO(RWStructuredBuffer<SVONode> svoBuffer, RWStructuredB
     traversalResult.offset = 0;
     traversalResult.TTL = 0;
     
-    if ((worldPosition.x < t0.x || worldPosition.x > t1.x) || (worldPosition.y < t0.y || worldPosition.y > t1.y) || (worldPosition.z < t0.z || worldPosition.z > t1.z))
-    {
+    //if ((worldPosition.x < t0.x || worldPosition.x > t1.x) || (worldPosition.y < t0.y || worldPosition.y > t1.y) || (worldPosition.z < t0.z || worldPosition.z > t1.z))
+    //{
         // We're done here
-        return traversalResult;
-    }   
+    //    return traversalResult;
+    //}   
            
     // Traverse tree
     uint offset = 0;

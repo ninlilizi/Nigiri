@@ -23,10 +23,10 @@ namespace NKLI.Nigiri
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
         // Render Textures
-        public RenderTexture lightingTexture;
-        public RenderTexture lightingTexture2;
-        public RenderTexture lightingTextureMono;
-        public RenderTexture lightingTexture2Mono;
+        //public RenderTexture lightingTexture;
+        //public RenderTexture texture_GBuffer0;
+        //public RenderTexture lightingTextureMono;
+        //public RenderTexture lightingTexture2Mono;
         public RenderTexture positionTexture;
         public RenderTexture depthTexture;
         public RenderTexture blur;
@@ -57,22 +57,22 @@ namespace NKLI.Nigiri
 
             if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
 
-            if (lightingTexture != null) lightingTexture.Release();
-            if (lightingTexture2 != null) lightingTexture2.Release();
+            //if (lightingTexture != null) lightingTexture.Release();
+            //if (texture_GBuffer0 != null) texture_GBuffer0.Release();
             if (depthTexture != null) depthTexture.Release();
             if (gi != null) gi.Release();
             if (blur != null) blur.Release();
 
-            lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-            lightingTexture2 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            //lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            //texture_GBuffer0 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             if (localCam.stereoEnabled) depthTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
             else depthTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.RHalf);
             gi = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
             blur = new RenderTexture(injectionTextureResolution.x * subsamplingRatio, injectionTextureResolution.y * subsamplingRatio, 0, RenderTextureFormat.ARGBHalf);
-            lightingTexture.filterMode = FilterMode.Bilinear;
-            lightingTexture2.filterMode = FilterMode.Bilinear;
+            //lightingTexture.filterMode = FilterMode.Bilinear;
+            //texture_GBuffer0.filterMode = FilterMode.Bilinear;
 
             depthTexture.filterMode = FilterMode.Bilinear;
             blur.filterMode = FilterMode.Bilinear;
@@ -81,23 +81,23 @@ namespace NKLI.Nigiri
             if (localCam.stereoEnabled)
             {
                 //We cut the injection images in half to avoid duplicate work in stereo
-                lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
-                lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+                //lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+                //lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
 
-                lightingTextureMono.vrUsage = VRTextureUsage.None;
-                lightingTexture2Mono.vrUsage = VRTextureUsage.None;
+                //lightingTextureMono.vrUsage = VRTextureUsage.None;
+                //lightingTexture2Mono.vrUsage = VRTextureUsage.None;
                 positionTexture.vrUsage = VRTextureUsage.None; // We disable this because it needs to not be stereo so the voxer does'nt do double the work
-                lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
-                lightingTexture2.vrUsage = VRTextureUsage.TwoEyes;
+                //lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
+                //texture_GBuffer0.vrUsage = VRTextureUsage.TwoEyes;
                 blur.vrUsage = VRTextureUsage.TwoEyes;
                 gi.vrUsage = VRTextureUsage.TwoEyes;
                 depthTexture.vrUsage = VRTextureUsage.TwoEyes; // Might cause regression with voxelization
-                lightingTextureMono.Create();
-                lightingTexture2Mono.Create();
+                //lightingTextureMono.Create();
+                //lightingTexture2Mono.Create();
             }
 
-            lightingTexture.Create();
-            lightingTexture2.Create();
+            //lightingTexture.Create();
+            //texture_GBuffer0.Create();
             positionTexture.Create();
             depthTexture.Create();
             blur.Create();
@@ -106,11 +106,11 @@ namespace NKLI.Nigiri
 
 
             // VRAM estimation
-            if (lightingTexture != null)
-                VRAM_Usage += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
+            //if (lightingTexture != null)
+            //    VRAM_Usage += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
 
-            if (lightingTexture2 != null)
-                VRAM_Usage += lightingTexture2.width * lightingTexture2.height * bitValue(lightingTexture2);
+            //if (texture_GBuffer0 != null)
+            //    VRAM_Usage += texture_GBuffer0.width * texture_GBuffer0.height * bitValue(texture_GBuffer0);
 
             if (positionTexture != null)
                 VRAM_Usage += positionTexture.width * positionTexture.height * bitValue(positionTexture);
@@ -167,10 +167,10 @@ namespace NKLI.Nigiri
             VRAM_Usage = 0;
 
             // Dispose render textures
-            Helpers.DisposeTextureRef(ref lightingTexture, destroy);
-            Helpers.DisposeTextureRef(ref lightingTexture2, destroy);
-            Helpers.DisposeTextureRef(ref lightingTextureMono, destroy);
-            Helpers.DisposeTextureRef(ref lightingTexture2Mono, destroy);
+            //Helpers.DisposeTextureRef(ref lightingTexture, destroy);
+            //Helpers.DisposeTextureRef(ref texture_GBuffer0, destroy);
+            //Helpers.DisposeTextureRef(ref lightingTextureMono, destroy);
+            //Helpers.DisposeTextureRef(ref lightingTexture2Mono, destroy);
             Helpers.DisposeTextureRef(ref positionTexture, destroy);
             Helpers.DisposeTextureRef(ref depthTexture, destroy);
             Helpers.DisposeTextureRef(ref gi, destroy);

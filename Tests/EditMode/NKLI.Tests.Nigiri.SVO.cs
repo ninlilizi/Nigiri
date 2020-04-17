@@ -102,7 +102,7 @@ namespace NKLI.Tests.Nigiri.SVO
 
 
                 // Voxelize scene
-                voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, RT_gBuffer0, buffer_Mask);
+                voxelizer.VoxelizeScene(sampleCount, RT_Position, RT_Source, buffer_Mask);
                 //Debug.Log("<Unit Test> Voxelized scene");
 
                 //Debug.Log("<Unit Test> Built SVO, gridWidth:" + gridWidth + ", ThreadCount:" + svo.ThreadCount + ", NodeCount:" + svo.NodeCount + ", VoxelCount:" + svo.VoxelCount + ", TreeDepth:" + svo.TreeDepth);

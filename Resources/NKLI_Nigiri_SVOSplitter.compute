@@ -45,8 +45,8 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
             SVONode nodeToSplit = _SVO[splitIndex];
             uint bitfieldOccupancy;
             uint ttl;
-            uint isLeaf;
-            nodeToSplit.UnPackStruct(bitfieldOccupancy, ttl, isLeaf);
+            uint isWaitingForMipmap;
+            nodeToSplit.UnPackStruct(bitfieldOccupancy, ttl, isWaitingForMipmap);
         
             // Only split the node if TTL is non-zero, reference is null and SVO not full
             if ((ttl) && (!nodeToSplit.referenceOffset) && (_SVO_Counters_Internal[0] < _SVO_MaxNodes))
@@ -60,7 +60,7 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
                 // Get write position
                 uint writePosition;
                 InterlockedAdd(_SVO_Counters_Internal[0], 8, writePosition);
-            
+                
                 // write new nodes
                 _SVO[writePosition] = nodeToWrite;
                 _SVO[writePosition + 1] = nodeToWrite;

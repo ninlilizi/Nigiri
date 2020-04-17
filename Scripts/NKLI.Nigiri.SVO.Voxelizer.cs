@@ -95,56 +95,50 @@ namespace NKLI.Nigiri.SVO
         /// <summary>
         /// Voxelizes the scene
         /// </summary>
-        public bool VoxelizeScene(int sampleCount, RenderTexture positionTexture, RenderTexture lightingTexture, RenderTexture lightingTexture2, ComputeBuffer maskBuffer)
+        public bool VoxelizeScene(int sampleCount, RenderTexture positionTexture, RenderTexture lightingTexture, ComputeBuffer maskBuffer)
         {
-            //if (WarmUp > 4)
-            //{
-                // Sanity check inputs
-                if (SVO_Tree == null || positionTexture == null || lightingTexture == null || lightingTexture2 == null)
-                {
-                    // Provide explanation
-                    if (SVO_Tree == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> SVO == null PTR");
-                    if (positionTexture == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Position Texture == null PTR");
-                    if (lightingTexture == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Lighting Texture == null PTR");
-                    if (lightingTexture2 == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Lighting Texture 2 == null PTR");
+            // Sanity check inputs
+            if (SVO_Tree == null || positionTexture == null || lightingTexture == null)
+            {
+                // Provide explanation
+                if (SVO_Tree == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> SVO == null PTR");
+                if (positionTexture == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Position Texture == null PTR");
+                if (lightingTexture == null) Debug.LogError("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Lighting Texture == null PTR");
 
-                    // Throw exception
-                    throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Null PTRs detected");
-                }
+                // Throw exception
+                throw new System.Exception("[Nigiri] <NKLI.Nigiri.SVO.Voxelizer.VoxelizeScene> Null PTRs detected");
+            }
 
-                // If SVO worker threads are suspended,
-                // then wake then up.
-                SVO_Tree.ResumeWorkers();
+            // If SVO worker threads are suspended,
+            // then wake then up.
+            SVO_Tree.ResumeWorkers();
 
-                // Set counter buffer to initial values
-                SVO_Tree.SetCounterBuffer();
+            // Set counter buffer to initial values
+            SVO_Tree.SetCounterBuffer();
 
-                // Set buffers
-                Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
-                Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
-                Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_Queue_Split);
-                Shader_VoxelEncoder.SetBuffer(0, "_SVO_MipmapQueue", SVO_Tree.Buffer_Queue_Mipmap);
-                Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
+            // Set buffers
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO_Counters", SVO_Tree.Buffer_Counters);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO_SplitQueue", SVO_Tree.Buffer_Queue_Split);
+            Shader_VoxelEncoder.SetBuffer(0, "_SVO_MipmapQueue", SVO_Tree.Buffer_Queue_Mipmap);
+            Shader_VoxelEncoder.SetBuffer(0, "_maskBuffer", maskBuffer);
 
-                // Set textures
-                Shader_VoxelEncoder.SetTextureFromGlobal(0, "_CameraDepthTexture", "_CameraDepthTexture");
-                Shader_VoxelEncoder.SetTexture(0, "positionTexture", positionTexture);
-                Shader_VoxelEncoder.SetTexture(0, "lightingTexture", lightingTexture);
-                Shader_VoxelEncoder.SetTexture(0, "lightingTexture2", lightingTexture2);
+            // Set textures
+            Shader_VoxelEncoder.SetTextureFromGlobal(0, "_CameraDepthTexture", "_CameraDepthTexture");
+            Shader_VoxelEncoder.SetTexture(0, "positionTexture", positionTexture);
+            Shader_VoxelEncoder.SetTexture(0, "lightingTexture", lightingTexture);
+            Shader_VoxelEncoder.SetTextureFromGlobal(0, "_CameraGBufferTexture0", "_CameraGBufferTexture0");
 
-                // Set values
-                Shader_VoxelEncoder.SetInt("_mipmapQueueEmpty", SVO_Tree.MipmapQueueEmpty ? 1 : 0);
-                Shader_VoxelEncoder.SetFloat("_emissiveIntensity", Emissive_Intensity);
-                Shader_VoxelEncoder.SetFloat("_shadowStrength", Shadow_Strength);
-                Shader_VoxelEncoder.SetFloat("_occlusionGain", Occlusion_Gain);
-                Shader_VoxelEncoder.SetFloat("_giAreaSize", GI_Area_Size);
-                Shader_VoxelEncoder.SetInt("_maxDepth", max_depth);
+            // Set values
+            Shader_VoxelEncoder.SetInt("_mipmapQueueEmpty", SVO_Tree.MipmapQueueEmpty ? 1 : 0);
+            Shader_VoxelEncoder.SetFloat("_emissiveIntensity", Emissive_Intensity);
+            Shader_VoxelEncoder.SetFloat("_shadowStrength", Shadow_Strength);
+            Shader_VoxelEncoder.SetFloat("_occlusionGain", Occlusion_Gain);
+            Shader_VoxelEncoder.SetFloat("_giAreaSize", GI_Area_Size);
+            Shader_VoxelEncoder.SetInt("_maxDepth", max_depth);
 
-                // Dispatch
-                Shader_VoxelEncoder.Dispatch(0, sampleCount / 1024, 1, 1);
-
-            //}
-            //else WarmUp++;
+            // Dispatch
+            Shader_VoxelEncoder.Dispatch(0, sampleCount / 1024, 1, 1);
 
             // We're done here
             return true;

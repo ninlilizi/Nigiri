@@ -120,7 +120,7 @@ struct SVONode
     inline uint GetIsWaitingForMipmap()
     {
 
-        return (packedBitfield >> 12) & 1;
+        return (packedBitfield >> 19) & 1;
     }
     
     /// <summary>
@@ -128,8 +128,8 @@ struct SVONode
     /// </summary>
     inline void SetIsWaitingForMipmap(uint value)
     {
-        packedBitfield &= ~(1 << 12);
-        packedBitfield |= value << 12;
+        packedBitfield &= ~(1 << 19);
+        packedBitfield |= value << 19;
     }
     
     /// <summary>

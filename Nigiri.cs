@@ -387,8 +387,8 @@ public class Nigiri : MonoBehaviour
 
 
     [Header("Render Textures")]
-    public RenderTexture lightingTexture;
-    public RenderTexture lightingTexture2;
+    //public RenderTexture lightingTexture;
+    //public RenderTexture lightingTexture2;
 
     // Scriptable objects
     public static RenderTextures renderTextures;
@@ -732,8 +732,8 @@ public class Nigiri : MonoBehaviour
         renderTextures.Create(localCam, injectionTextureResolution, subsamplingRatio);
 
         // Assign inspector debug RTs
-        lightingTexture = renderTextures.lightingTexture;
-        lightingTexture2 = renderTextures.lightingTexture2;
+        //lightingTexture = renderTextures.lightingTexture;
+        //lightingTexture2 = renderTextures.texture_GBuffer0;
 
 
         // Instantiate buffers
@@ -806,7 +806,7 @@ public class Nigiri : MonoBehaviour
     }
 
     // Function to update data in the voxel grid
-    private void UpdateSVO()
+    private void UpdateSVO(RenderTexture source)
     {
         computeBuffers.RenderCountBuffer.SetData(renderCounts.CounterData, 0, 0, RenderCounterMax);
 
@@ -819,13 +819,13 @@ public class Nigiri : MonoBehaviour
         voxelizer.UpdateParameters(EmissiveIntensity, shadowStrength, occlusionGain);
 
         // Voxelize scene
-        voxelizer.VoxelizeScene(renderTextures.lightingTexture.width * renderTextures.lightingTexture.height, renderTextures.positionTexture, renderTextures.lightingTexture, renderTextures.lightingTexture2, computeBuffers.voxelUpdateMaskBuffer);
+        voxelizer.VoxelizeScene(source.width * source.height, renderTextures.positionTexture, source, computeBuffers.voxelUpdateMaskBuffer);
 
         // Split nodes
         voxelizer.SplitNodes();
 
         // Mipmap nodes
-        voxelizer.MipmapNodes();
+        //voxelizer.MipmapNodes();
 
 
         // Update execution time of worker threads
@@ -989,13 +989,13 @@ public class Nigiri : MonoBehaviour
         tracerMaterial.SetFloat("NearLightGain", NearLightGain);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
 
-        Graphics.Blit(source, renderTextures.lightingTexture);
-        Graphics.Blit(null, renderTextures.lightingTexture2, blitGBuffer0Material);
+        //Graphics.Blit(source, renderTextures.lightingTexture);
+        //Graphics.Blit(null, renderTextures.texture_GBuffer0, blitGBuffer0Material);
 
         if (localCam.stereoEnabled)
         {
-            Graphics.Blit(renderTextures.lightingTexture, renderTextures.lightingTextureMono, stereo2MonoMaterial);
-            Graphics.Blit(renderTextures.lightingTexture2, renderTextures.lightingTexture2Mono, stereo2MonoMaterial);
+            //Graphics.Blit(renderTextures.lightingTexture, renderTextures.lightingTextureMono, stereo2MonoMaterial);
+            //Graphics.Blit(renderTextures.texture_GBuffer0, renderTextures.lightingTexture2Mono, stereo2MonoMaterial);
         }
 
         // Save RenderBuffers to filea for Test units
@@ -1048,8 +1048,8 @@ public class Nigiri : MonoBehaviour
         {
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
-            renderTextures.gi = raytracer.Trace(source, renderTextures.positionTexture);
-            //Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
+            if (!visualizeOcclusion) renderTextures.gi = raytracer.Trace(source, renderTextures.positionTexture);
+            else Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
             renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
@@ -1171,7 +1171,7 @@ public class Nigiri : MonoBehaviour
             nigiri_VoxelMask.SetTexture(1, "positionTexture", renderTextures.positionTexture);
             nigiri_VoxelMask.SetBuffer(1, "_maskBufferRW", computeBuffers.voxelUpdateMaskBuffer);
             nigiri_VoxelMask.SetBuffer(1, "_renderCountBuffer", computeBuffers.RenderCountBuffer);
-            nigiri_VoxelMask.Dispatch(1, renderTextures.lightingTexture.width / 16, renderTextures.lightingTexture.height / 16, 1);
+            nigiri_VoxelMask.Dispatch(1, source.width / 16, source.height / 16, 1);
 
             computeBuffers.maskGenerated = true;
         }
@@ -1185,7 +1185,7 @@ public class Nigiri : MonoBehaviour
         {
             // Update the SVO
             // Worker threads will auto resume when voxelizer called
-            UpdateSVO();
+            UpdateSVO(source);
         }
         else
         {

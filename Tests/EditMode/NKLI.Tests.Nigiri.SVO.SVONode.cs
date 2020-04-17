@@ -29,7 +29,7 @@ namespace NKLI.Tests.Nigiri.SVO
         [Test]
         public void PackStruct_OctreeDepth()
         {
-            uint control = 0b_0000_0000_0000_1111_0000_0000_0000_0000;
+            uint control = 0b_0000_0000_1111_0000_0000_0000_0000_0000;
             uint sample = 0b_0000_0000_0000_0000_0000_0000_0000_1111;
 
             SVONode SVONode = new SVONode(0, 0, 0, sample, false);
@@ -39,9 +39,9 @@ namespace NKLI.Tests.Nigiri.SVO
 
         // Test PackStruct is leaf
         [Test]
-        public void PackStruct_IsLeaf()
+        public void PackStruct_IsWaitingForMipmap()
         {
-            uint control = 0b_0000_0000_0000_0000_1000_0000_0000_0000;
+            uint control = 0b_0000_0000_0000_1000_0000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, 0, 0, 0, true);
 
@@ -66,7 +66,7 @@ namespace NKLI.Tests.Nigiri.SVO
         public void UnPackStruct_OctreeDepth()
         {
             uint control = 0b_0000_0000_0000_0000_0000_0000_0000_1111;
-            uint sample = 0b_0000_0000_0000_1111_0000_0000_0000_0000;
+            uint sample = 0b_0000_0000_1111_0000_0000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, sample);
             SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _depth, out bool isLeaf);
@@ -76,9 +76,9 @@ namespace NKLI.Tests.Nigiri.SVO
 
         // Test UnPackStruct is leaf
         [Test]
-        public void UnPackStruct_IsLeaf()
+        public void UnPackStruct_IsWaitingForMipmap()
         {
-            uint sample = 0b_0000_0000_0000_0000_1000_0000_0000_0000;
+            uint sample = 0b_0000_0000_0000_1000_0000_0000_0000_0000;
 
             SVONode SVONode = new SVONode(0, sample);
             SVONode.UnPackStruct(out uint _bitFieldOccupancy, out uint _depth, out bool isLeaf);

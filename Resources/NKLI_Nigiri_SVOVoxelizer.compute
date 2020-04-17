@@ -34,9 +34,9 @@ uniform const float _occlusionGain;
 uniform const float _giAreaSize;
 
 // Sample input textures
-uniform Texture2D<float4> positionTexture;
-uniform Texture2D<float4> lightingTexture;
-uniform Texture2D<float4> lightingTexture2;
+uniform Texture2D<half4> positionTexture;
+uniform Texture2D<half4> lightingTexture;
+uniform Texture2D<half4> _CameraGBufferTexture0;
 uniform Texture2D _CameraDepthTexture;
 
 // Groupshared array of node split offsets
@@ -58,8 +58,11 @@ void CSMain(uint3 id : SV_DispatchThreadID, uint thread : SV_GroupIndex)
     // Get morton ordered read index from mask buffer
     uint2 orderedCoord = morton2D_MagicBits_Decode(_maskBuffer[counter]);
     
-    half4 colour = GetNewMixedColour(orderedCoord, lightingTexture, lightingTexture2, _emissiveIntensity, _shadowStrength, _occlusionGain);
+    half4 colour = GetNewMixedColour(orderedCoord, lightingTexture, _CameraGBufferTexture0, _emissiveIntensity, _shadowStrength, _occlusionGain);
     float depth = _CameraDepthTexture[orderedCoord].r;
+    
+    //if (lightingTexture2[orderedCoord].a == 0)
+    //    return;
    
     // Traverse the SVO, splitting and writing the sampled colour as required
     TraversalResult traversalResult = TraverseSVO(

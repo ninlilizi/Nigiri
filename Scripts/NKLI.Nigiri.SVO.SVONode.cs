@@ -84,7 +84,7 @@ namespace NKLI.Nigiri.SVO
         {
             //ulong padding = (packedBitfield & 0x7FFF);
             isWaitingForMipmap = Convert.ToBoolean((packedBitfield >> 19) & 1);
-            _ttl = (uint)(packedBitfield >> 20) & 0xF;
+            _ttl = (packedBitfield >> 20) & 0xF;
             _bitfieldOccupancy = (uint)(packedBitfield >> 24) & 0xFF;
         }
 
