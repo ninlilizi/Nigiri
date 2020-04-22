@@ -23,7 +23,7 @@ namespace NKLI.Nigiri
         private RenderTextureDescriptor voxelGridDescriptorFloat4;
 
         // Render Textures
-        //public RenderTexture lightingTexture;
+        public RenderTexture lightingTexture;
         //public RenderTexture texture_GBuffer0;
         //public RenderTexture lightingTextureMono;
         //public RenderTexture lightingTexture2Mono;
@@ -57,13 +57,13 @@ namespace NKLI.Nigiri
 
             if (injectionTextureResolution.x == 0 || injectionTextureResolution.y == 0) injectionTextureResolution = new Vector2Int(1280, 720);
 
-            //if (lightingTexture != null) lightingTexture.Release();
+            if (lightingTexture != null) lightingTexture.Release();
             //if (texture_GBuffer0 != null) texture_GBuffer0.Release();
             if (depthTexture != null) depthTexture.Release();
             if (gi != null) gi.Release();
             if (blur != null) blur.Release();
 
-            //lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+            lightingTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             //texture_GBuffer0 = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             if (localCam.stereoEnabled) positionTexture = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
             else positionTexture = new RenderTexture(injectionTextureResolution.x, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
@@ -81,10 +81,10 @@ namespace NKLI.Nigiri
             if (localCam.stereoEnabled)
             {
                 //We cut the injection images in half to avoid duplicate work in stereo
-                //lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
+               // lightingTextureMono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
                 //lightingTexture2Mono = new RenderTexture(injectionTextureResolution.x / 2, injectionTextureResolution.y, 0, RenderTextureFormat.ARGBHalf);
 
-                //lightingTextureMono.vrUsage = VRTextureUsage.None;
+               // lightingTextureMono.vrUsage = VRTextureUsage.None;
                 //lightingTexture2Mono.vrUsage = VRTextureUsage.None;
                 positionTexture.vrUsage = VRTextureUsage.None; // We disable this because it needs to not be stereo so the voxer does'nt do double the work
                 //lightingTexture.vrUsage = VRTextureUsage.TwoEyes;
@@ -96,7 +96,7 @@ namespace NKLI.Nigiri
                 //lightingTexture2Mono.Create();
             }
 
-            //lightingTexture.Create();
+            lightingTexture.Create();
             //texture_GBuffer0.Create();
             positionTexture.Create();
             depthTexture.Create();
@@ -106,8 +106,8 @@ namespace NKLI.Nigiri
 
 
             // VRAM estimation
-            //if (lightingTexture != null)
-            //    VRAM_Usage += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
+            if (lightingTexture != null)
+               VRAM_Usage += lightingTexture.width * lightingTexture.height * bitValue(lightingTexture);
 
             //if (texture_GBuffer0 != null)
             //    VRAM_Usage += texture_GBuffer0.width * texture_GBuffer0.height * bitValue(texture_GBuffer0);
@@ -167,7 +167,7 @@ namespace NKLI.Nigiri
             VRAM_Usage = 0;
 
             // Dispose render textures
-            //Helpers.DisposeTextureRef(ref lightingTexture, destroy);
+            Helpers.DisposeTextureRef(ref lightingTexture, destroy);
             //Helpers.DisposeTextureRef(ref texture_GBuffer0, destroy);
             //Helpers.DisposeTextureRef(ref lightingTextureMono, destroy);
             //Helpers.DisposeTextureRef(ref lightingTexture2Mono, destroy);

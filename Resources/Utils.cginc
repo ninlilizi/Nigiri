@@ -1,4 +1,47 @@
 static const float PI = 3.1415926535897932384626433832795;
+#include "NKLI_Nigiri_SVONode.cginc"
+
+
+struct RayHit
+{
+	float3 position;
+	float distance;
+	float3 normal;
+	float3 albedo;
+	float3 specular;
+	float smoothness;
+	float3 emission;
+	float transparency;
+	float refraction;
+};
+
+RayHit CreateRayHit()
+{
+	RayHit hit;
+	hit.position = 0;
+	hit.distance = 0;
+	hit.normal = (0).xxx;
+	hit.albedo = (0).xxx;
+	hit.specular = (0).xxx;
+	hit.smoothness = 0;
+	hit.emission = (0).xxx;
+	hit.transparency = 0;
+	hit.refraction = 0l;
+	
+	return hit;
+}
+
+uniform const float _giAreaSize;
+
+float4 grid_origin;
+float4 grid_size;
+
+
+float3 grid_min;
+float3 grid_max;
+
+uniform RWStructuredBuffer<SVONode> _SVO;
+
 
 bool hit_sphere(float3 sphere_center, float sphere_radius, float3 ray_dir, float3 ray_origin)
 {
@@ -13,6 +56,7 @@ bool hit_sphere(float3 sphere_center, float sphere_radius, float3 ray_dir, float
 struct Ray
 {
 	float3 origin;
+	float3 position;
 	float3 direction;
 	float3 inv_direction;
 	int3 sign;
@@ -25,13 +69,14 @@ Ray MakeRay(float3 origin, float3 direction)
 	float3 inv_direction = float3(1, 1, 1) / direction;
 	int3 sign = int3
 	(
-		(inv_direction.x < 0) ? 1 : 0,
-		(inv_direction.y < 0) ? 1 : 0,
-		(inv_direction.z < 0) ? 1 : 0
+	(inv_direction.x < 0) ? 1 : 0,
+	(inv_direction.y < 0) ? 1 : 0,
+	(inv_direction.z < 0) ? 1 : 0
 	);
 
 	Ray output;
 	output.origin = origin;
+	output.position = origin;
 	output.direction = direction;
 	output.inv_direction = inv_direction;
 	output.sign = sign;
@@ -190,7 +235,7 @@ float3x3 GetTangentSpace(float3 normal)
 	// Choose a helper vector for the cross product
 	float3 helper = float3(1, 0, 0);
 	if (abs(normal.x) > 0.99f)
-		helper = float3(0, 0, 1);
+	helper = float3(0, 0, 1);
 
 	// Generate vectors
 	float3 tangent = normalize(cross(normal, helper));

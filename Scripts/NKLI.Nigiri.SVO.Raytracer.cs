@@ -80,11 +80,58 @@ namespace NKLI.Nigiri.SVO
             }
         }
 
+        // Number of cone tracing iterations used in the indirect diffuse lighting step
+        [Range(0.0f, 500.0f)]
+        public float maximumIterationsDiffuse = 8.0f;
 
+        // Step value for the cone tracing process in the indirect diffuse lighting step
+        public float coneStepDiffuse = 0.25f;
+
+        // Step multiplier for the cone tracing step in indirect diffuse illumination
+        public float stepMultiplierDiffuse = 2.0f;
+
+        // Angle of the cone in the indirect diffuse lighting step
+        [Range(0.0f, 1.0f)]
+        public float coneAngleDiffuse = 1f;
+
+        // Offset value for the cone tracing process in the indirect diffuse lighting step
+        public float coneOffsetDiffuse = 0.1f;
+
+        // Strength of the computed indirect diffuse lighting
+        public float indirectDiffuseLightingStrength = 1.0f;
+
+        // Downsampling for the indirect diffuse lighting
+        public int downsampleDiffuse = 1;
+
+        // Number of blur iterations for the indirect diffuse lighting
+        public int blurIterationsDiffuse = 0;
+
+        // Step value for blurring of indirect diffuse lighting
+        public float blurStepDiffuse = 1.0f;
+
+        private int currentTimestamp = 0;
+
+        int tracedTexture1UpdateCount;
+
+        public RenderTexture lighting;
+
+        Matrix4x4[] matrices = new Matrix4x4[4];
+        void SetMatrix()
+        {
+            Matrix4x4 matrixCameraToWorld = scene_view_camera.cameraToWorldMatrix;
+            Matrix4x4 matrixProjectionInverse = GL.GetGPUProjectionMatrix(scene_view_camera.projectionMatrix, false).inverse;
+            Matrix4x4 matrixHClipToWorld = matrixCameraToWorld * matrixProjectionInverse;
+
+            Shader_Raytracer.SetMatrix("_MatrixHClipToWorld", matrixHClipToWorld);
+        }
         public RenderTexture Trace(RenderTexture source, RenderTexture positionTexture)
         {
             if (Initialied)
             {
+                tracedTexture1UpdateCount++;
+                ++currentTimestamp;
+                currentTimestamp = currentTimestamp % 100;
+                Shader_Raytracer.SetInt("tracedTexture1UpdateCount", tracedTexture1UpdateCount);
                 // Update logic
                 if (attachedCamera.transform.position != last_camera_position || attachedCamera.transform.rotation != last_camera_rotation)
                 {
@@ -103,11 +150,43 @@ namespace NKLI.Nigiri.SVO
                 worldspace_frustum_corners.SetRow(3, scene_view_camera.transform.TransformVector(frustumCorners[2]));
                 Shader_Raytracer.SetMatrix("worldspace_frustum_corners", worldspace_frustum_corners);
                 Shader_Raytracer.SetVector("camera_position", scene_view_camera.transform.position);
-
+                Shader_Raytracer.SetVector("camera_normal", scene_view_camera.transform.forward);
+                Shader_Raytracer.SetMatrix("_CameraToWorld", scene_view_camera.cameraToWorldMatrix);
+                Shader_Raytracer.SetMatrix("_CameraInverseProjection", scene_view_camera.projectionMatrix.inverse);
+                SetMatrix();
                 Shader_Raytracer.SetFloat("_giAreaSize", GI_Area_Size);
                 Shader_Raytracer.SetBuffer(0, "_SVO", SVO_Tree.Buffer_SVO);
 
                 Shader_Raytracer.SetTexture(path_tracing_kernel, "output", hdr_rt);
+                Shader_Raytracer.SetTexture(0, "_Lighting", lighting);
+                Shader_Raytracer.SetTextureFromGlobal(0, "_CameraDepthTexture", "_CameraDepthTexture");
+                Shader_Raytracer.SetTextureFromGlobal(0, "_CameraGBufferTexture0", "_CameraGBufferTexture0");
+                Shader_Raytracer.SetTextureFromGlobal(0, "_CameraGBufferTexture1", "_CameraGBufferTexture1");
+                Shader_Raytracer.SetTextureFromGlobal(0, "_CameraGBufferTexture2", "_CameraGBufferTexture2");
+                Shader_Raytracer.SetTextureFromGlobal(0, "_CameraDepthNormalsTexture", "_CameraDepthNormalsTexture");
+
+                Shader_Raytracer.SetFloat("_MaximumIterations", maximumIterationsDiffuse);
+                Shader_Raytracer.SetFloat("_ConeStep", coneStepDiffuse);
+                Shader_Raytracer.SetFloat("_StepMultiplier", stepMultiplierDiffuse);
+                Shader_Raytracer.SetFloat("_ConeAngle", coneAngleDiffuse);
+                Shader_Raytracer.SetFloat("_ConeOffset", coneOffsetDiffuse);
+
+                Shader_Raytracer.SetInt("_CurrentTimestamp", currentTimestamp);
+
+                Shader_Raytracer.SetVector("sunColor", sunLight.color);
+                Shader_Raytracer.SetVector("skyColor", RenderSettings.ambientLight);
+
+
+
+                Matrix4x4 viewMat = scene_view_camera.worldToCameraMatrix;
+                Matrix4x4 projMat = GL.GetGPUProjectionMatrix(scene_view_camera.projectionMatrix, false);
+                Matrix4x4 viewProjMat = (projMat * viewMat);
+                //Shader_Raytracer.SetMatrix("_ViewProjInv", viewProjMat.inverse);
+                Shader_Raytracer.SetMatrix("_ViewProjInv", (scene_view_camera.projectionMatrix * scene_view_camera.worldToCameraMatrix).inverse);
+
+
+                if (sunLight != null) Shader_Raytracer.SetVector("sunLight", sunLight.transform.rotation.eulerAngles);
+                else Shader_Raytracer.SetVector("sunLight", new Vector3(80, 0, 0));
 
                 int random_seed = Random.Range(0, int.MaxValue / 100);
                 Shader_Raytracer.SetInt("start_seed", random_seed);
@@ -123,7 +202,7 @@ namespace NKLI.Nigiri.SVO
 
             return source;
         }
-
+        public Light sunLight;
         public void Setup(Camera cam)
         {
             //I must call this function every time the viewport is resized, VERY IMPORTANT
@@ -135,7 +214,7 @@ namespace NKLI.Nigiri.SVO
             groups_x = Mathf.CeilToInt(cam.pixelRect.width / 4.0f);
             groups_y = Mathf.CeilToInt(cam.pixelRect.height / 4.0f);
 
-            tonemap_blit = new Material(Shader.Find("PathTracing/Tonemap"));
+            //tonemap_blit = new Material(Shader.Find("PathTracing/Tonemap"));
 
             hdr_rt = new RenderTexture((int)cam.pixelRect.width, (int)cam.pixelRect.height, 0, RenderTextureFormat.ARGBFloat, RenderTextureReadWrite.Linear);
             hdr_rt.enableRandomWrite = true;

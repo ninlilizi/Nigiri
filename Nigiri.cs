@@ -969,6 +969,8 @@ public class Nigiri : MonoBehaviour
         tracerMaterial.SetColor("skyColor", skyColor);
         if (sunLight != null) tracerMaterial.SetVector("sunLight", sunLight.transform.rotation.eulerAngles);
         else tracerMaterial.SetVector("sunLight", new Vector3(80, 0, 0));
+
+
         tracerMaterial.SetFloat("sunLightInjection", sunLightInjection);
         tracerMaterial.SetInt("sphericalSunlight", sphericalSunlight ? 1 : 0);
 
@@ -988,8 +990,9 @@ public class Nigiri : MonoBehaviour
         tracerMaterial.SetFloat("GIGain", GIGain);
         tracerMaterial.SetFloat("NearLightGain", NearLightGain);
         tracerMaterial.SetInt("stereoEnabled", localCam.stereoEnabled ? 1 : 0);
+        Graphics.Blit(source, renderTextures.lightingTexture);
+        raytracer.lighting = renderTextures.lightingTexture;
 
-        //Graphics.Blit(source, renderTextures.lightingTexture);
         //Graphics.Blit(null, renderTextures.texture_GBuffer0, blitGBuffer0Material);
 
         if (localCam.stereoEnabled)
@@ -1049,7 +1052,7 @@ public class Nigiri : MonoBehaviour
             Shader.SetGlobalTexture("NoiseTexture", blueNoise[frameSwitch % 8]);
             renderTimes.TraceStopwatch.Start();
             if (!visualizeOcclusion) renderTextures.gi = raytracer.Trace(source, renderTextures.positionTexture);
-            else Graphics.Blit (source, renderTextures.gi, tracerMaterial, 2);
+            else Graphics.Blit(source, renderTextures.gi, tracerMaterial, 2);
             Graphics.ClearRandomWriteTargets();
             renderTimes.TraceStopwatch.Stop();
             renderTimes.RenderTrace = renderTimes.TraceStopwatch.Elapsed.TotalMilliseconds;
@@ -2333,6 +2336,7 @@ public class Nigiri : MonoBehaviour
 
             // Instantiate raytracer
             raytracer = new NKLI.Nigiri.SVO.Raytracer(SVO, this.GetComponent<Camera>(), sunLight, OctreeAreaSize);
+            raytracer.sunLight = sunLight;
         }
 
         // Propagate inspector values

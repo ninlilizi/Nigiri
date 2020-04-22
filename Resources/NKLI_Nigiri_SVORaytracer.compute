@@ -1,58 +1,40 @@
 ﻿#pragma kernel PathTrace_uniform_grid
 
-#include "Utils.cginc"
-#include "NKLI_Nigiri_SVONode.cginc"
-
+#include "UnityCG.cginc"
+//#include "Utils.cginc"
+//#include "NKLI_Nigiri_SVONode.cginc"
+#include "SVO_Trace_DD.cginc"
 RWTexture2D<float4> output;
 
+Texture2D<float4> _CameraDepthTexture;
+Texture2D<float4> _Lighting;
+Texture2D<float4> _CameraGBufferTexture0;
+Texture2D<float4> _CameraGBufferTexture1;
+Texture2D<float4> _CameraGBufferTexture2;
+Texture2D<float4> _CameraDepthNormalsTexture;
+
+
+float4x4 _CameraToWorld;
+float4x4 _CameraInverseProjection;
 // SVO
-uniform RWStructuredBuffer<SVONode> _SVO;
 
-float3 grid_min;
-float3 grid_max;
+uniform float3					sunLight;
 
-uniform const float _giAreaSize;
+//uniform half4					sunColor;
+uniform float					sunLightInjection = 2;
+uniform	float					GIGain = 2;
 
-float4 grid_origin;
-float4 grid_size;
+uniform sampler2D 				_MainTex;
+uniform float					indirectLightingStrength = 2;
+
 
 //camera data
 float4x4 worldspace_frustum_corners;
 float4 screen_size;
 float4 camera_position;
+float4 camera_normal;
 
 int start_seed;
-
-struct RayHit
-{
-    float3 position;
-    float distance;
-    float3 normal;
-    float3 albedo;
-    float3 specular;
-    float smoothness;
-    float3 emission;
-    float transparency;
-    float refraction;
-};
-
-RayHit CreateRayHit()
-{
-    RayHit hit;
-    hit.position = 0;
-    hit.distance = 0;
-    hit.normal = (0).xxx;
-    hit.albedo = (0).xxx;
-    hit.specular = (0).xxx;
-    hit.smoothness = 0;
-    hit.emission = (0).xxx;
-    hit.transparency = 0;
-    hit.refraction = 0l;
-    
-    return hit;
-}
-
-
 
 struct CS_INPUT
 {
@@ -62,675 +44,331 @@ struct CS_INPUT
     uint GI : SV_GroupIndex;
 };
 
-struct subtree_Struct
+
+Ray CreateCameraRay(float2 uv)
 {
+    // Transform the camera origin to world space
+    float3 origin = mul(_CameraToWorld, float4(0.0f, 0.0f, 0.0f, 1.0f)).xyz;
     
-    float3 t0;
-    float3 t1;
-    uint referenceOffset;
+    // Invert the perspective projection of the view-space position
+    float3 direction = mul(_CameraInverseProjection, float4(uv, 0.0f, 1.0f)).xyz;
+    // Transform the direction from camera to world space and normalize
+    direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
+    direction = normalize(direction);
+
+    return MakeRay(origin, direction);
+}
+
+
+
+
+uniform half3					sunColor;
+uniform half3					skyColor;
+
+
+//This is UV coords
+float2 _Pixel;
+//Cone directions https://github.com/turanszkij/WickedEngine/blob/master/WickedEngine/voxelConeTracingHF.hlsli
+static const float3 CONES[] = 
+{
+    float3(0.57735, 0.57735, 0.57735),
+    float3(0.57735, -0.57735, -0.57735),
+    float3(-0.57735, 0.57735, -0.57735),
+    float3(-0.57735, -0.57735, 0.57735),
+    float3(-0.903007, -0.182696, -0.388844),
+    float3(-0.903007, 0.182696, 0.388844),
+    float3(0.903007, -0.182696, 0.388844),
+    float3(0.903007, 0.182696, -0.388844),
+    float3(-0.388844, -0.903007, -0.182696),
+    float3(0.388844, -0.903007, 0.182696),
+    float3(0.388844, 0.903007, -0.182696),
+    float3(-0.388844, 0.903007, 0.182696),
+    float3(-0.182696, -0.388844, -0.903007),
+    float3(0.182696, 0.388844, -0.903007),
+    float3(-0.182696, 0.388844, 0.903007),
+    float3(0.182696, -0.388844, 0.903007)
 };
 
-struct result_Struct
-{
-    uint isLeaf;
-    
-    uint isOccupied[3];
-    
-    float3 t0[3];
-    
-    float3 t1[3];
-    
-    uint referenceOffset[3];
+//Alt directions
+
+float3 CONESALT[] = {
+    float3 (0,1,0),
+    float3 (0,0.5,0.866025),
+    float3 (0.822639,0.5,0.267617),
+    float3 (0.509037,0.5,-0.700639),
+    float3 (-0.509037,0.5,-0.700639),
+    float3 (-0.822639,0.5,-0.267617)
 };
 
-result_Struct Create_result_Struct()
+//Not using
+float weights[] = {
+    PI/4, 3*PI/20,3*PI/20,3*PI/20,3*PI/20,3*PI/20
+};
+
+
+
+// Traces a ray starting from the current voxel in the reflected ray direction and accumulates color Using in reflection.
+float4 RayTrace(float3 worldPosition, float3 reflectedRayDirection, float3 pixelNormal, float rayDist)
 {
-    result_Struct output;
-    
-    output.isLeaf = 0;
-    
-    output.isOccupied[0] = 0;
-    output.isOccupied[1] = 0;
-    output.isOccupied[2] = 0;
-    
-    output.t0[0] = (0).xxx;
-    output.t0[1] = (0).xxx;
-    output.t0[2] = (0).xxx;
-    
-    output.t1[0] = (0).xxx;
-    output.t1[1] = (0).xxx;
-    output.t1[2] = (0).xxx;
-    
-    output.referenceOffset[0] = 0;
-    output.referenceOffset[1] = 0;
-    output.referenceOffset[2] = 0;
-    
-    return output;
-}
+    // Color for storing all the samples
+    float4 accumulatedColor = float4(.0f, .0f, .0f, .0f);
 
-/*#define STACK_DECLARE
-#define STACK_SETUP uint StackPosition = 0; subtree_Struct stackBuffer[256]
-#define STACK_PUSH(a) stackBuffer[StackPosition++] = a
-#define STACK_POP stackBuffer[--StackPosition]
-#define STACK_HAS_DATA (StackPosition >0)*/
+    float3 currentPosition = worldPosition + (0.15f * pixelNormal);
+    float4 currentVoxelInfo = float4(0.0f, 0.0f,0.0f, 0.0f);
 
+    bool hitFound = false;
+    float rayStep = 0.125;
+    //float dist;
+    float currentWeight = 1.0;
 
-float3 SampleHemisphere(float3 normal, float alpha, uint seed)
-{
+    float totalWeight = 0.0;
 
-    seed = rand_xorshift(seed);
-    float u = seed * (1.0 / 4294967296.0);
-    seed = rand_xorshift(seed);
-    float v = seed * (1.0 / 4294967296.0);
-	// Sample the hemisphere, where alpha determines the kind of the sampling
-    float cosTheta = pow(u, 1.0f / (alpha + 1.0f));
-    float sinTheta = sqrt(1.0f - cosTheta * cosTheta);
-    float phi = 2 * PI * v;
-    float3 tangentSpaceDir = float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
-
-	// Transform direction to world space
-    return mul(tangentSpaceDir, GetTangentSpace(normal));
-}
-
-float3 Shade(inout Ray ray, RayHit hit, uint seed)
-{
-    if (hit.distance < 1.#INF)
+    // Loop for tracing the ray through the scene
+    for (float i = 0.0f; i < rayDist; i += rayStep)
     {
-		// Calculate chances of diffuse and specular reflection
-        hit.albedo = (min(hit.transparency - hit.specular, hit.albedo) + hit.albedo) / 2;
-        float specChance = energy(hit.specular);
-        float diffChance = energy(hit.albedo);
-        float transparencyChance = (hit.transparency);
-        float sum = specChance + diffChance;
+        //rayStep*= 1.5f;
+        //dist += rayStep;
+        // Traverse the ray in the reflected direction
+        currentPosition += (reflectedRayDirection * rayStep);
 
+        // Get the currently hit voxel's information
+        currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 0);
 
-		// Roulette-select the ray's path
-
-        float u = seed * (1.0 / 4294967296.0);
-        float roulette = u;
-		//	noise();
-
-        if (roulette < specChance)
+        // At the currently traced sample
+        if (((int)currentVoxelInfo.a | 0) && (!hitFound))
         {
-			//// Specular reflection
-			//ray.origin = hit.position + hit.normal * 0.001f;
-            ray.origin = hit.position;
-            float alpha;
-            if (hit.smoothness < 1)
-            {
-                alpha = SmoothnessToPhongAlpha(hit.smoothness);
-                ray.direction = SampleHemisphere(reflect(ray.direction, hit.normal), alpha, seed);
-                float f = (alpha + 2) / (alpha + 1);
-
-                ray.energy *= (1.0f / specChance) * hit.specular * sdot(hit.normal, ray.direction, f);
-            }
-            else
-            {
-                float alpha = 15.0f;
-                ray.direction = (reflect(ray.direction, hit.normal));
-                float f = (alpha + 2) / (alpha + 1);
-                ray.energy *= (1.0f / specChance) * hit.specular * sdot(hit.normal, ray.direction, f);
-            }
-
-
-        }
-        else if (diffChance > 0 && transparencyChance == 1 && roulette < sum)
-        {
-			//// Diffuse reflection
-            ray.origin = hit.position;
-			//ray.origin = hit.position + hit.normal * 0.001f;
-            ray.direction = SampleHemisphere(hit.normal, 1.0f, seed);
-            ray.energy *= (1.0f / diffChance) * hit.albedo;
-
-
-        }
-        else if (transparencyChance < 1)
-        {
-            const float refIdx = hit.refraction;
-			//// Transparency and refraction
-
-			//1.56 ior reflection;
-            float3 outwardNormal;
-            float niOverNt;
-            float3 refracted;
-            float cosine;
-
-            if (dot(ray.direction, hit.normal) > 0)
-            {
-                outwardNormal = -hit.normal;
-                niOverNt = refIdx;
-                cosine = refIdx * dot(ray.direction, hit.normal) / length(ray.direction);
-            }
-            else
-            {
-                outwardNormal = hit.normal;
-                niOverNt = 1.0 / refIdx;
-                cosine = -dot(ray.direction, hit.normal) / length(ray.direction);
-            }
-
-            float reflectProb = lerp(1.0, Schlick(cosine, refIdx),
-				Refract(ray.direction, outwardNormal, niOverNt, refracted));
-
-            float alpha = SmoothnessToPhongAlpha(1 - transparencyChance);
-
-            ray.origin = hit.position; //;
-            ray.direction = refracted;
-
-            float f = (alpha + 2) / (alpha + 1);
-            ray.energy *= (1.0f / diffChance) * (hit.albedo) * (1 - transparencyChance);
-
-
-
-        }
-        else
-        {
-            ray.energy = 0.0f;
+            accumulatedColor += currentVoxelInfo;
+            // totalWeight += currentWeight;
+            //hitFound = true; // We dont do this or fails to reflect!
+            //break;
         }
 
-		//Shadow Pass
-		//if (_shadowMode == 1) {
-		//	Ray shadowRay = CreateRay(hit.position + hit.normal * 0.001f, -1 * _DirectionalLight.xyz, ray.uv);
-		//	RayHit shadowHit = Trace(shadowRay);
-		//	if (shadowHit.distance != 1.#INF)
-		//	{
-		//		if (shadowHit.canShadow == 1) {
-		//			ray.energy += float3(0.0f, 0.0f, 0.0f);
-		//			//Clamp min to 1
-		//			ray.energy = ray.energy / 8 / max(0.125, _shadowStrength)/*(normalize(shadowRay.origin + shadowHit.position)/4*/;
-		//		}
 
-		//	}
-		//	else
-		//	{
-		//		ray.origin = hit.position - hit.normal * 0.001f;
-		//		ray.firstHit = false;
-		//		//ray.energy += _LightColor0;
-		//	}
-		//}
-		//else {
-		//ray.origin = hit.position;
-				//hit.position + hit.normal * 0.001f;
-			//ray.firstHit = false;
-		//}
 
-        return hit.emission;
     }
-    else
-    {
-		// Erase the ray's energy - the sky doesn't reflect anything
-        ray.energy = 0.0f;
+    // accumulatedColor /= totalWeight;
 
-
-        return float3(1.5, 1.5, 1.5);
-    }
-}
-
-int first_node(float tx0, float ty0, float tz0, float txm, float tym, float tzm)
-{
-    uint
-    answer = 0; // initialize to 00000000
-    // select the entry plane and set bits
-    if (tx0 > ty0)
-    {
-        if (tx0 > tz0)
-        { // PLANE YZ
-            if (tym < tx0)
-                answer |= 2; // set bit at position 1
-            if (tzm < tx0)
-                answer |= 1; // set bit at position 0
-            return (int) answer;
-        }
-    }
-    else
-    {
-        if (ty0 > tz0)
-        { // PLANE XZ
-
-        //These were swappep Nin
-            if (txm < ty0)
-                answer |= 4; // set bit at position 2
-            if (tzm < ty0)
-                answer |= 1; // set bit at position 0
-            return (int) answer;
-        }
-    }
-    // PLANE XY
-    if (txm < tz0)
-        answer |= 4; // set bit at position 2
-    if (tym < tz0)
-        answer |= 2; // set bit at position 1
-    return (int) answer;
-}
-
-inline int new_node(float txm, int x, float tym, int y, float tzm, int z)
-{
-    if (txm < tym)
-    {
-        if (txm < tzm)
-        {
-            return x;
-        } // YZ plane
-    }
-    else
-    {
-        if (tym < tzm)
-        {
-            return y;
-        } // XZ plane
-    }
-    return z; // XY plane;
-}
-/*inline void PushSubTreeToStack(uint tx0, uint ty0, uint tz0, uint txm, uint tym, uint tzm, uint offset, inout uint StackPosition, inout subtree_Struct stackBuffer[128])
-{
-    subtree_Struct subtree;
-    subtree.t0 = float3(tx0, ty0, tz0);
-    subtree.t1 = float3(txm, tym, tzm);
-    subtree.referenceOffset = offset;
-    STACK_PUSH(subtree);
-}*/
-
-inline void AddChildToResult(float tx0, float ty0, float tz0, float txm, float tym, float tzm, uint offset, uint nodeOffset, SVONode node, uint childCount, inout result_Struct result)
-{
-    // Only append the node if occupancy bit is set
-    if (node.GetOccupancyBit(nodeOffset));
-    {
-        result.t0[childCount] = float3(tx0, ty0, tz0);
-        result.t1[childCount] = float3(txm, tym, tzm);
-        result.referenceOffset[childCount] = offset + nodeOffset;
-        result.isOccupied[childCount] = 1;
-    }
-}
-
-result_Struct proc_subtree(float tx0, float ty0, float tz0, float tx1, float ty1, float tz1, SVONode node, uint a)
-{
-    result_Struct result = Create_result_Struct();
-    
-    float txm, tym, tzm;
-    int currNode;
-
-    if (tx1 < 0 || ty1 < 0 || tz1 < 0)
-        return result;
-    if (!node.GetTTL())
-    {
-        //cout << "Reached leaf node " << node - > debug_ID << endl;
-        
-        //result.t0[0] = float3(tx0, ty0, tz0);
-        //result.t1[0] = float3(txm, tym, tzm);
-        //result.referenceOffset[0] = node.referenceOffset;
-        result.isLeaf = 1;
-        return result;
-    }
-    else if (!node.referenceOffset)
-    {
-        //cout << "Reached node " << node - > debug_ID << endl;
-        
-        /*if (node.colour_A)
-        {
-            //result.t0[0] = float3(tx0, ty0, tz0);
-            //result.t1[0] = float3(txm, tym, tzm);
-            //result.referenceOffset[0] = node.referenceOffset;
-            result.isLeaf = 1;
-            return result;
-        }*/
-        
-
-        
-        
-        //result.isLeaf = 1;
-        return result;
-    }
-
-    txm = 0.5 * (tx0 + tx1);
-    tym = 0.5 * (ty0 + ty1);
-    tzm = 0.5 * (tz0 + tz1);
-           
-    currNode = first_node(tx0, ty0, tz0, txm, tym, tzm);
-    for (uint childCount = 0; childCount < 3; childCount++)
-    {
-        //subtree_Struct subtree;
-        
-        switch (currNode)
-        {
-            case 0:
-                    //proc_subtree(tx0, ty0, tz0, txm, tym, tzm, node - > children[a]);
-                AddChildToResult(tx0, ty0, tz0, txm, tym, tzm, node.referenceOffset, a, node, childCount, result);
-                currNode = new_node(txm, 4, tym, 2, tzm, 1);
-                break;
-            case 1:
-                    //proc_subtree(tx0, ty0, tzm, txm, tym, tz1, node - > children[1 ^ a]);
-                AddChildToResult(tx0, ty0, tzm, txm, tym, tz1, node.referenceOffset, (1 ^ a), node, childCount, result);
-                currNode = new_node(txm, 5, tym, 3, tz1, 8);
-                break;
-            case 2:
-                    //proc_subtree(tx0, tym, tz0, txm, ty1, tzm, node - > children[2 ^ a]);
-                AddChildToResult(tx0, tym, tz0, txm, ty1, tzm, node.referenceOffset, (2 ^ a), node, childCount, result);
-                currNode = new_node(txm, 6, ty1, 8, tzm, 3);
-                break;
-            case 3:
-                    //proc_subtree(tx0, tym, tzm, txm, ty1, tz1, node - > children[3 ^ a]);
-                AddChildToResult(tx0, tym, tzm, txm, ty1, tz1, node.referenceOffset, (3 ^ a), node, childCount, result);
-                currNode = new_node(txm, 7, ty1, 8, tz1, 8);
-                break;
-            case 4:
-                    //proc_subtree(txm, ty0, tz0, tx1, tym, tzm, node - > children[4 ^ a]);
-                AddChildToResult(txm, ty0, tz0, tx1, tym, tzm, node.referenceOffset, (4 ^ a), node, childCount, result);
-                currNode = new_node(tx1, 8, tym, 6, tzm, 5);
-                break;
-            case 5:
-                    //proc_subtree(txm, ty0, tzm, tx1, tym, tz1, node - > children[5 ^ a]);
-                AddChildToResult(txm, ty0, tzm, tx1, tym, tz1, node.referenceOffset, (5 ^ a), node, childCount, result);
-                currNode = new_node(tx1, 8, tym, 7, tz1, 8);
-                break;
-            case 6:
-                    //proc_subtree(txm, tym, tz0, tx1, ty1, tzm, node - > children[6 ^ a]);
-                AddChildToResult(txm, tym, tz0, tx1, ty1, tzm, node.referenceOffset, (6 ^ a), node, childCount, result);
-                currNode = new_node(tx1, 8, ty1, 8, tzm, 7);
-                break;
-            case 7:
-                    //proc_subtree(txm, tym, tzm, tx1, ty1, tz1, node - > children[7 ^ a]);
-                AddChildToResult(txm, tym, tzm, tx1, ty1, tz1, node.referenceOffset, (7 ^ a), node, childCount, result);
-                currNode = 8;
-                break;
-            case 8:
-                return result;
-                break;
-        }
-    }
-    //result.childCount = childCount + 1;
-    
-    return result;
+    return accumulatedColor;
 }
 
 
-bool SVOIntersection(Ray ray, out float3 position, out float3 normal, out RayHit hit)
+float3 ComputeReflection(Ray ray, float skyVisibility, float3 pixelColor)
 {
-    bool ris = false;
-    float3 p;
-    
-    /// Calculate initial values
-    // AABB Min/Max x,y,z
-    float halfArea = _giAreaSize / 2;
-    grid_min = (-halfArea).xxx;
-    grid_max = (halfArea).xxx;
-    
-    float octreeCenter[3] = { 0, 0, 0};
-    
-    //check if ray origin is inside the voxel grid
-    if (point_inside_box(ray.origin, grid_min, grid_max))
-    {
-        p = ray.origin;
-    }
-    else //the origin is not in the grid, check if the ray intersects the grid
-    {
-        float tmin, tmax;
-        float3 aabb[2] = { grid_min, grid_max };
+    ///Reflection cone setup
+    float depthValue;
+    float3 viewSpaceNormal;
+    DecodeDepthNormal(_CameraDepthNormalsTexture[_Pixel], depthValue, viewSpaceNormal);
+    //float lindepth =  LinearEyeDepth(depthValue);
 
-        ray_box_intersection(ray, aabb, tmin, tmax);
+    
+    viewSpaceNormal = normalize(viewSpaceNormal);
+    float3 pixelNormal = mul((float3x3)_CameraToWorld, viewSpaceNormal);
+    float3 pixelToCameraUnitVector = normalize(camera_position - ray.origin);
+    float3 reflectedRayDirection = reflect(pixelToCameraUnitVector, pixelNormal);
+    reflectedRayDirection *= -1.0;
+    float4 reflection = (0).xxxx;
 
-        if (tmin > tmax)  //no scene intersection
-        {
-            return false;
-        }
-        else
-        {
-            p = ray.origin + tmin * ray.direction;
-        }
-    }
-    
-     
-    uint a = 0;
+    float3 viewVector = normalize(camera_normal);
 
-    // fixes for rays with negative direction
-    if (ray.direction[0] < 0)
-    {
-        ray.origin[0] = octreeCenter[0] * 2 - ray.origin[0];
-        ray.direction[0] = -ray.direction[0];
-        a |= 4; //bitwise OR (latest bits are XYZ)
-    }
-    if (ray.direction[1] < 0)
-    {
-        ray.origin[1] = octreeCenter[1] * 2 - ray.origin[1];
-        ray.direction[1] = -ray.direction[1];
-        a |= 2;
-    }
-    if (ray.direction[2] < 0)
-    {
-        ray.origin[2] = octreeCenter[2] * 2 - ray.origin[2];
-        ray.direction[2] = -ray.direction[2];
-        a |= 1;
-    }
-    
-    
-    float divx = 1 / ray.direction.x; // IEEE stability fix
-    float divy = 1 / ray.direction.y;
-    float divz = 1 / ray.direction.z;
-    
-    float tx0 = (grid_min.x - ray.origin[0]) * divx;
-    float tx1 = (grid_max.x - ray.origin[0]) * divx;
-    float ty0 = (grid_min.y - ray.origin[1]) * divy;
-    float ty1 = (grid_max.y - ray.origin[1]) * divy;
-    float tz0 = (grid_min.z - ray.origin[2]) * divz;
-    float tz1 = (grid_max.z - ray.origin[2]) * divz;
-      
-    
-    //STACK_SETUP;
-    //RINGBUFFER_SETUP;
-    
-    uint RingBuffer_MaxCount = 128;
-    subtree_Struct RingBuffer[128];
-    uint RingBuffer_ReadIndex = 0;
-    uint RingBuffer_WriteIndex = 0;
-    uint RingBuffer_Count = 0;
-        
-    
-    subtree_Struct rootNode;
-    rootNode.t0 = float3(tx0, ty0, tz0);
-    rootNode.t1 = float3(tx1, ty1, tz1);
-    rootNode.referenceOffset = 0;
-    //STACK_PUSH(rootNode);
-    //RINGBUFFER_WRITE(rootNode);
-    
-    RingBuffer[RingBuffer_WriteIndex] = rootNode;
-    
-    RingBuffer_WriteIndex++;
-    RingBuffer_Count++;
+    float4 spec = _CameraGBufferTexture1[_Pixel];
 
-    if (RingBuffer_WriteIndex == RingBuffer_MaxCount)
-        RingBuffer_WriteIndex = 0;
+    float3 fresnel = pow(saturate(dot(viewVector.xyz,reflectedRayDirection)) * (spec.a * 0.5 + 0.5), 5.0);
+    // fresnel = lerp(fresnel,spec.rgb, spec.a);
+    // fresnel *= saturate(spec.a);
+
+    fresnel = lerp(fresnel, (1.0).xxx, spec.rgb);
+    fresnel *= saturate(spec.a );
+    //if(spec.a>0)
+    reflection = RayTrace(ray.origin, reflectedRayDirection, pixelNormal, 25) * 1 / 12;
     
-        
-    if (max(max(tx0, ty0), tz0) < min(min(tx1, ty1), tz1))
-    {
-        //result_Struct result = proc_subtree(tx0, ty0, tz0, tx1, ty1, tz1, _SVO[0], a);
-        float min_t = 9999;
-        uint intersected = 0;
-        
-        //while (RINGBUFFER_HAS_DATA)
-        while (RingBuffer_Count > 0)
-        {
-            //subtree_Struct subtree = STACK_POP;
-            //subtree_Struct subtree = RINGBUFFER_READ;
-            
-            // Fetch next node from the buffer
-            subtree_Struct subtree = RingBuffer[RingBuffer_ReadIndex];
-        
-            RingBuffer_ReadIndex++;
-            RingBuffer_Count--;
-        
-            if (RingBuffer_ReadIndex == RingBuffer_MaxCount)
-                RingBuffer_ReadIndex = 0;
+    reflection.rgb = reflection.rgb * 0.7 + (reflection.a * 1.00 * float3(.1,.1,.1)) * 2.41 * 1 * skyVisibility;
+    reflection *= float4(fresnel.rgb,1);
 
-            
-            result_Struct result = proc_subtree(subtree.t0.x, subtree.t0.y, subtree.t0.z, subtree.t1.x, subtree.t1.y, subtree.t1.z, _SVO[subtree.referenceOffset], a);
-            
-            /*if (result.isLeaf)
-            {
-                float tmin, tmax;
-                float3 aabb[2] = { subtree.t0, subtree.t1 };
-
-                ray_box_intersection(ray, aabb, tmin, tmax);
-                
-                float t = distance(ray.origin, tmin);
-                
-                if (tmin < t)
-                {
-                    min_t = tmin;
-                    //min_b = b;
-                    //min_tris_index = tris_index;
-                    
-                    intersected = 1;
-                }
-            }*/
-            
-            if (result.isLeaf)
-            {
-                SVONode localNode = _SVO[subtree.referenceOffset];
-            
-                float tmin, tmax;
-                float3 aabb[2] = { subtree.t0, subtree.t1 };
-
-                ray_box_intersection(ray, aabb, tmin, tmax);
-                float center = (tmax - tmin) * 0.5;
-                
-                float t = distance(ray.origin, center + tmin);
-                
-                //float3 tM = float3(0.5 * (subtree.t0.x + subtree.t1.x), 0.5 * (subtree.t0.y + subtree.t1.y), 0.5 * (subtree.t0.z + subtree.t1.z));
-            
-                position = ray.origin + t * ray.direction;
-
-                normal = float3(0, 1, 0);
-                hit.normal = normal;
-                //int material_index = material_index_list[min_tris_index];
-                //float4x4 mat = material_list[material_index];
-                //hit.position = position;
-
-                hit.albedo = localNode.UnPackColour().rgb;
-			    //hit.albedo = mat[0];
-                hit.position = position;
-                hit.specular = 0.0;
-                hit.smoothness = 0.5;
-			    //mat[3].y;
-                hit.emission = 0;
-                hit.transparency = 0.5;
-			    //mat[3].x;
-
-                hit.refraction = 0;
-
-                hit.distance = t;
-			    //hit.canShadow = mat[3].z;
-            
-                return true;
-            }
-            
-            /*if (result.childCount > 0)
-            {
-            
-                hit.albedo = float3(0.5, 0, 1);
-                return true;
-            }*/
-            
-            for (uint ri = 0; ri < 3; ri += 1)
-            {
-                if (result.isOccupied[ri])
-                {
-                    subtree_Struct subtree;
-                    subtree.t0 = result.t0[ri];
-                    subtree.t1 = result.t1[ri];
-                    subtree.referenceOffset = result.referenceOffset[ri];
-                    //STACK_PUSH(subtree);
-                    //RINGBUFFER_WRITE(subtree);
-                    
-                    if (RingBuffer_MaxCount - RingBuffer_Count)
-                    {
-                        RingBuffer[RingBuffer_WriteIndex] = subtree;
-    
-                        RingBuffer_WriteIndex++;
-                        RingBuffer_Count++;
-
-                        if (RingBuffer_WriteIndex == RingBuffer_MaxCount)
-                            RingBuffer_WriteIndex = 0;
-                    }
-
-                    //result.t0[ri] = float3(0, 0, 0);
-                    //result.t1[ri] = float3(0, 0, 0);
-                    //result.referenceOffset[ri] = 0;
-                    //result.isOccupied[ri] = 0;
-                }
-            }
-            //result.isLeaf = 0;
-        }
-    }
-    
-    position = 0;
-    normal = (0).xxx;
-    hit = CreateRayHit();
-    
-    // For now. Obv change later
-    return false;
+    return float4(max(0, reflection.rgb), saturate(reflection.a));
 }
 
 
+//WIP conetracing of scene.
+float4 ConeTrace( Ray ray, float3 worldNormal, float3 pixelColor, float coneAperture)
+{
+    float4 computedColor = 0;
+    float lengthOfCone = 1.0f;
+
+    float maximumIterations = 64.0f;
+    float coneStep = lengthOfCone / 8.00;
+    float3 coneOrigin = ray.origin + (0.15f* worldNormal);
+    float3 currentPosition = coneOrigin;
+    float4 currentVoxelInfo = float4(0.0f, 0.0f, 0.0f, 0.0f);
+    float hitFound = 0.0f;
+    int coordSet = 0;
+    float skyVisibility = 1.0f;
+    float occlusion;
+    float4 gi = (0).xxxx;
+    currentPosition = coneOrigin;
+    float3 voxelPosition = (0).xxx;
+
+    float currentStep = 0;
+
+    float4 currentColor;
+    float alpha = 0;
+    float dist = 0.25f; 
+
+    
+    while (dist < maximumIterations && alpha < 1)
+    {
+        float diameter =  2 * coneAperture * dist;
+        float mip = log2(diameter /4);
+        currentPosition += (coneStep * ray.direction);
+
+        float fi = ((float)dist) / maximumIterations;
+        fi = lerp(fi, 1.0, 0.0);
+
+        float coneDistance = (exp2(fi * 4.0) - 0.99) / 8.0;
+        float coneSize = coneDistance * 63.6;
+
+        if (hitFound < 0.9f)
+        {
+            currentVoxelInfo = GetVoxelInfoSVO(currentPosition, 0);
+
+            //Reverse blend.
+            float a = 1- alpha;
+            currentColor += currentVoxelInfo*float4(pixelColor,1) *a * fi;
+
+            alpha += a *currentVoxelInfo.a;
+
+            dist += diameter * coneStep;
+
+        }
+        occlusion = skyVisibility * skyVisibility;
+
+        float falloffFix = pow(fi, 1.0) * 4.0 + 1;
+
+        currentColor.a *= lerp(saturate(coneSize / 1.0), 1.0, 0.5f);
+        currentColor.a *= (0.8 / (fi * fi * 2.0 + 0.15));
+        
+        gi.rgb += currentColor.rgb * occlusion * (coneDistance + 1) * 80.0 / falloffFix * (1.0 - fi * fi);// / falloffFix;
+
+        skyVisibility *= pow(saturate(1.0 - currentColor.a * 0.0015f * (1.0 + coneDistance)), 0.65f);
+    }
+    if(currentVoxelInfo.a<1){
+        gi = (0).xxxx;;
+    }
+    computedColor =  gi;
+    //skyVisibility = 1;
+    float NdotL = pow(saturate(dot(ray.direction, worldNormal) * 1.0 - 0.0), 0.5);
+
+    computedColor *= NdotL;
+    skyVisibility *= NdotL;
+    skyVisibility *= lerp(saturate(dot(worldNormal, float3(0.0, 1.0, 0.0)) * 10.0 + 0.0), 1.0,1);
+    float3 skyColor2 = float3(1.0f, 1.0f,1.0f);
+    float3 sunColor2 = float3(256 / 124, 256 / 122, 256 / 118);
+
+    float upGradient = saturate(dot(worldNormal, float3(0.0, 1.0, 0.0)));
+    float sunGradient = saturate(dot(worldNormal, -sunLight.xyz));
+    skyColor2 += lerp(skyColor2.rgb * 1.0, skyColor2.rgb * 0.5, pow(upGradient, (0.5).xxx));
+    skyColor2 += sunColor2.rgb * pow(sunGradient, (4.0).xxx) * 1;
+
+    computedColor.rgb *= 1 * 0.35f;
+    computedColor.rgb += (skyColor * skyVisibility);
+    
+    return computedColor;
+}
 
 
-static const int NUM_BOUNCES = 4;
+inline float3 ComputeIndirectContribution(Ray ray, float3 worldNormal, float3 pixelColor)
+{
+    float coneAperture = tan(PI * 0.5f * 0.33f);
 
-[numthreads(4, 4, 1)]
+    float3 color = (0).xxx;
+    float3 origin = ray.origin;
+    for (float i = 0.0f; i <16; i += 1)
+    {
+        
+        float3 coneDirection = reflect(worldNormal,CONES[i]);
+        //float3 coneDirection = normalize(CONES[i] + worldNormal);
+        coneDirection *= dot(coneDirection,worldNormal) < 0 ? -1 : 1;
+        ray.direction = coneDirection;
+        
+        color += ConeTrace(ray,worldNormal, pixelColor, coneAperture);
+    }
+    //color/= 8;
+    return max(0, color);
+}
+
+
+//Lighting calcs
+float4 lighting(Ray ray, float3 worldPos){
+    
+    float3 worldSpaceNormal = normalize(_CameraGBufferTexture2[_Pixel]*2-1);
+
+    float3 rayPos;
+    float3 directLightingSP = _Lighting[_Pixel];
+    float4 pixelColor = _CameraGBufferTexture0[_Pixel];
+    float4 metallic = _CameraGBufferTexture1[_Pixel];
+    ray.direction = worldSpaceNormal;
+    ray.origin = worldPos + 0.133f*ray.direction;
+    
+    float skyVisibility = 1;
+
+
+    float3 indirectContribution = ComputeIndirectContribution(ray, worldSpaceNormal, pixelColor);
+    float3 indirectLighting = directLightingSP + ((pixelColor.a * 1 * (1.0f - metallic.a) * pixelColor.rgb) / PI) * indirectContribution;
+
+
+    //Reflections Calcs
+    float3 reflection = ComputeReflection(ray, skyVisibility, directLightingSP);
+    //if(metallic.a>0)
+    reflection.rgb = lerp(indirectLighting.rgb, reflection.rgb, metallic.a);
+    //else reflection = indirectLighting;
+    // float3 metalshow = (metallic.r).xxx;
+    return float4(reflection,1);
+}
+
+
+static const int NUM_BOUNCES =8;
+
+[numthreads(16, 16, 1)]
 void PathTrace_uniform_grid(CS_INPUT input)
 {
-    if (input.DTid.x < screen_size.x && input.DTid.y < screen_size.y)
+    if (input.DTid.x <= screen_size.x && input.DTid.y <= screen_size.y)
     {
-		//compute view ray
-        float2 uv = float2(input.DTid.xy) / (screen_size.xy - 1);
-        float3 eye_dir = lerp(lerp(worldspace_frustum_corners[0], worldspace_frustum_corners[1], uv.y), lerp(worldspace_frustum_corners[2], worldspace_frustum_corners[3], uv.y), uv.x);
-        eye_dir = normalize(eye_dir);
+        _Pixel = input.DTid.xy;
+        float depth = LinearEyeDepth ( DecodeFloatRG( _CameraDepthTexture[_Pixel]));
 
-        Ray ray = MakeRay(camera_position.xyz, eye_dir);
-        //Ray ray = MakeRay(float3(0, 0, 0), eye_dir);
         
-        float3 intersection_position;
-        float3 intersection_normal;
+        //compute view ray
+        //float2 uv = float2(input.DTid.xy) / (screen_size.xy - 1);
+        float2 uv2 = float2((input.DTid.xy) / screen_size.xy * 2.0f - 1.0f);
 
-        float weight = 1;
+        //V1
+        // float3 eye_dir = lerp(lerp(worldspace_frustum_corners[0], worldspace_frustum_corners[1], uv.y), lerp(worldspace_frustum_corners[2], worldspace_frustum_corners[3], uv.y), uv.x);
+        // eye_dir = normalize(eye_dir);
         
-        // For debug purposes
-        //float3 L = float3(0, 0, 0);
+        // Invert the perspective projection of the view-space position
+        float3 direction = mul(_CameraInverseProjection, float4(uv2, 0.0f, 1.0f)).xyz;
+        // Transform the direction from camera to world space and normalize
+        direction = mul(_CameraToWorld, float4(direction, 0.0f)).xyz;
+        direction = (direction);
+
+        //World position from depth
+        float3 wPos = camera_position+ depth*direction;
+
+        Ray ray = MakeRay(camera_position, direction);
+        
         float3 L = SimpleGradient(ray);
-        
-		//random initial seed using thread id
-        uint seed = wang_hash(input.DTid.x + input.DTid.y * screen_size.x + start_seed);
+        float4 hitColor;
         RayHit hit;
 
-        //for (int bounce = 0; bounce < NUM_BOUNCES; ++bounce)
-        //{
-            if (SVOIntersection(ray, intersection_position, intersection_normal, hit))
-            {
-                seed = rand_xorshift(seed);
-				
-                L = hit.albedo;
-                //L += ray.energy * Shade(ray, hit, seed);
-				//L
-
-            }
-            /*else
-            {
-                L += SimpleGradient(ray) * ray.energy; //float3(1.5, 1.5, 1.5) is the temporary skybox value
-
-                if (bounce == 0)
-					//L = float3(0, 0, 0);
-                    if (!any(ray.energy))
-                        break;
-                break;
-            }*/
- 
-									
-        //}
+        hitColor = lighting(ray, wPos);
+        //As we are not booling a hit we do this for now.
+        if(hitColor.a>0.0f){
+            L=hitColor;
+        }     
+        
+        
 
         float4 ris = output[input.DTid.xy];
-        //float num_samples = ris.a;
-        //L = 1.0 / (num_samples + 1) * (num_samples * ris.rgb + L);
-        //ris = float4(L, num_samples + 1);
-        ris = float4(L, 1);
-		
+        ris = float4(L, 1 );
         output[input.DTid.xy] = ris;
     }
 }
