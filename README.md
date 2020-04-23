@@ -12,7 +12,7 @@ An almost-dynamic voxel-based global illumination system for Unity.
 * Supports adding GI to 3rd party plugins that otherwise don't expose geometary to Unity.
 
 # Roadmap
-https://github.com/ninlilizi/Nigiri/wiki/Roadmap
+https://github.com/ninlilizi/Nigiri/wiki/Doc:-Roadmap
 
 # Installation
 Check the [Releases](https://github.com/ninlilizi/Nigiri/releases) section above to download a version of Nigiri that is a simple .unitypackage file which is ready for you to import into your project. 
