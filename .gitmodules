@@ -3,4 +3,4 @@
 	url = git@github.com:ninlilizi/Nigiri-DemoScenes.git
 [submodule "Resources/Textures"]
 	path = Resources/Textures
-	url = https://github.com/ninlilizi/Nigiri-TextureResources
+	url = git@github.com:ninlilizi/Nigiri-TextureResources.git
