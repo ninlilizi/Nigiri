@@ -1,4 +1,4 @@
-<h3>Please, note. Due to a complete re-write and considerable amount of work put in. This project is continuing as a closed source project for eventual sale on the Unity Asset Store. Please be patient until further details are forthcoming</h3>
+<h3>Please, note. Due to a complete re-write and considerable amount of work put in. This project is continuing as a closed source project for eventual sale on the Unity Asset Store. Please join the Discord for more details or to follow it's development.</h3>
 <h1 align=center>Nigiri</h1>
 An almost-dynamic voxel-based global illumination system for Unity.
 <p align="center" style="display: inline-block;">
